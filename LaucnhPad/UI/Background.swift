@@ -45,6 +45,8 @@ final class WallpaperProvider: ObservableObject {
 }
 
 nonisolated enum WallpaperBlur {
+    private static let sharedCIContext = CIContext(options: [.cacheIntermediates: false])
+
     static func render(url: URL, targetSize: CGSize, sigma: Double = 30) -> CGImage? {
         guard let input = CIImage(contentsOf: url), input.extent.width > 0, input.extent.height > 0 else { return nil }
         // Rendu à demi-résolution quand on floute : le flou masque les détails et c'est bien plus rapide.
@@ -67,7 +69,7 @@ nonisolated enum WallpaperBlur {
             crop.size.height = extent.width / screenRatio
             crop.origin.y = extent.midY - crop.height / 2
         }
-        return CIContext(options: [.cacheIntermediates: false]).createCGImage(output, from: crop.integral)
+        return sharedCIContext.createCGImage(output, from: crop.integral)
     }
 }
 
@@ -93,6 +95,7 @@ struct VisualEffectBackground: NSViewRepresentable {
 
 struct LiquidGlassBackground: View, Equatable {
     static func == (lhs: LiquidGlassBackground, rhs: LiquidGlassBackground) -> Bool { true }
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         GeometryReader { proxy in
@@ -101,8 +104,8 @@ struct LiquidGlassBackground: View, Equatable {
                 // 1. Flou d'arrière-plan en temps réel de haute qualité de ce qui est derrière la fenêtre
                 VisualEffectBackground(material: .fullScreenUI)
 
-                // 2. Base semi-translucide sombre pour un contraste optimal des icônes et des textes (comme dans la référence 1)
-                Color.black.opacity(0.46)
+                // 2. Base semi-translucide sombre pour un contraste optimal des icônes et des textes
+                Color.black.opacity(reduceTransparency ? 0.82 : 0.44)
 
                 // 3. Halo diffus central (lumière ambiante douce rétro-éclairant la grille d'icônes comme dans la référence 1)
                 RadialGradient(

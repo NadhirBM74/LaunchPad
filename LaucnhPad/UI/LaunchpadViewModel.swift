@@ -115,6 +115,20 @@ final class DragPointer: ObservableObject {
     @Published var location: CGPoint = .zero
 }
 
+/// Décalage horizontal des pages. Isolé du modèle principal pour que le trackpad
+/// ne reconstruise que la bande d'icônes, pas le fond, la recherche ni les widgets.
+@MainActor
+final class PageScroll: ObservableObject {
+    @Published var offset: CGFloat = 0
+}
+
+/// Intensité du voile affiché quand les réglages sont ouverts.
+/// Séparé du modèle pour que l'animation ne redessine pas la grille.
+@MainActor
+final class SettingsChrome: ObservableObject {
+    @Published var intensity: Double = 0
+}
+
 struct DialogModel: Identifiable {
     let id = UUID()
     var title: String
@@ -136,11 +150,19 @@ struct RenameRequest: Identifiable {
 final class LaunchpadViewModel: ObservableObject {
     let store: LaunchpadStore
     let pointer = DragPointer()
+    let pageScroll = PageScroll()
+    let settingsChrome = SettingsChrome()
 
     @Published var query = "" { didSet { if query != oldValue { queryChanged(from: oldValue) } } }
     @Published private(set) var page = 0
     @Published private(set) var lastPage = 0
-    @Published var pageOffset: CGFloat = 0
+    /// Décalage des pages. L'écriture est instantanée (sans animation implicite) :
+    /// le suivi du doigt ne doit pas être interpolé. Les changements de page animés
+    /// écrivent directement dans `pageScroll.offset` à l'intérieur de `withAnimation`.
+    var pageOffset: CGFloat {
+        get { pageScroll.offset }
+        set { setLivePageOffset(newValue) }
+    }
     var scrollOffset: CGFloat {
         let width = metrics?.size.width ?? 1200
         return pageOffset + CGFloat(page) * width
@@ -183,9 +205,16 @@ final class LaunchpadViewModel: ObservableObject {
         didSet {
             guard let m = metrics else { return }
             if oldValue == nil || oldValue?.size.width != m.size.width {
-                pageOffset = -CGFloat(page) * m.size.width
+                setLivePageOffset(-CGFloat(page) * m.size.width)
             }
         }
+    }
+
+    private func setLivePageOffset(_ value: CGFloat) {
+        guard pageScroll.offset != value else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { pageScroll.offset = value }
     }
     var folderMetrics: FolderMetrics?
     var gridOrigin: CGPoint = .zero
@@ -197,14 +226,31 @@ final class LaunchpadViewModel: ObservableObject {
     // MARK: - Flou d'arrière-plan des Réglages et Aperçu de la taille des icônes
     @Published public private(set) var isSettingsOpen = false
     @Published public private(set) var isIconScalePreviewing = false
-    @Published public private(set) var settingsBlurIntensity: Double = 0.0
+
+    /// Intensité du voile (0…1). La valeur animée vit dans `settingsChrome`
+    /// pour ne pas invalider la grille à chaque image.
+    public var settingsBlurIntensity: Double {
+        get { settingsChrome.intensity }
+        set { setChromeIntensity(newValue, animated: false) }
+    }
 
     public var settingsBlurRadius: CGFloat {
-        CGFloat(14.0 * settingsBlurIntensity)
+        CGFloat(14.0 * settingsChrome.intensity)
     }
 
     public var settingsScrimOpacity: Double {
-        0.20 * settingsBlurIntensity
+        0.28 * settingsChrome.intensity
+    }
+
+    private func setChromeIntensity(_ value: Double, animated: Bool) {
+        guard settingsChrome.intensity != value else { return }
+        if animated {
+            settingsChrome.intensity = value
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { settingsChrome.intensity = value }
+        }
     }
 
     private var cancellables = Set<AnyCancellable>()
@@ -252,6 +298,13 @@ final class LaunchpadViewModel: ObservableObject {
                 self?.setIconScalePreviewing(previewing)
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .accessibilityPermissionDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.showToast("✅ Autorisation d'accessibilité accordée !")
+            }
+            .store(in: &cancellables)
     }
 
     func setSettingsOpen(_ open: Bool) {
@@ -273,11 +326,11 @@ final class LaunchpadViewModel: ObservableObject {
         let targetIntensity: Double = (isSettingsOpen && !isIconScalePreviewing) ? 1.0 : 0.0
         let reduceMotion = Prefs.reduceMotion
         if !animated || reduceMotion {
-            settingsBlurIntensity = targetIntensity
+            setChromeIntensity(targetIntensity, animated: false)
         } else {
             let duration: Double = isSettingsOpen ? (isIconScalePreviewing ? 0.22 : 0.26) : 0.22
             withAnimation(.easeInOut(duration: duration)) {
-                settingsBlurIntensity = targetIntensity
+                settingsChrome.intensity = targetIntensity
             }
         }
     }
@@ -370,7 +423,7 @@ final class LaunchpadViewModel: ObservableObject {
     var columns: Int { metrics?.columns ?? Prefs.columns }
     var rows: Int { metrics?.rows ?? Prefs.rows }
 
-    var isPresentingModal: Bool { dialog != nil || rename != nil || uninstall != nil || customTileModal != nil || showTutorial }
+    var isPresentingModal: Bool { dialog != nil || rename != nil || uninstall != nil || customTileModal != nil || showTutorial || PermissionManager.shared.showPermissionCard }
     var showsDeleteBadges: Bool { (editing || optionHeld) && !isSearching }
 
     var overlayFolder: FolderData? {
@@ -542,11 +595,11 @@ final class LaunchpadViewModel: ObservableObject {
         let targetOffset = -CGFloat(clamped) * width
 
         if Prefs.reduceMotion {
-            pageOffset = targetOffset
+            setLivePageOffset(targetOffset)
             lastPage = clamped
         } else {
             withAnimation(motion(.spring(response: 0.38, dampingFraction: 0.86))) {
-                pageOffset = targetOffset
+                pageScroll.offset = targetOffset
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
                 guard let self else { return }
@@ -654,7 +707,12 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     func escape() {
-        if showTutorial { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showTutorial = false }; focusSearch() }
+        if PermissionManager.shared.showPermissionCard {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                PermissionManager.shared.showPermissionCard = false
+            }
+            focusSearch()
+        } else if showTutorial { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showTutorial = false }; focusSearch() }
         else if uninstall != nil, uninstall?.working == false { uninstall = nil; focusSearch() }
         else if customTileModal != nil { customTileModal = nil; focusSearch() }
         else if rename != nil { rename = nil; textInputActive = false; focusSearch() }

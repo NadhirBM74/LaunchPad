@@ -69,6 +69,7 @@ struct LaunchpadRootView: View {
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
+    @ObservedObject private var permissionManager = PermissionManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @FocusState private var searchFocused: Bool
 
@@ -128,20 +129,9 @@ struct LaunchpadRootView: View {
                     .frame(width: size.width, height: size.height)
                 content(layout)
                     .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
-                    .blur(radius: vm.settingsBlurIntensity > 0.001 ? vm.settingsBlurRadius : 0)
 
-                if vm.settingsBlurIntensity > 0 {
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .opacity(vm.settingsBlurIntensity * 0.45)
-                        .frame(width: size.width, height: size.height)
-                        .allowsHitTesting(false)
-
-                    Color.black
-                        .opacity(vm.settingsScrimOpacity)
-                        .frame(width: size.width, height: size.height)
-                        .allowsHitTesting(false)
-                }
+                SettingsDimmingOverlay(chrome: vm.settingsChrome)
+                    .frame(width: size.width, height: size.height)
                 if let state = vm.drag {
                     if let widgetConfig = store.visibleItems.compactMap(\.widget).first(where: { $0.id == state.id }) {
                         let placed = vm.placedItem(for: state.id)
@@ -246,10 +236,8 @@ struct LaunchpadRootView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+                    .liquidGlassCapsule(interactive: true)
+                    .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
                 .position(x: max(60, layout.size.width * 0.06), y: layout.searchCenterY)
@@ -264,10 +252,8 @@ struct LaunchpadRootView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+                        .liquidGlassCapsule(interactive: true)
+                        .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
                 .position(x: layout.size.width - max(60, layout.size.width * 0.06), y: layout.searchCenterY)
@@ -275,7 +261,57 @@ struct LaunchpadRootView: View {
             }
             searchBar
                 .position(x: layout.searchCenterX, y: layout.searchCenterY)
-            pagesLayer(layout.grid)
+            if !permissionManager.isAccessibilityGranted && !permissionManager.hasDismissedBanner && !vm.isSearching {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.orange)
+
+                    Text(loc("permission.banner.desc"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1)
+
+                    Button {
+                        permissionManager.promptUserForAccessibility()
+                    } label: {
+                        Text(loc("general.authorize_button"))
+                            .font(.system(size: 10.5, weight: .bold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2.5)
+                            .background(Color.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            permissionManager.hasDismissedBanner = true
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .liquidGlassCapsule(interactive: true)
+                .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
+                .position(x: layout.searchCenterX, y: layout.searchCenterY + 30)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+            PagesLayer(
+                vm: vm,
+                store: store,
+                metrics: layout.grid,
+                showLabels: showLabels,
+                showRunning: showRunning,
+                reduceMotion: reduceMotion,
+                tint: activeTintColor
+            )
                 .offset(x: layout.gridOrigin.x, y: layout.gridOrigin.y)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: iconScale)
             if vm.displayItems.isEmpty {
@@ -333,33 +369,7 @@ struct LaunchpadRootView: View {
         .background {
             if backgroundStyle == .liquidGlass {
                 Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.18), Color.white.opacity(0.04), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.68),
-                                        Color.white.opacity(0.24),
-                                        Color.white.opacity(0.08),
-                                        Color.white.opacity(0.22)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.0
-                            )
-                    )
+                    .liquidGlass(in: Capsule(), interactive: true)
             } else {
                 Capsule()
                     .fill(Color.white.opacity(0.06))
@@ -368,8 +378,7 @@ struct LaunchpadRootView: View {
         }
         .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
-        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? 0.32 : 0.20), radius: 14, x: 0, y: 7)
-        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? 0.16 : 0), radius: 3, x: 0, y: 1)
+        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? 0.32 : 0.20), radius: 12, x: 0, y: 6)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
 
@@ -402,13 +411,61 @@ struct LaunchpadRootView: View {
         .opacity(vm.pageCount > 1 ? 1 : 0)
     }
 
-    // MARK: Pages (un seul ForEach pour toutes les pages : l'identité des icônes reste stable pendant un glisser)
+    private func isRemovable(_ item: LayoutItem) -> Bool {
+        if item.isWidget { return true }
+        guard let id = item.appID else { return false }
+        if id.hasPrefix("web:") || id.hasPrefix("shortcut:") { return true }
+        return store.catalog[id]?.isRemovable == true
+    }
 
-    private func pagesLayer(_ m: GridMetrics) -> some View {
+    private func tileModel(for id: String) -> TileModel {
+        if let item = vm.displayItems.first(where: { $0.id == id }) ?? store.visibleItems.first(where: { $0.id == id }) {
+            return tileModel(for: item)
+        }
+        return tileModel(for: .app(id))
+    }
+
+    private func tileModel(for item: LayoutItem) -> TileModel {
+        var model = TileModel.make(item, store: store, showRunning: showRunning)
+        model.tintColor = activeTintColor
+        return model
+    }
+}
+
+// MARK: - Bande des pages (isolée : seul ce calque observe le décalage du trackpad)
+
+/// Un seul ForEach pour toutes les pages : l'identité des icônes reste stable pendant un glisser.
+/// Le décalage horizontal vit dans `PageScroll` : suivre le doigt à 120 Hz ne reconstruit
+/// ni le fond, ni la recherche, ni la vue racine — uniquement cette bande d'icônes.
+struct PagesLayer: View {
+    @ObservedObject var vm: LaunchpadViewModel
+    @ObservedObject var store: LaunchpadStore
+    @ObservedObject private var pageScroll: PageScroll
+    let metrics: GridMetrics
+    let showLabels: Bool
+    let showRunning: Bool
+    let reduceMotion: Bool
+    let tint: Color?
+
+    init(vm: LaunchpadViewModel, store: LaunchpadStore, metrics: GridMetrics,
+         showLabels: Bool, showRunning: Bool, reduceMotion: Bool, tint: Color?) {
+        self.vm = vm
+        self.store = store
+        self._pageScroll = ObservedObject(wrappedValue: vm.pageScroll)
+        self.metrics = metrics
+        self.showLabels = showLabels
+        self.showRunning = showRunning
+        self.reduceMotion = reduceMotion
+        self.tint = tint
+    }
+
+    var body: some View {
+        let m = metrics
         let placed = vm.placedDisplayItems(metrics: m)
         let width = m.size.width
+        let offset = pageScroll.offset
         let draggingID = vm.drag?.id
-        let currentPos = width > 0 ? (-vm.pageOffset / width) : CGFloat(vm.page)
+        let currentPos = width > 0 ? (-offset / width) : CGFloat(vm.page)
         let fromPage = min(vm.page, vm.lastPage)
         let toPage = max(vm.page, vm.lastPage)
         let isSettled = abs(currentPos - CGFloat(vm.page)) < 0.005 && vm.page == vm.lastPage && draggingID == nil
@@ -425,7 +482,20 @@ struct LaunchpadRootView: View {
             }
         }
         .frame(width: width, height: m.size.height, alignment: .topLeading)
-        .offset(x: vm.pageOffset)
+        .offset(x: offset)
+    }
+
+    private func isRemovable(_ item: LayoutItem) -> Bool {
+        if item.isWidget { return true }
+        guard let id = item.appID else { return false }
+        if id.hasPrefix("web:") || id.hasPrefix("shortcut:") { return true }
+        return store.catalog[id]?.isRemovable == true
+    }
+
+    private func tileModel(for item: LayoutItem) -> TileModel {
+        var model = TileModel.make(item, store: store, showRunning: showRunning)
+        model.tintColor = tint
+        return model
     }
 
     @ViewBuilder
@@ -468,7 +538,7 @@ struct LaunchpadRootView: View {
                         .fill(Color.white.opacity(0.06))
                         .overlay(
                             RoundedRectangle(cornerRadius: WidgetManager.shared.cornerRadius, style: .continuous)
-                                 .strokeBorder(Color.white.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                                .strokeBorder(Color.white.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                         )
                         .frame(width: displayW, height: displayH)
                 } else {
@@ -513,25 +583,25 @@ struct LaunchpadRootView: View {
             }
         }
     }
+}
 
-    private func isRemovable(_ item: LayoutItem) -> Bool {
-        if item.isWidget { return true }
-        guard let id = item.appID else { return false }
-        if id.hasPrefix("web:") || id.hasPrefix("shortcut:") { return true }
-        return store.catalog[id]?.isRemovable == true
-    }
+// MARK: - Voile des réglages (isolé : l'animation ne redessine pas la grille)
 
-    private func tileModel(for id: String) -> TileModel {
-        if let item = vm.displayItems.first(where: { $0.id == id }) ?? store.visibleItems.first(where: { $0.id == id }) {
-            return tileModel(for: item)
+struct SettingsDimmingOverlay: View {
+    @ObservedObject var chrome: SettingsChrome
+
+    var body: some View {
+        let intensity = chrome.intensity
+        ZStack {
+            if intensity > 0.001 {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(intensity * 0.45)
+                Color.black
+                    .opacity(0.28 * intensity)
+            }
         }
-        return tileModel(for: .app(id))
-    }
-
-    private func tileModel(for item: LayoutItem) -> TileModel {
-        var model = TileModel.make(item, store: store, showRunning: showRunning)
-        model.tintColor = activeTintColor
-        return model
+        .allowsHitTesting(false)
     }
 }
 
@@ -739,7 +809,7 @@ struct AppTileView: View, Equatable {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .shadow(color: .black.opacity(0.88), radius: 2.0, y: 1.0)
+                    .shadow(color: .black.opacity(0.88), radius: 0.6, y: 0.5)
                     .contentShape(Rectangle())
                     .frame(width: max(20, labelWidth), height: 16)
             }
@@ -809,7 +879,8 @@ struct IconImage: View {
             // L'ombre est déjà intégrée à l'image en cache (aucun calcul d'ombre à l'affichage).
             Image(nsImage: icon)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(.medium)
+                .antialiased(true)
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
                 .saturation(isTinted ? 0.0 : 1.0)
@@ -839,7 +910,7 @@ struct FolderIconView: View {
                         ForEach(0..<3, id: \.self) { column in
                             let index = row * 3 + column
                             if index < icons.count {
-                                Image(nsImage: icons[index]).resizable().interpolation(.medium).frame(width: mini, height: mini)
+                                Image(nsImage: icons[index]).resizable().interpolation(.low).frame(width: mini, height: mini)
                             } else {
                                 Color.clear.frame(width: mini, height: mini)
                             }
@@ -1006,33 +1077,7 @@ struct FolderOverlayView: View {
 
             if theme == .liquidGlass {
                 RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.16), Color.white.opacity(0.03), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.68),
-                                        Color.white.opacity(0.22),
-                                        Color.white.opacity(0.06),
-                                        Color.white.opacity(0.24)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.2
-                            )
-                    )
+                    .liquidGlassCard(cornerRadius: 32, interactive: false, borderLineWidth: 1.2)
                     .shadow(color: .black.opacity(0.40), radius: 32, x: 0, y: 16)
                     .shadow(color: .black.opacity(0.18), radius: 6, x: 0, y: 3)
                     .frame(width: fm.panelRect.width, height: fm.panelRect.height)
@@ -1174,33 +1219,7 @@ struct FavoritesDockView: View {
         .background {
             if backgroundStyle == .liquidGlass {
                 Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.18), Color.white.opacity(0.04), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.70),
-                                        Color.white.opacity(0.24),
-                                        Color.white.opacity(0.08),
-                                        Color.white.opacity(0.22)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.2
-                            )
-                    )
+                    .liquidGlass(in: Capsule(), interactive: false)
             } else {
                 Capsule()
                     .fill(Color.black.opacity(0.42))
@@ -1406,20 +1425,8 @@ struct WidgetGalleryModal: View {
                 }
             }
             .frame(width: min(720, rootSize.width - 40), height: min(520, rootSize.height - 60))
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.40), Color.white.opacity(0.10), Color.white.opacity(0.25)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: .black.opacity(0.55), radius: 36, y: 16)
+            .liquidGlassCard(cornerRadius: 22, interactive: false, borderLineWidth: 1.2)
+            .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
         }
     }
 

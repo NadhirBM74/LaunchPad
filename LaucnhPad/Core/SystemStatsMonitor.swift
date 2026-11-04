@@ -107,6 +107,10 @@ final class SystemStatsMonitor: ObservableObject {
         }
     }
 
+    nonisolated private static let hostPort: mach_port_t = mach_host_self()
+    nonisolated private static let pageSize: UInt64 = UInt64(getpagesize())
+    nonisolated private static let totalBytes: UInt64 = ProcessInfo.processInfo.physicalMemory
+
     // MARK: - CPU
 
     nonisolated private func sampleCPU() -> Int? {
@@ -114,7 +118,7 @@ final class SystemStatsMonitor: ObservableObject {
         var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / MemoryLayout<integer_t>.size)
         let kerr = withUnsafeMutablePointer(to: &cpuInfo) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &count)
+                host_statistics(Self.hostPort, HOST_CPU_LOAD_INFO, $0, &count)
             }
         }
         guard kerr == KERN_SUCCESS else { return nil }
@@ -150,16 +154,16 @@ final class SystemStatsMonitor: ObservableObject {
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
         let kerr = withUnsafeMutablePointer(to: &vmStats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(Self.hostPort, HOST_VM_INFO64, $0, &count)
             }
         }
         guard kerr == KERN_SUCCESS else { return nil }
-        let pageSize = UInt64(getpagesize())
+        let pageSize = Self.pageSize
         let active = UInt64(vmStats.active_count) * pageSize
         let wire = UInt64(vmStats.wire_count) * pageSize
         let compressed = UInt64(vmStats.compressor_page_count) * pageSize
         let usedBytes = active + wire + compressed
-        let totalBytes = ProcessInfo.processInfo.physicalMemory
+        let totalBytes = Self.totalBytes
 
         let usedGB = Double(usedBytes) / 1_073_741_824
         let totalGB = Double(totalBytes) / 1_073_741_824

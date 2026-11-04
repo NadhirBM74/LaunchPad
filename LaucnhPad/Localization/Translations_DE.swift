@@ -41,6 +41,7 @@ nonisolated enum Translations_DE: Sendable {
         "general.pinch": "Trackpad-Geste",
         "general.pinch_subtitle": "Zusammenziehen zum Öffnen, auseinanderziehen zum Schließen.",
         "general.pinch_conflict": "Die macOS-Systemgeste 'Launchpad / Apps' (mit 4 Fingern zusammenziehen) ist aktiv. Deaktivieren Sie diese in Systemeinstellungen › Trackpad › Weitere Gesten.",
+        "general.three_finger_drag_tip": "Das macOS 'Drei-Finger-Ziehen' ist in Bedienungshilfen aktiviert. Verwenden Sie 4 Finger zum Aufrufen von LaunchPad.",
         "general.scroll_sensitivity": "Scroll-Empfindlichkeit",
         "general.hot_corner": "Aktive Ecke",
         "general.hot_corner_subtitle": "Mauszeiger in die Ecke bewegen, um Launchpad zu öffnen oder zu schließen.",
@@ -238,6 +239,7 @@ nonisolated enum Translations_DE: Sendable {
         "corner.bottomLeft": "Untere linke Ecke",
         "corner.bottomRight": "Untere rechte Ecke",
 
+        "pinch.all": "Automatisch (3, 4 oder 5 Finger)",
         "pinch.off": "Deaktiviert",
         "pinch.three": "Mit 3 Fingern zusammenziehen",
         "pinch.fourFive": "Mit 4 oder 5 Fingern zusammenziehen",

@@ -95,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         applyConfiguration(force: true)
         importLaunchOSOnce()
+        PermissionManager.shared.checkOnLaunch { [weak self] in
+            self?.launchpad.show()
+        }
 
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)

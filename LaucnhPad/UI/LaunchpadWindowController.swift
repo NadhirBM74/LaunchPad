@@ -85,6 +85,7 @@ final class LaunchpadWindowController: NSObject {
         center.addObserver(self, selector: #selector(appDidResignActive), name: NSApplication.didResignActiveNotification, object: nil)
         center.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(systemDidWake), name: NSWorkspace.didWakeNotification, object: nil)
     }
 
     // MARK: Affichage
@@ -235,13 +236,17 @@ final class LaunchpadWindowController: NSObject {
     }
 
     private func targetScreen() -> NSScreen {
-        let fallback = NSScreen.main ?? NSScreen.screens.first!
+        let screens = NSScreen.screens
+        guard let fallback = NSScreen.main ?? screens.first ?? panel.screen else {
+            // Écran de secours virtuel si le WindowServer est en pleine reconfiguration
+            return panel.screen ?? NSScreen()
+        }
         switch Prefs.screenTarget {
         case .cursor:
             let location = NSEvent.mouseLocation
-            return NSScreen.screens.first { NSMouseInRect(location, $0.frame, false) } ?? fallback
+            return screens.first { NSMouseInRect(location, $0.frame, false) } ?? fallback
         case .main:
-            return NSScreen.screens.first ?? fallback
+            return screens.first ?? fallback
         case .active:
             return fallback
         }
@@ -260,8 +265,21 @@ final class LaunchpadWindowController: NSObject {
         Task { @MainActor [weak self] in
             guard let self, self.isVisible else { return }
             let screen = self.targetScreen()
+            self.viewModel.updateTopInset(self.topInset(for: screen))
             self.applyLayout(on: screen, display: true)
             self.wallpaper.update(for: screen)
+        }
+    }
+
+    @objc private func systemDidWake() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let screen = self.targetScreen()
+            self.viewModel.updateTopInset(self.topInset(for: screen))
+            if self.isVisible {
+                self.applyLayout(on: screen, display: true)
+                self.wallpaper.update(for: screen)
+            }
         }
     }
 

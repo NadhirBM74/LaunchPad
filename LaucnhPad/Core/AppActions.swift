@@ -17,7 +17,14 @@ enum AppActions {
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
-        NSWorkspace.shared.openApplication(at: app.url, configuration: configuration, completionHandler: nil)
+        NSWorkspace.shared.openApplication(at: app.url, configuration: configuration) { _, error in
+            if error != nil {
+                // Fallback avec NSWorkspace.shared.open(app.url) au cas où la configuration stricte échoue
+                DispatchQueue.main.async {
+                    _ = NSWorkspace.shared.open(app.url)
+                }
+            }
+        }
     }
 
     static func revealInFinder(_ app: AppInfo) {

@@ -27,7 +27,10 @@ struct WidgetBannerView: View {
         }
         .onAppear {
             stats.startMonitoring()
-            startClockTimer()
+            if LaunchpadViewModel.isLaunchpadVisible {
+                currentDate = Date()
+                startClockTimer()
+            }
         }
         .onDisappear {
             stats.stopMonitoring()
@@ -37,6 +40,7 @@ struct WidgetBannerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
             let isVisible = (notif.object as? Bool) ?? false
             if isVisible {
+                currentDate = Date()
                 stats.startMonitoring()
                 startClockTimer()
             } else {
@@ -50,10 +54,13 @@ struct WidgetBannerView: View {
     // MARK: - Horloge en temps réel
 
     private func startClockTimer() {
-        timer = Timer.publish(every: 1.0, on: .main, in: .common)
+        timer?.cancel()
+        timer = Timer.publish(every: 15.0, tolerance: 3.0, on: .main, in: .common)
             .autoconnect()
             .sink { [self] date in
-                self.currentDate = date
+                if !Calendar.current.isDate(date, equalTo: self.currentDate, toGranularity: .minute) {
+                    self.currentDate = date
+                }
             }
     }
 
@@ -305,37 +312,7 @@ struct WidgetBannerView: View {
     private func cardBackground(cornerRadius: CGFloat) -> some View {
         if backgroundStyle == .liquidGlass {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.16),
-                                    Color.white.opacity(0.04),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.60),
-                                    Color.white.opacity(0.20),
-                                    Color.white.opacity(0.08),
-                                    Color.white.opacity(0.22)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                )
+                .liquidGlassCard(cornerRadius: cornerRadius, interactive: false)
         } else if backgroundStyle == .glass {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
@@ -355,24 +332,35 @@ struct WidgetBannerView: View {
 
     // MARK: - Helpers Date & Heure
 
-    private var formattedTime: String {
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: currentDate)
+        return formatter
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    private static let cachedUserName: String = NSFullUserName()
+
+    private var formattedTime: String {
+        Self.timeFormatter.string(from: currentDate)
     }
 
     private var formattedShortTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: currentDate)
+        Self.timeFormatter.string(from: currentDate)
     }
 
     private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.locale = LocalizationManager.shared.effectiveLocale
-        formatter.dateStyle = .full
-        formatter.timeStyle = .none
-        return formatter.string(from: currentDate).capitalized
+        let locale = LocalizationManager.shared.effectiveLocale
+        if Self.dateFormatter.locale != locale {
+            Self.dateFormatter.locale = locale
+        }
+        return Self.dateFormatter.string(from: currentDate).capitalized
     }
 
     private var greetingText: String {
@@ -385,7 +373,7 @@ struct WidgetBannerView: View {
         } else {
             greeting = loc("widgets.greeting_evening")
         }
-        let userName = NSFullUserName()
+        let userName = Self.cachedUserName
         if !userName.isEmpty && userName != "root" {
             return "\(greeting), \(userName)"
         }

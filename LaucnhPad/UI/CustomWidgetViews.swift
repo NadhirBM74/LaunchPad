@@ -25,44 +25,73 @@ struct WidgetContainerView<Content: View>: View {
             .shadow(color: .black.opacity(0.38), radius: 14, x: 0, y: 7)
     }
 
+    @ViewBuilder
     private func glassBackground(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
-                shape.fill(Color.black.opacity(widgetManager.glassOpacity * 0.74))
-            )
-            .overlay(
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.20),
-                            Color.white.opacity(0.04),
-                            Color(red: 0.08, green: 0.09, blue: 0.14).opacity(0.24)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+        if backgroundStyle == .liquidGlass {
+            shape
+                .liquidGlass(
+                    in: shape,
+                    interactive: false,
+                    tint: nil
+                )
+                .overlay {
+                    if widgetManager.glowColor != .none {
+                        shape.fill(widgetManager.glowColor.primaryColor.opacity(0.06))
+                    }
+                }
+                .overlay {
+                    if widgetManager.glassOpacity > 0.05 {
+                        shape.fill(Color.black.opacity(widgetManager.glassOpacity * 0.45))
+                    }
+                }
+        } else {
+            shape
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    shape.fill(Color.black.opacity(widgetManager.glassOpacity * 0.74))
+                )
+                .overlay {
+                    if widgetManager.glowColor != .none {
+                        shape.fill(widgetManager.glowColor.primaryColor.opacity(0.06))
+                    }
+                }
+                .overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.20),
+                                Color.white.opacity(0.04),
+                                Color(red: 0.08, green: 0.09, blue: 0.14).opacity(0.24)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
                 )
-            )
+        }
     }
 
+    @ViewBuilder
     private func luminousBorder(cornerRadius: CGFloat) -> some View {
         let glow = widgetManager.glowColor.primaryColor
-        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .strokeBorder(
-                LinearGradient(
-                    colors: [
-                        widgetManager.glowColor == .none ? Color.white.opacity(0.55) : glow.opacity(0.70),
-                        Color.white.opacity(0.35),
-                        widgetManager.glowColor == .none ? Color.white.opacity(0.12) : glow.opacity(0.25),
-                        Color.white.opacity(0.18)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 1.0
-            )
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if backgroundStyle != .liquidGlass || widgetManager.glowColor != .none {
+            shape
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            widgetManager.glowColor == .none ? Color.white.opacity(0.55) : glow.opacity(0.70),
+                            Color.white.opacity(0.35),
+                            widgetManager.glowColor == .none ? Color.white.opacity(0.12) : glow.opacity(0.25),
+                            Color.white.opacity(0.18)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.0
+                )
+        }
     }
 }
 
@@ -3321,32 +3350,25 @@ struct QuickNoteWidgetView: View {
                         }
                     }
 
-                    // Zone de saisie avec marge jaune Apple Notes
-                    HStack(spacing: isCompact ? 6 : 8) {
-                        // Marge décorative jaune Apple Notes
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color.yellow.opacity(0.75))
-                            .frame(width: 2.5)
-                            .padding(.vertical, 2)
-
-                        ZStack(alignment: .topLeading) {
-                            if noteText.isEmpty {
-                                Text(loc("widget.quickNote.placeholder"))
-                                    .font(.system(size: isCompact ? 11 : 12, weight: .regular))
-                                    .foregroundStyle(.white.opacity(0.35))
-                                    .padding(.top, 4)
-                                    .padding(.leading, 3)
-                                    .allowsHitTesting(false)
-                            }
-
-                            TextEditor(text: $noteText)
-                                .scrollContentBackground(.hidden)
-                                .font(.system(size: isCompact ? 11.5 : 12.5))
-                                .foregroundStyle(.white)
-                                .lineSpacing(isCompact ? 2 : 3)
+                    // Zone de saisie
+                    ZStack(alignment: .topLeading) {
+                        if noteText.isEmpty {
+                            Text(loc("widget.quickNote.placeholder"))
+                                .font(.system(size: isCompact ? 11 : 12, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.35))
+                                .padding(.top, 4)
+                                .padding(.leading, 3)
+                                .allowsHitTesting(false)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        TextEditor(text: $noteText)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.clear)
+                            .font(.system(size: isCompact ? 11.5 : 12.5))
+                            .foregroundStyle(.white)
+                            .lineSpacing(isCompact ? 2 : 3)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     // Pied de carte : Compteur
                     if !noteText.isEmpty {
@@ -3354,7 +3376,7 @@ struct QuickNoteWidgetView: View {
                             Spacer()
                             Text("\(noteText.count) car.")
                                 .font(.system(size: isCompact ? 8.5 : 9.5, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.40))
+                                .foregroundStyle(.white.opacity(0.55))
                         }
                     }
                 }

@@ -9,7 +9,7 @@ final class WidgetManager: ObservableObject {
 
     @Published var widgets: [CustomWidgetConfig] = []
     @Published var position: WidgetPosition = .leftSide
-    @Published var glowColor: WidgetGlowColor = .cyan
+    @Published var glowColor: WidgetGlowColor = .none
     @Published var cornerRadius: CGFloat = 26.0
     @Published var glassOpacity: Double = 0.52
 
@@ -35,7 +35,7 @@ final class WidgetManager: ObservableObject {
            let glow = WidgetGlowColor(rawValue: glowRaw) {
             self.glowColor = glow
         } else {
-            self.glowColor = .cyan
+            self.glowColor = .none
         }
 
         // Coins arrondis
@@ -170,7 +170,7 @@ final class WidgetManager: ObservableObject {
 
     func resetToDefaults() {
         self.position = .leftSide
-        self.glowColor = .cyan
+        self.glowColor = .none
         self.cornerRadius = 26.0
         self.glassOpacity = 0.52
         self.widgets = Self.defaultWidgets()

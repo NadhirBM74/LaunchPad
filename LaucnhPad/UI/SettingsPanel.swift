@@ -189,10 +189,10 @@ struct SettingsPanel: View {
                 Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.45)
             case .liquidGlass:
                 Rectangle().fill(.ultraThinMaterial)
-                Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.35)
+                Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.32)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.10),
+                        Color.white.opacity(0.12),
                         Color.purple.opacity(0.04),
                         Color.blue.opacity(0.03),
                         Color.clear
@@ -201,7 +201,7 @@ struct SettingsPanel: View {
                     endPoint: .bottomTrailing
                 )
                 LinearGradient(
-                    colors: [Color.white.opacity(0.15), Color.clear],
+                    colors: [Color.white.opacity(0.18), Color.white.opacity(0.03), Color.clear],
                     startPoint: .top,
                     endPoint: .center
                 )
@@ -213,17 +213,19 @@ struct SettingsPanel: View {
     // MARK: Onglets (icône au-dessus du titre, onglet actif en violet)
 
     private var tabBar: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 8) {
             ForEach(SettingsTab.allCases) { tab in
                 let selected = selectedTab == tab
-                Button { withAnimation(.easeOut(duration: 0.15)) { selectedTab = tab } } label: {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { selectedTab = tab }
+                } label: {
                     VStack(spacing: 5) {
                         Image(systemName: tab.symbol)
                             .font(.system(size: 18, weight: .regular))
                             .frame(height: 20)
                         HStack(spacing: 3) {
                             Text(tab.title)
-                                .font(.system(size: 12.5))
+                                .font(.system(size: 12.5, weight: selected ? .medium : .regular))
                                 .lineLimit(1)
                             if tab == .license && licenseManager.isPro {
                                 Image(systemName: "checkmark.circle.fill")
@@ -232,15 +234,24 @@ struct SettingsPanel: View {
                             }
                         }
                     }
-                    .frame(width: 95, height: 62)
+                    .frame(width: 96, height: 62)
                     .foregroundStyle(selected ? SettingsStyle.accent : Color.primary.opacity(0.78))
-                    .background(selected ? Color.primary.opacity(0.07) : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(SettingsStyle.accent.opacity(0.18))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .strokeBorder(SettingsStyle.accent.opacity(0.35), lineWidth: 1)
+                                }
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
     }
 
@@ -248,6 +259,35 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var generalTab: some View {
+        if !accessibilityGranted {
+            SettingsCardBox {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.orange)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("permission.banner.title"))
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text(loc("permission.banner.desc"))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+
+                    Spacer()
+
+                    Button(loc("general.authorize_button")) {
+                        PermissionManager.shared.requestAccessibility()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 10)
+            }
+        }
+
         SettingsSectionTitle(loc("section.language"))
         SettingsCardBox {
             SettingsRow(loc("lang.title"), subtitle: loc("lang.subtitle")) {
@@ -327,6 +367,9 @@ struct SettingsPanel: View {
             if pinchMode != .off && pinchMode != .three && SystemConflicts.systemFourFingerPinchEnabled {
                 SettingsWarning(loc("general.pinch_conflict"))
             }
+            if pinchMode != .off && SystemConflicts.systemThreeFingerDragEnabled {
+                SettingsWarning(loc("general.three_finger_drag_tip"))
+            }
             SettingsSeparator()
             SettingsSliderRow(loc("general.scroll_sensitivity"), value: $scrollSensitivity, range: 0.2...2.0, step: 0.1)
             SettingsSeparator()
@@ -349,10 +392,7 @@ struct SettingsPanel: View {
                     Label(loc("general.authorized"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 } else {
                     Button(loc("general.authorize_button")) {
-                        InputEventMonitor.requestAccessibility()
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                            NSWorkspace.shared.open(url)
-                        }
+                        PermissionManager.shared.requestAccessibility()
                     }
                 }
             }
@@ -2106,16 +2146,25 @@ private struct SettingsCardBox<Content: View>: View {
     let content: () -> Content
     init(@ViewBuilder content: @escaping () -> Content) { self.content = content }
     var body: some View {
-        VStack(alignment: .leading, spacing: 0, content: content)
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                cardBackground
-                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        Group {
+            if theme == .liquidGlass {
+                VStack(alignment: .leading, spacing: 0, content: content)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .liquidGlassCard(cornerRadius: 15, interactive: false)
+            } else {
+                VStack(alignment: .leading, spacing: 0, content: content)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        cardBackground
+                            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    }
+                    .overlay {
+                        cardStroke
+                    }
             }
-            .overlay {
-                cardStroke
-            }
+        }
     }
 
     @ViewBuilder

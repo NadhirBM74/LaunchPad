@@ -300,22 +300,8 @@ struct TutorialCardView: View {
             .padding(.vertical, 14)
         }
         .frame(width: 650, height: 490)
-        .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.35), Color.white.opacity(0.08), Color.white.opacity(0.20)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.2
-                        )
-                )
-                .shadow(color: .black.opacity(0.6), radius: 36, y: 16)
-        }
+        .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
+        .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
     }
 
     private func dismiss() {

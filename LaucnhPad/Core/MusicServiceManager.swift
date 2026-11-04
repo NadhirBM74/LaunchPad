@@ -408,7 +408,7 @@ public final class MusicServiceManager: ObservableObject {
                 limitationNotice: nil
             )
 
-            if existingArtwork == nil {
+            if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
                 resolveArtwork(for: name, artist: artist, album: album)
             }
         }
@@ -447,7 +447,7 @@ public final class MusicServiceManager: ObservableObject {
                 limitationNotice: spotifyLimitationNotice
             )
 
-            if existingArtwork == nil {
+            if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
                 resolveArtwork(for: name, artist: artist, album: album, fallbackURL: self.currentTrack.artworkURL)
             }
         }
@@ -914,7 +914,7 @@ public final class MusicServiceManager: ObservableObject {
         track.sourceAppName = snap.appName
 
         if let data = snap.artworkData {
-            artworkCache[cacheKey] = data
+            storeArtwork(data, forKey: cacheKey)
         } else if artwork == nil, !Self.isBrowser(bundleID: snap.bundleID), !snap.artist.isEmpty {
             // Miniature : recherche de la pochette officielle (les vidéos de navigateur n'ont pas
             // de correspondance fiable, on garde alors l'icône de l'application source).
@@ -994,6 +994,17 @@ public final class MusicServiceManager: ObservableObject {
 
     // MARK: - Résolution Avancée et Cache de Pochettes d'Album
 
+    private static let maxArtworkCacheEntries = 30
+
+    private func storeArtwork(_ data: Data, forKey key: String) {
+        if artworkCache.count >= Self.maxArtworkCacheEntries, artworkCache[key] == nil {
+            // Éviction légère de la moitié des entrées pour borner l'empreinte RAM
+            let keysToRemove = Array(artworkCache.keys.prefix(Self.maxArtworkCacheEntries / 2))
+            for k in keysToRemove { artworkCache.removeValue(forKey: k) }
+        }
+        artworkCache[key] = data
+    }
+
     private func artworkCacheKey(title: String, artist: String) -> String {
         "\(artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())|||\(title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
     }
@@ -1028,7 +1039,7 @@ public final class MusicServiceManager: ObservableObject {
             // Étape A : Télécharger depuis le fallbackURL (ex: Spotify CDN) si présent
             if let fallbackURL {
                 if let data = await self.fetchArtworkData(from: fallbackURL) {
-                    self.artworkCache[cacheKey] = data
+                    self.storeArtwork(data, forKey: cacheKey)
                     if self.currentTrack.title == trimmedTitle {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             self.currentTrack.artworkData = data
@@ -1044,7 +1055,7 @@ public final class MusicServiceManager: ObservableObject {
             }.value : nil
 
             if let localData, !localData.isEmpty, NSImage(data: localData) != nil {
-                self.artworkCache[cacheKey] = localData
+                self.storeArtwork(localData, forKey: cacheKey)
                 if self.currentTrack.title == trimmedTitle {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         self.currentTrack.artworkData = localData
@@ -1055,7 +1066,7 @@ public final class MusicServiceManager: ObservableObject {
 
             // Étape C : Requête sur l'API officielle iTunes Search (Apple CDN, cover HD 600x600)
             if let remoteData = await self.searchArtworkOnITunes(title: trimmedTitle, artist: trimmedArtist) {
-                self.artworkCache[cacheKey] = remoteData
+                self.storeArtwork(remoteData, forKey: cacheKey)
                 if self.currentTrack.title == trimmedTitle {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         self.currentTrack.artworkData = remoteData
@@ -1151,7 +1162,7 @@ public final class MusicServiceManager: ObservableObject {
               NSImage(data: data) != nil else {
             return nil
         }
-        artworkCache[url.absoluteString] = data
+        storeArtwork(data, forKey: url.absoluteString)
         return data
     }
 

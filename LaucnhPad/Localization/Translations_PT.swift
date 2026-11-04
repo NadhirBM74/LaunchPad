@@ -41,6 +41,7 @@ nonisolated enum Translations_PT: Sendable {
         "general.pinch": "Gesto do trackpad",
         "general.pinch_subtitle": "Junte os dedos para abrir, afaste para fechar.",
         "general.pinch_conflict": "O gesto do sistema 'Launchpad / Apps' (juntar 4 dedos) está ativo. Desative-o em Ajustes do Sistema › Trackpad › Mais Gestos.",
+        "general.three_finger_drag_tip": "O 'Arrastar com três dedos' do macOS está ativo na Acessibilidade. Use 4 dedos para abrir o LaunchPad.",
         "general.scroll_sensitivity": "Sensibilidade de rolagem",
         "general.hot_corner": "Canto ativo",
         "general.hot_corner_subtitle": "Mova o cursor para o canto escolhido da tela para abrir ou fechar o Launchpad.",
@@ -238,6 +239,7 @@ nonisolated enum Translations_PT: Sendable {
         "corner.bottomLeft": "Canto inferior esquerdo",
         "corner.bottomRight": "Canto inferior direito",
 
+        "pinch.all": "Automático (3, 4 ou 5 dedos)",
         "pinch.off": "Desativado",
         "pinch.three": "Juntar 3 dedos",
         "pinch.fourFive": "Juntar 4 ou 5 dedos",

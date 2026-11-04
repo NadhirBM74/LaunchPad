@@ -103,6 +103,8 @@ final class InputEventMonitor {
     private(set) var gestureTapAvailable = false
     private var gestureTap: CFMachPort?
     private var gestureSource: CFRunLoopSource?
+    private var globalGestureMonitor: Any?
+    private var lastGestureTimestamp: TimeInterval = 0
     private var keyTap: CFMachPort?
     private var keySource: CFRunLoopSource?
     private var mouseMonitors: [Any] = []
@@ -129,10 +131,16 @@ final class InputEventMonitor {
     func reconfigure() {
         stopAll()
         activeHotCorner = Prefs.hotCorner
-        if Prefs.pinchMode != .off { startGestureTap() }
+        cachedPinchMode = Prefs.pinchMode
+        cachedSensitivity = CGFloat(max(0.3, min(Prefs.scrollSensitivity, 2.5)))
+        if cachedPinchMode != .off { startGestureTap() }
         if Prefs.interceptF4 { startKeyTap() }
         if activeHotCorner != .off { startHotCorner() }
     }
+
+    /// Réglages mis en cache : le chemin chaud (chaque événement trackpad du système) ne lit jamais UserDefaults.
+    private var cachedPinchMode: PinchMode = .off
+    private var cachedSensitivity: CGFloat = 1.0
 
     func stopAll() {
         for (tap, source) in [(gestureTap, gestureSource), (keyTap, keySource)] {
@@ -140,9 +148,14 @@ final class InputEventMonitor {
             if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         }
         gestureTap = nil; gestureSource = nil; keyTap = nil; keySource = nil
+        if let globalGestureMonitor {
+            NSEvent.removeMonitor(globalGestureMonitor)
+            self.globalGestureMonitor = nil
+        }
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
         mouseMonitors.removeAll()
         cornerTask?.cancel()
+        interactiveWatchdog?.cancel()
     }
 
     fileprivate func reenableTaps() {
@@ -150,79 +163,151 @@ final class InputEventMonitor {
         if let keyTap, !CGEvent.tapIsEnabled(tap: keyTap) { CGEvent.tapEnable(tap: keyTap, enable: true) }
     }
 
-    // MARK: Pincement (event tap en écoute seule sur les événements « gesture »)
+    // MARK: Pincement (Event tap + moniteur global pour capture précise et fluide)
 
     private func startGestureTap() {
         let mask = CGEventMask(1) << CGEventMask(NSEvent.EventType.gesture.rawValue)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
-                                          eventsOfInterest: mask, callback: gestureTapCallback, userInfo: refcon) else {
+        if let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
+                                       eventsOfInterest: mask, callback: gestureTapCallback, userInfo: refcon) {
+            let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+            CGEvent.tapEnable(tap: tap, enable: true)
+            gestureTap = tap
+            gestureSource = source
+            gestureTapAvailable = true
+        } else {
             gestureTapAvailable = false
-            return
         }
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        gestureTap = tap
-        gestureSource = source
-        gestureTapAvailable = true
+
+        // Moniteur global compagnon pour garantir la réception sans délai
+        if globalGestureMonitor == nil {
+            globalGestureMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.gesture]) { [weak self] event in
+                self?.handleGesture(event)
+            }
+        }
     }
 
     fileprivate func handleGesture(_ event: NSEvent) {
-        let mode = Prefs.pinchMode
-        let touches = event.allTouches().filter { $0.phase != .ended && $0.phase != .cancelled }
+        // Déduplication entre CGEventTap et le global monitor
+        guard abs(event.timestamp - lastGestureTimestamp) > 0.0005 else { return }
+        lastGestureTimestamp = event.timestamp
+
+        let mode = cachedPinchMode
+        guard mode != .off else { return }
+
+        // Récupère l'ensemble des contacts physiques actifs (y compris stationnaires)
+        let rawTouches: Set<NSTouch> = {
+            let touching = event.touches(matching: .touching, in: nil)
+            return touching.isEmpty ? event.allTouches() : touching
+        }()
+        let touches = rawTouches.filter { $0.phase != .ended && $0.phase != .cancelled }
         let count = touches.count
-        guard mode.accepts(count) else {
-            // Doigts levés (ou nombre de doigts changé) : fin du geste interactif.
-            finishInteractive()
-            if count < 3 { resetPinch() }
-            return
+
+        // Tolérance continue : en cours de geste, tolérer 2 à 5 doigts sans interruption
+        if interactiveActive {
+            if count < 2 {
+                finishInteractive()
+                resetPinch()
+                return
+            }
+        } else {
+            guard mode.accepts(count) else {
+                if count < 3 { resetPinch() }
+                return
+            }
         }
+
         let points = touches.map(\.normalizedPosition)
-        let centroid = CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(count), y: points.map(\.y).reduce(0, +) / CGFloat(count))
+        let centroid = CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(count),
+                               y: points.map(\.y).reduce(0, +) / CGFloat(count))
         let spread = points.map { hypot($0.x - centroid.x, $0.y - centroid.y) }.reduce(0, +) / CGFloat(count)
 
-        if count != pinchFingers || pinchInitialSpread == 0 {
-            finishInteractive()
+        // Réinitialisation du référentiel initial lors d'un nouveau geste
+        if !interactiveActive && (count != pinchFingers || pinchInitialSpread == 0) {
             pinchFingers = count
             pinchInitialSpread = spread
             pinchInitialCentroid = centroid
             pinchFired = false
+            // Sensibilité relue une seule fois par geste (le réglage s'applique dès le geste suivant)
+            cachedSensitivity = CGFloat(max(0.3, min(Prefs.scrollSensitivity, 2.5)))
             return
         }
-        guard pinchInitialSpread > 0.03 else { return }
-        // Un balayage déplace le centre sans changer l'écartement : on l'ignore.
+
+        guard pinchInitialSpread > 0.025 else { return }
         let drift = hypot(centroid.x - pinchInitialCentroid.x, centroid.y - pinchInitialCentroid.y)
         let ratio = spread / pinchInitialSpread
+
+        // Prise en compte directe de la sensibilité configurée par l'utilisateur
+        let sensitivity = cachedSensitivity
+        let openRange = Self.baseOpenRange / sensitivity
+        let closeRange = Self.baseCloseRange / sensitivity
 
         if !interactiveActive {
             guard !pinchFired else { return }
             let visible = isLaunchpadVisible()
-            let start = visible ? (ratio - 1) / Self.closeRange : (1 - ratio) / Self.openRange
-            guard start > 0.06, drift < 0.12 else { return }
-            guard interactiveBegin?(!visible) == true else { pinchFired = true; return }
+
+            let pinchInwardProgress = (1.0 - ratio) / openRange
+            let spreadOutwardProgress = (ratio - 1.0) / closeRange
+
+            // Seuil d'initiation équilibré (juste milieu entre réactivité et absence de faux déclenchements)
+            let initThreshold: CGFloat = 0.075 / sensitivity
+
+            let shouldStart: Bool
+            let opening: Bool
+
+            if !visible {
+                // Fermé : pincer vers l'intérieur ouvre
+                shouldStart = pinchInwardProgress > initThreshold
+                opening = true
+            } else {
+                // Déjà ouvert : écarter vers l'extérieur OU repincer vers l'intérieur ferme
+                if spreadOutwardProgress > initThreshold {
+                    shouldStart = true
+                    opening = false
+                } else if pinchInwardProgress > (initThreshold * 1.15) {
+                    shouldStart = true
+                    opening = false
+                } else {
+                    shouldStart = false
+                    opening = false
+                }
+            }
+
+            // Tolérance de dérive équilibrée : évite les démarrages sur simple balayage
+            guard shouldStart, drift < 0.22 else { return }
+            guard interactiveBegin?(opening) == true else { pinchFired = true; return }
             interactiveActive = true
-            interactiveOpening = !visible
+            interactiveOpening = opening
             interactiveProgress = 0
             interactiveVelocity = 0
         }
-        // Le geste devient un balayage : on annule.
-        if drift > 0.3 {
+
+        // Annulation si le geste se transforme en balayage (drift excessif)
+        if drift > 0.35 {
             finishInteractive(forceCancel: true)
             return
         }
-        let raw = interactiveOpening ? (1 - ratio) / Self.openRange : (ratio - 1) / Self.closeRange
+
+        let raw: CGFloat
+        if interactiveOpening {
+            raw = (1.0 - ratio) / openRange
+        } else {
+            raw = ratio < 1.0 ? (1.0 - ratio) / openRange : (ratio - 1.0) / closeRange
+        }
+
         let progress = min(max(raw, 0), 1)
         interactiveVelocity = interactiveVelocity * 0.5 + (progress - interactiveProgress) * 0.5
         interactiveProgress = progress
-        // Visibilité du Launchpad : 0 → 1 à l'ouverture, 1 → 0 à la fermeture.
-        interactiveUpdate?(interactiveOpening ? progress : 1 - progress)
+
+        // Visibilité du Launchpad : 0 → 1 à l'ouverture, 1 → 0 à la fermeture
+        interactiveUpdate?(interactiveOpening ? progress : 1.0 - progress)
         scheduleInteractiveWatchdog()
     }
 
-    /// Écartement nécessaire pour une ouverture / fermeture complète.
-    private static let openRange: CGFloat = 0.45   // pincer jusqu'à 55 % de l'écartement initial
-    private static let closeRange: CGFloat = 0.6   // écarter jusqu'à 160 %
+    /// Amplitudes de base pour ouverture / fermeture complète
+    private static let baseOpenRange: CGFloat = 0.42
+    private static let baseCloseRange: CGFloat = 0.58
 
     private var interactiveActive = false
     private var interactiveOpening = false
@@ -243,8 +328,9 @@ final class InputEventMonitor {
         interactiveWatchdog?.cancel()
         pinchFired = true
         let progress = interactiveProgress, velocity = interactiveVelocity
-        // Comme macOS : on termine si le geste est assez avancé ou lancé dans le bon sens.
-        let commit = !forceCancel && velocity > -0.01 && (progress > 0.35 || (progress > 0.1 && velocity > 0.004))
+
+        // Validation au juste milieu : engagement franc requis (> 34 % ou > 22 % avec vitesse nette)
+        let commit = !forceCancel && (progress > 0.34 || (progress > 0.22 && velocity > 0.003))
         interactiveEnd?(commit)
     }
 
@@ -283,6 +369,14 @@ final class InputEventMonitor {
     // MARK: Coin actif
 
     private func startHotCorner() {
+        refreshCornerTargets()
+        if screenObserver == nil {
+            screenObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshCornerTargets() }
+            }
+        }
         if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { [weak self] _ in
             self?.checkCorner()
         }) { mouseMonitors.append(global) }
@@ -292,21 +386,29 @@ final class InputEventMonitor {
         }) { mouseMonitors.append(local) }
     }
 
-    private func checkCorner() {
+    /// Points cibles du coin actif sur chaque écran (recalculés uniquement si la configuration d'écrans change).
+    private var cornerTargets: [CGPoint] = []
+    private var screenObserver: NSObjectProtocol?
+
+    private func refreshCornerTargets() {
         let corner = activeHotCorner
-        guard corner != .off else { return }
-        let location = NSEvent.mouseLocation
-        let inside = NSScreen.screens.contains { screen in
+        cornerTargets = NSScreen.screens.compactMap { screen in
             let frame = screen.frame
-            let target: CGPoint
             switch corner {
-            case .topLeft: target = CGPoint(x: frame.minX, y: frame.maxY)
-            case .topRight: target = CGPoint(x: frame.maxX, y: frame.maxY)
-            case .bottomLeft: target = CGPoint(x: frame.minX, y: frame.minY)
-            case .bottomRight: target = CGPoint(x: frame.maxX, y: frame.minY)
-            case .off: return false
+            case .topLeft: return CGPoint(x: frame.minX, y: frame.maxY)
+            case .topRight: return CGPoint(x: frame.maxX, y: frame.maxY)
+            case .bottomLeft: return CGPoint(x: frame.minX, y: frame.minY)
+            case .bottomRight: return CGPoint(x: frame.maxX, y: frame.minY)
+            case .off: return nil
             }
-            return abs(location.x - target.x) <= 3 && abs(location.y - target.y) <= 3
+        }
+    }
+
+    private func checkCorner() {
+        guard activeHotCorner != .off else { return }
+        let location = NSEvent.mouseLocation
+        let inside = cornerTargets.contains { target in
+            abs(location.x - target.x) <= 3 && abs(location.y - target.y) <= 3
         }
         if inside {
             guard !cornerFired, cornerEnteredAt == nil else { return }

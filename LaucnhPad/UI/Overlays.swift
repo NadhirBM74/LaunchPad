@@ -34,6 +34,16 @@ struct LaunchpadOverlays: View {
                 TutorialModalView(vm: vm)
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
+            if PermissionManager.shared.showPermissionCard && !PermissionManager.shared.isAccessibilityGranted {
+                dimmer {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        PermissionManager.shared.showPermissionCard = false
+                    }
+                    vm.focusSearch()
+                }
+                AccessibilityPermissionCard()
+                    .transition(.scale(scale: 0.94).combined(with: .opacity))
+            }
             if let toast = vm.toast {
                 VStack {
                     Spacer()
@@ -42,21 +52,8 @@ struct LaunchpadOverlays: View {
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 18).padding(.vertical, 10)
-                        .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    Capsule().strokeBorder(
-                                        LinearGradient(
-                                            colors: [Color.white.opacity(0.60), Color.white.opacity(0.15), Color.white.opacity(0.20)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                                )
-                        }
-                        .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
+                        .liquidGlassCapsule()
+                        .shadow(color: LiquidGlassStyle.shadowColor, radius: 14, y: 6)
                         .padding(.bottom, 90)
                         .frame(maxWidth: 560)
                 }
@@ -69,6 +66,7 @@ struct LaunchpadOverlays: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.uninstall?.id)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.customTileModal?.id)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: vm.showTutorial)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: PermissionManager.shared.showPermissionCard)
     }
 
     private func dimmer(_ action: @escaping () -> Void) -> some View {
@@ -88,33 +86,7 @@ private struct CardBackground: ViewModifier {
             .background {
                 if backgroundStyle == .liquidGlass {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.16), Color.white.opacity(0.03), Color.clear],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.65),
-                                            Color.white.opacity(0.22),
-                                            Color.white.opacity(0.06),
-                                            Color.white.opacity(0.22)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.2
-                                )
-                        )
+                        .liquidGlassCard(cornerRadius: 22, interactive: false, borderLineWidth: 1.2)
                 } else {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(Color(white: 0.14).opacity(0.96))
@@ -432,5 +404,152 @@ struct AddCustomTileCard: View {
         .frame(width: 440)
         .modifier(CardBackground())
         .onAppear { focusedField = .title }
+    }
+}
+
+// MARK: - Carte d'autorisation d'Accessibilité (Liquid Glass)
+
+struct AccessibilityPermissionCard: View {
+    @ObservedObject private var permissionManager = PermissionManager.shared
+
+    var body: some View {
+        VStack(spacing: 18) {
+            // Icône avec halo lumineux
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.orange.opacity(0.35), Color.orange.opacity(0.12)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 58, height: 58)
+                    .overlay(
+                        Circle().strokeBorder(Color.orange.opacity(0.45), lineWidth: 1)
+                    )
+                    .shadow(color: Color.orange.opacity(0.3), radius: 10, y: 3)
+
+                Image(systemName: "hand.raised.app.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Color.orange)
+            }
+
+            VStack(spacing: 6) {
+                Text(loc("permission.accessibility.title"))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+
+                Text(loc("permission.accessibility.subtitle"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Liste des fonctionnalités nécessitant l'autorisation
+            VStack(alignment: .leading, spacing: 10) {
+                featureRow(
+                    icon: "hand.draw.fill",
+                    title: loc("permission.feature.pinch"),
+                    desc: loc("permission.feature.pinch_desc")
+                )
+                featureRow(
+                    icon: "keyboard.fill",
+                    title: loc("permission.feature.f4"),
+                    desc: loc("permission.feature.f4_desc")
+                )
+                featureRow(
+                    icon: "cursorarrow.rays",
+                    title: loc("permission.feature.hotcorner"),
+                    desc: loc("permission.feature.hotcorner_desc")
+                )
+                featureRow(
+                    icon: "playpause.fill",
+                    title: loc("permission.feature.media"),
+                    desc: loc("permission.feature.media_desc")
+                )
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+
+            // État en temps réel et boutons d'action
+            if permissionManager.isAccessibilityGranted {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text(loc("permission.granted_auto"))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.green)
+                }
+                .transition(.opacity)
+            } else {
+                HStack(spacing: 12) {
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            permissionManager.showPermissionCard = false
+                        }
+                    } label: {
+                        Text(loc("common.later"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        permissionManager.requestAccessibility()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 12))
+                            Text(loc("general.accessibility_button"))
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(Color.white)
+                        .clipShape(Capsule())
+                        .shadow(color: .white.opacity(0.3), radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(width: 440)
+        .padding(24)
+        .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
+        .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
+    }
+
+    private func featureRow(icon: String, title: String, desc: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(desc)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.60))
+            }
+            Spacer()
+        }
     }
 }

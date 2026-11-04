@@ -32,6 +32,7 @@ nonisolated enum PrefKey: Sendable {
     static let folderPlacement = "LaunchpadFolderPlacement"
     static let sortFolderContents = "LaunchpadSortFolderContents"
     static let hasLaunchedBefore = "LaunchpadHasLaunchedBefore"
+    static let hasPromptedAccessibility = "LaunchpadHasPromptedAccessibility"
     static let iconStyle = "LaunchpadIconStyle"
     static let displayMode = "LaunchpadDisplayMode"
     static let hideDock = "LaunchpadHideDock"
@@ -119,15 +120,22 @@ enum DisplayMode: String, CaseIterable, Identifiable {
 }
 
 enum PinchMode: String, CaseIterable, Identifiable {
-    case off, three, fourFive, five
+    case all = "all"
+    case three = "three"
+    case fourFive = "fourFive"
+    case five = "five"
+    case off = "off"
+
     var id: String { rawValue }
     var title: String { loc("pinch.\(rawValue)") }
+
     func accepts(_ fingers: Int) -> Bool {
         switch self {
-        case .off: false
-        case .three: fingers == 3
-        case .fourFive: fingers == 4 || fingers == 5
-        case .five: fingers == 5
+        case .off: return false
+        case .all: return fingers >= 3 && fingers <= 5
+        case .three: return fingers >= 3 && fingers <= 4
+        case .fourFive: return fingers >= 4 && fingers <= 5
+        case .five: return fingers == 5
         }
     }
 }
@@ -228,7 +236,7 @@ enum Prefs {
             PrefKey.reduceMotion: false,
             PrefKey.scrollSensitivity: 1.0,
             PrefKey.settingsOpacity: 0.92,
-            PrefKey.pinchMode: PinchMode.three.rawValue,
+            PrefKey.pinchMode: PinchMode.all.rawValue,
             PrefKey.hotCorner: HotCorner.off.rawValue,
             PrefKey.interceptF4: false,
             PrefKey.hotKeyEnabled: true,
@@ -287,7 +295,7 @@ enum Prefs {
         let value = defaults.double(forKey: PrefKey.scrollSensitivity)
         return value == 0 ? 1 : min(max(value, 0.2), 2.0)
     }
-    static var pinchMode: PinchMode { PinchMode(rawValue: defaults.string(forKey: PrefKey.pinchMode) ?? "") ?? .three }
+    static var pinchMode: PinchMode { PinchMode(rawValue: defaults.string(forKey: PrefKey.pinchMode) ?? "") ?? .all }
     static var hotCorner: HotCorner { HotCorner(rawValue: defaults.string(forKey: PrefKey.hotCorner) ?? "") ?? .off }
     static var interceptF4: Bool { defaults.bool(forKey: PrefKey.interceptF4) }
     static var hotKeyEnabled: Bool { defaults.bool(forKey: PrefKey.hotKeyEnabled) }
@@ -330,6 +338,16 @@ enum SystemConflicts {
     static var systemFourFingerPinchEnabled: Bool {
         for domain in ["com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad"] {
             if let value = CFPreferencesCopyAppValue("TrackpadFourFingerPinchGesture" as CFString, domain as CFString) as? Int, value == 2 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Le glissement avec 3 doigts est-il activé dans macOS (Accessibilité > Contrôle du pointeur) ?
+    static var systemThreeFingerDragEnabled: Bool {
+        for domain in ["com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad"] {
+            if let value = CFPreferencesCopyAppValue("TrackpadThreeFingerDrag" as CFString, domain as CFString) as? Int, value == 1 {
                 return true
             }
         }

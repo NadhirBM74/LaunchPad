@@ -41,6 +41,7 @@ nonisolated enum Translations_IT: Sendable {
         "general.pinch": "Gesto del trackpad",
         "general.pinch_subtitle": "Pizzica per aprire, allarga le dita per chiudere.",
         "general.pinch_conflict": "Il gesto di sistema 'Launchpad / App' (pizzica con 4 dita) è attivo. Disattivalo in Impostazioni di Sistema › Trackpad › Altri gesti.",
+        "general.three_finger_drag_tip": "Il 'Trascina con tre dita' di macOS è attivo in Accessibilità. Usa 4 dita per pizzicare e aprire LaunchPad.",
         "general.scroll_sensitivity": "Sensibilità scorrimento",
         "general.hot_corner": "Angolo attivo",
         "general.hot_corner_subtitle": "Muovi il cursore nell'angolo scelto dello schermo per aprire o chiudere Launchpad.",
@@ -238,6 +239,7 @@ nonisolated enum Translations_IT: Sendable {
         "corner.bottomLeft": "Angolo inferiore sinistro",
         "corner.bottomRight": "Angolo inferiore destro",
 
+        "pinch.all": "Automatico (3, 4 o 5 dita)",
         "pinch.off": "Disattivato",
         "pinch.three": "Pizzica con 3 dita",
         "pinch.fourFive": "Pizzica con 4 o 5 dita",
