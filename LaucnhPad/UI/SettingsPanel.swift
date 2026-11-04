@@ -13,7 +13,7 @@ enum SettingsStyle {
 }
 
 struct SettingsPanel: View {
-    static let size = CGSize(width: 640, height: 680)
+    static let size = CGSize(width: 640, height: 710)
     static var targetTab: SettingsTab? = nil
 
     static var initialTab: SettingsTab {
@@ -125,7 +125,8 @@ struct SettingsPanel: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 44)
                 }
             }
 
@@ -1421,39 +1422,59 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var aboutTab: some View {
+        // Section En-tête de l'application
         SettingsCardBox {
             HStack(spacing: 16) {
                 Image(nsImage: appLogo.image ?? NSApp.applicationIconImage)
-                    .resizable().frame(width: 64, height: 64)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text("LaucnhPad").font(.system(size: 18, weight: .semibold))
+                        Text("LaucnhPad")
+                            .font(.system(size: 19, weight: .bold))
                         if !licenseManager.isPro {
                             ProBadge()
                         }
                     }
+
                     HStack(spacing: 6) {
                         Text("Version installée :")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                         Text("v\(updateManager.currentAppVersion)")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.primary)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Color.primary.opacity(0.08))
+                            .clipShape(Capsule())
                     }
-                    Text(loc("about.created_by")).font(.caption).foregroundStyle(.secondary)
+
+                    Text(loc("about.created_by"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, 16)
         }
 
         // Section Mise à jour
         SettingsCardBox {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(SettingsStyle.accent)
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color.purple.opacity(0.16))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.purple)
+                    }
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mise à jour du logiciel")
                             .font(.system(size: 14, weight: .semibold))
@@ -1467,7 +1488,9 @@ struct SettingsPanel: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+
                     Spacer()
+
                     if updateManager.state == .checking {
                         ProgressView()
                             .controlSize(.small)
@@ -1475,10 +1498,11 @@ struct SettingsPanel: View {
                 }
 
                 SettingsSeparator()
+                    .padding(.vertical, 2)
 
                 switch updateManager.state {
                 case .idle:
-                    HStack {
+                    HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Version actuelle : v\(updateManager.currentAppVersion)")
                                 .font(.system(size: 13, weight: .medium))
@@ -1500,13 +1524,14 @@ struct SettingsPanel: View {
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
 
                 case .upToDate(let version):
-                    HStack {
+                    HStack(spacing: 12) {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
+                                .font(.system(size: 16))
                             Text("LaucnhPad est à jour (v\(version))")
                                 .font(.system(size: 13, weight: .medium))
                         }
@@ -1518,7 +1543,7 @@ struct SettingsPanel: View {
                     }
 
                 case .updateAvailable(let version, let notes, _):
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             HStack(spacing: 8) {
                                 Image(systemName: "sparkles")
@@ -1533,7 +1558,8 @@ struct SettingsPanel: View {
                             } label: {
                                 Label("Installer la mise à jour", systemImage: "arrow.down.circle.fill")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .padding(.horizontal, 4)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(SettingsStyle.accent)
@@ -1552,6 +1578,7 @@ struct SettingsPanel: View {
                                     .font(.system(size: 12.5))
                                     .foregroundStyle(.primary.opacity(0.92))
                                     .lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1560,7 +1587,7 @@ struct SettingsPanel: View {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .stroke(Color.primary.opacity(0.08), lineWidth: 1)
                             )
-                            .cornerRadius(10)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                     }
 
@@ -1609,9 +1636,9 @@ struct SettingsPanel: View {
                             .tint(.green)
                         }
                     }
-                    .padding(10)
+                    .padding(12)
                     .background(Color.green.opacity(0.08))
-                    .cornerRadius(10)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 case .installing:
                     HStack(spacing: 10) {
@@ -1641,24 +1668,60 @@ struct SettingsPanel: View {
                 }
 
                 SettingsSeparator()
+                    .padding(.vertical, 2)
 
-                SettingsRow("Recherche automatique", subtitle: "Vérifier régulièrement si une nouvelle version est disponible.") {
-                    SettingsSwitch(isOn: $updateManager.autoCheckEnabled)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Recherche automatique")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Vérifier régulièrement si une nouvelle version est disponible.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $updateManager.autoCheckEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(SettingsStyle.accent)
                 }
             }
+            .padding(.vertical, 16)
         }
 
         // Section Guide & Tutoriel
         SettingsCardBox {
-            SettingsRow("Tutoriel de bienvenue", subtitle: "Revoir le guide interactif présentant toutes les fonctionnalités de LaunchPad.") {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.blue.opacity(0.16))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "graduationcap.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.blue)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Tutoriel de bienvenue")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Revoir le guide interactif présentant toutes les fonctionnalités de LaunchPad.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
                 Button {
                     NotificationCenter.default.post(name: .openTutorial, object: nil)
                 } label: {
-                    Label("Lancer le tutoriel", systemImage: "graduationcap.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                    Label("Lancer le tutoriel", systemImage: "play.circle.fill")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
                 }
                 .buttonStyle(.bordered)
             }
+            .padding(.vertical, 14)
         }
 
         // Section Mode Administrateur & Tests
@@ -1666,76 +1729,101 @@ struct SettingsPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
                     ZStack {
-                        Circle()
-                            .fill(adminManager.isAuthenticated ? Color.green.opacity(0.18) : SettingsStyle.accent.opacity(0.18))
-                            .frame(width: 38, height: 38)
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(adminManager.isAuthenticated ? Color.green.opacity(0.16) : Color.orange.opacity(0.16))
+                            .frame(width: 32, height: 32)
                         Image(systemName: adminManager.isAuthenticated ? "checkmark.shield.fill" : "lock.shield.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(adminManager.isAuthenticated ? Color.green : SettingsStyle.accent)
+                            .font(.system(size: 16))
+                            .foregroundStyle(adminManager.isAuthenticated ? Color.green : Color.orange)
                     }
+
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
                             Text("Mode Administrateur")
                                 .font(.system(size: 14, weight: .semibold))
                             if adminManager.isAuthenticated {
-                                Text("DÉVERROUILLÉ")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.green.opacity(0.18))
-                                    .foregroundStyle(.green)
-                                    .clipShape(Capsule())
+                                HStack(spacing: 4) {
+                                    Circle().fill(Color.green).frame(width: 6, height: 6)
+                                    Text("DÉVERROUILLÉ")
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2.5)
+                                .background(Color.green.opacity(0.16))
+                                .foregroundStyle(.green)
+                                .clipShape(Capsule())
                             }
                         }
                         Text(adminManager.isAuthenticated ? "Connecté en tant que \(adminManager.authenticatedUser) — Accès complet au menu de tests" : "Accès réservé pour tester tous les sous-systèmes, widgets, animations et fonctionnalités.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+
                     Spacer()
                 }
 
                 SettingsSeparator()
+                    .padding(.vertical, 2)
 
                 if adminManager.isAuthenticated {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Le mode administrateur est actuellement actif. Vous pouvez ouvrir le Centre de Test pour expérimenter toutes les fonctionnalités de LaunchPad.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.primary.opacity(0.035))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                         HStack(spacing: 12) {
                             Button {
                                 adminManager.openTestCenter()
                             } label: {
-                                Label("Ouvrir le Menu de Test", systemImage: "hammer.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
+                                HStack(spacing: 6) {
+                                    Image(systemName: "hammer.fill")
+                                    Text("Ouvrir le Menu de Test")
+                                        .fontWeight(.semibold)
+                                }
+                                .font(.system(size: 12.5))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(SettingsStyle.accent)
 
-                            Button("Se déconnecter") {
+                            Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     adminManager.logout()
                                     adminUsername = ""
                                     adminPassword = ""
                                     adminErrorMessage = nil
                                 }
+                            } label: {
+                                Text("Se déconnecter")
+                                    .font(.system(size: 12.5))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
                             }
                             .buttonStyle(.bordered)
                         }
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .bottom, spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Nom d'utilisateur")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                                 TextField("admin", text: $adminUsername)
                                     .textFieldStyle(.roundedBorder)
+                                    .frame(minWidth: 130)
                             }
-                            .frame(maxWidth: 160)
 
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Mot de passe")
@@ -1758,31 +1846,28 @@ struct SettingsPanel: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
+                                .frame(minWidth: 130)
                             }
-                            .frame(maxWidth: 160)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(" ")
-                                    .font(.system(size: 11, weight: .medium))
-                                Button {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        let res = adminManager.authenticate(username: adminUsername, password: adminPassword)
-                                        if res.success {
-                                            adminErrorMessage = nil
-                                            adminPassword = ""
-                                            adminManager.openTestCenter()
-                                        } else {
-                                            adminErrorMessage = res.message
-                                        }
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    let res = adminManager.authenticate(username: adminUsername, password: adminPassword)
+                                    if res.success {
+                                        adminErrorMessage = nil
+                                        adminPassword = ""
+                                        adminManager.openTestCenter()
+                                    } else {
+                                        adminErrorMessage = res.message
                                     }
-                                } label: {
-                                    Label("Connexion", systemImage: "key.fill")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .padding(.horizontal, 4)
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .tint(SettingsStyle.accent)
+                            } label: {
+                                Label("Connexion", systemImage: "key.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
                             }
+                            .buttonStyle(.borderedProminent)
+                            .tint(SettingsStyle.accent)
                         }
 
                         if let adminErrorMessage {
@@ -1809,23 +1894,45 @@ struct SettingsPanel: View {
                     }
                 }
             }
+            .padding(.vertical, 16)
         }
 
         // Section Quitter
         SettingsCardBox {
-            SettingsRow(loc("about.quit_title"), subtitle: loc("about.quit_subtitle")) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.red.opacity(0.14))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "power")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.red)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("about.quit_title"))
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(loc("about.quit_subtitle"))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
                 Button(role: .destructive) {
                     NSApp.terminate(nil)
                 } label: {
                     Label(loc("about.quit_button"), systemImage: "power")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, 3)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.red.opacity(0.88))
                 .keyboardShortcut("q", modifiers: .command)
             }
+            .padding(.vertical, 14)
         }
     }
 
@@ -2003,7 +2110,7 @@ private struct SettingsCardBox<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 cardBackground
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
             .overlay {
                 cardStroke
@@ -2014,16 +2121,16 @@ private struct SettingsCardBox<Content: View>: View {
     private var cardBackground: some View {
         switch theme {
         case .dark:
-            Color.white.opacity(0.04)
+            Color.white.opacity(0.045)
         case .light:
             Color.white.opacity(0.72)
         case .glass:
             Color.white.opacity(0.065)
         case .liquidGlass:
             ZStack {
-                Color.white.opacity(0.06)
+                Color.white.opacity(0.05)
                 LinearGradient(
-                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.02), Color.clear],
+                    colors: [Color.white.opacity(0.10), Color.white.opacity(0.02), Color.clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -2035,19 +2142,19 @@ private struct SettingsCardBox<Content: View>: View {
     private var cardStroke: some View {
         switch theme {
         case .dark:
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         case .light:
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
         case .glass:
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         case .liquidGlass:
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.55), Color.white.opacity(0.12), Color.white.opacity(0.05), Color.white.opacity(0.20)],
+                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.08), Color.white.opacity(0.03), Color.white.opacity(0.14)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
