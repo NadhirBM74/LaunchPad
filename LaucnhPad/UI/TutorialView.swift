@@ -335,9 +335,10 @@ private struct AnimStep0OpenClose: View {
     let accentColor: Color
 
     @State private var pinchProgress: CGFloat = 0.0
-    @State private var isOpen = false
     @State private var isKeyPressed = false
-    @State private var statusMessage = "Pincement 3-4 doigts ou ⌃ Espace"
+    @State private var launchpadOpacity: Double = 0.0
+    @State private var launchpadScale: CGFloat = 0.85
+    @State private var statusMessage = "1. Pincez ou pressez ⌃ Espace"
     @State private var timer: Timer? = nil
 
     var body: some View {
@@ -502,86 +503,85 @@ private struct AnimStep0OpenClose: View {
 
                         Spacer()
 
-                        // 3. Dock macOS en bas de l'écran (visible quand LaunchPad est fermé)
-                        if !isOpen {
-                            HStack(spacing: 6) {
-                                miniDockIcon(icon: "finder", color: .blue)
-                                miniDockIcon(icon: "safari.fill", color: .cyan)
-                                miniDockIcon(icon: "envelope.fill", color: .indigo)
-                                miniDockIcon(icon: "music.note", color: .pink)
-                                miniDockIcon(icon: "photo.stack.fill", color: .orange)
-                                miniDockIcon(icon: "square.grid.2x2.fill", color: accentColor, isLaunchpad: true)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
-                            )
-                            .padding(.bottom, 6)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        // 3. Dock macOS en bas de l'écran (glisse vers le bas et s'estompe quand LaunchPad s'ouvre)
+                        HStack(spacing: 6) {
+                            miniDockIcon(icon: "finder", color: .blue)
+                            miniDockIcon(icon: "safari.fill", color: .cyan)
+                            miniDockIcon(icon: "envelope.fill", color: .indigo)
+                            miniDockIcon(icon: "music.note", color: .pink)
+                            miniDockIcon(icon: "photo.stack.fill", color: .orange)
+                            miniDockIcon(icon: "square.grid.2x2.fill", color: accentColor, isLaunchpad: true)
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                        )
+                        .padding(.bottom, 6)
+                        .opacity(1.0 - launchpadOpacity)
+                        .offset(y: CGFloat(launchpadOpacity * 20.0))
                     }
 
-                    // 4. OVERLAY LAUNCHPAD (qui s'ouvre avec flou et zoom fluide)
-                    if isOpen {
-                        ZStack {
-                            // Fond flouté dépoli profond
-                            Rectangle()
-                                .fill(.ultraThinMaterial)
-                                .overlay(Color.black.opacity(0.35))
+                    // 4. OVERLAY LAUNCHPAD (animé en synchronicité exacte via launchpadOpacity & scale)
+                    ZStack {
+                        // Fond flouté dépoli profond
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Color.black.opacity(0.35))
 
-                            VStack(spacing: 10) {
-                                // Mini barre de recherche
-                                HStack(spacing: 4) {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.white.opacity(0.6))
-                                    Text("Rechercher...")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.white.opacity(0.5))
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .frame(width: 140)
-                                .background(Color.white.opacity(0.12))
-                                .clipShape(Capsule())
-                                .padding(.top, 14)
-
-                                // Grille des applications LaunchPad avec icônes réalistes
-                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 14), count: 4), spacing: 8) {
-                                    miniLaunchIcon(name: "Safari", icon: "safari.fill", color: .cyan)
-                                    miniLaunchIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
-                                    miniLaunchIcon(name: "Musique", icon: "music.note", color: .red)
-                                    miniLaunchIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
-                                    miniLaunchIcon(name: "Xcode", icon: "hammer.fill", color: .blue)
-                                    miniLaunchIcon(name: "Mail", icon: "envelope.fill", color: .indigo)
-                                    miniLaunchIcon(name: "Notes", icon: "note.text", color: .yellow)
-                                    miniLaunchIcon(name: "Réglages", icon: "gearshape.fill", color: .gray)
-                                }
-
+                        VStack(spacing: 10) {
+                            // Mini barre de recherche
+                            HStack(spacing: 4) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                Text("Rechercher...")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.white.opacity(0.5))
                                 Spacer()
                             }
-
-                            // Badge de confirmation vert "LaunchPad Ouvert"
-                            HStack(spacing: 4) {
-                                Circle().fill(Color.green).frame(width: 6, height: 6)
-                                Text("LaunchPad Ouvert")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 3.5)
-                            .background(Color.black.opacity(0.7))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .frame(width: 140)
+                            .background(Color.white.opacity(0.12))
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 1))
-                            .offset(y: 62)
+                            .padding(.top, 14)
+
+                            // Grille des applications LaunchPad avec icônes réalistes
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 14), count: 4), spacing: 8) {
+                                miniLaunchIcon(name: "Safari", icon: "safari.fill", color: .cyan)
+                                miniLaunchIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
+                                miniLaunchIcon(name: "Musique", icon: "music.note", color: .red)
+                                miniLaunchIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
+                                miniLaunchIcon(name: "Xcode", icon: "hammer.fill", color: .blue)
+                                miniLaunchIcon(name: "Mail", icon: "envelope.fill", color: .indigo)
+                                miniLaunchIcon(name: "Notes", icon: "note.text", color: .yellow)
+                                miniLaunchIcon(name: "Réglages", icon: "gearshape.fill", color: .gray)
+                            }
+
+                            Spacer()
                         }
-                        .transition(.scale(scale: 0.88).combined(with: .opacity))
+
+                        // Badge de confirmation vert "LaunchPad Ouvert"
+                        HStack(spacing: 4) {
+                            Circle().fill(Color.green).frame(width: 6, height: 6)
+                            Text("LaunchPad Ouvert")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3.5)
+                        .background(Color.black.opacity(0.7))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 1))
+                        .offset(y: 62)
                     }
+                    .opacity(launchpadOpacity)
+                    .scaleEffect(launchpadScale)
+                    .blur(radius: CGFloat((1.0 - launchpadOpacity) * 6.0))
 
                     // Caméra FaceTime HD (Notch) au sommet
                     VStack {
@@ -603,7 +603,7 @@ private struct AnimStep0OpenClose: View {
         }
         .onAppear {
             runAnimationCycle()
-            timer = Timer.scheduledTimer(withTimeInterval: 5.8, repeats: true) { _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 6.2, repeats: true) { _ in
                 runAnimationCycle()
             }
         }
@@ -645,46 +645,54 @@ private struct AnimStep0OpenClose: View {
     }
 
     private func runAnimationCycle() {
-        // 0. ÉTAT AU REPOS (Bureau macOS)
+        // 0. ÉTAT INITIAL AU REPOS (Bureau macOS)
         withAnimation(.easeOut(duration: 0.3)) {
-            isOpen = false
+            launchpadOpacity = 0.0
+            launchpadScale = 0.85
             pinchProgress = 0.0
             isKeyPressed = false
             statusMessage = "1. Pincez ou pressez ⌃ Espace"
         }
 
-        // 1. GESTE D'OUVERTURE SYNCHRONISÉ : Doigts pincent + touches s'enfoncent -> LaunchPad s'ouvre !
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+        // 1. GESTE D'OUVERTURE : Doigts pincent + touches s'enfoncent -> LaunchPad zoome et s'affiche SIMULTANÉMENT !
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 pinchProgress = 1.0
                 isKeyPressed = true
-                isOpen = true
+                launchpadOpacity = 1.0
+                launchpadScale = 1.0
                 statusMessage = "✦ Le geste ouvre LaunchPad !"
             }
         }
 
-        // 2. Relâchement des doigts : LaunchPad reste ouvert et visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
-            withAnimation(.easeOut(duration: 0.35)) {
+        // 2. Relâchement des doigts : LaunchPad reste grand ouvert et stable
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
+            withAnimation(.easeOut(duration: 0.3)) {
                 pinchProgress = 0.0
                 isKeyPressed = false
                 statusMessage = "✦ LaunchPad est ouvert et prêt"
             }
         }
 
-        // 3. GESTE DE FERMETURE SYNCHRONISÉ : Doigts pincent à nouveau -> LaunchPad se ferme !
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.7) {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+        // 3. ANNONCE DE LA FERMETURE (l'utilisateur lit ce qui va se passer)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
+            statusMessage = "2. Pincez à nouveau pour fermer..."
+        }
+
+        // 4. GESTE DE FERMETURE EN DIRECT : Doigts pincent + touches s'enfoncent -> LaunchPad se referme SIMULTANÉMENT !
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.1) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 pinchProgress = 1.0
                 isKeyPressed = true
-                isOpen = false
-                statusMessage = "✦ Répétez le geste pour fermer"
+                launchpadOpacity = 0.0
+                launchpadScale = 0.85
+                statusMessage = "✦ Le geste referme LaunchPad !"
             }
         }
 
-        // 4. Relâchement des doigts : Retour au Bureau macOS
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
-            withAnimation(.easeOut(duration: 0.35)) {
+        // 5. Relâchement des doigts sur le bureau : état final au repos
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.8) {
+            withAnimation(.easeOut(duration: 0.3)) {
                 pinchProgress = 0.0
                 isKeyPressed = false
                 statusMessage = "✦ Retour au bureau macOS"
