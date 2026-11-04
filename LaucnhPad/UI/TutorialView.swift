@@ -828,97 +828,99 @@ private struct AnimStep2DragAndPage: View {
     }
 }
 
-// MARK: - ANIMATION 4 : Création de Dossiers (Superposition)
+// MARK: - ANIMATION 4 : Création de Dossiers (Superposition au Centre)
 
 private struct AnimStep3CreateFolder: View {
     let accentColor: Color
 
     @State private var dragX: CGFloat = 55.0
-    @State private var dragY: CGFloat = 0.0
+    @State private var musicX: CGFloat = -55.0
     @State private var isLifted = false
     @State private var isFolderOpen = false
 
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
-                HStack(spacing: 64) {
-                    // Cible (Musique) qui devient un dossier
-                    ZStack {
-                        if isFolderOpen {
+                if isFolderOpen {
+                    // DOSSIER CRÉÉ PARFAITEMENT AU MILIEU (x = 0)
+                    VStack(spacing: 4) {
+                        ZStack {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color.white.opacity(0.15))
-                                .frame(width: 72, height: 72)
+                                .fill(Color.white.opacity(0.16))
+                                .frame(width: 76, height: 76)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                                         .stroke(accentColor, lineWidth: 2)
                                 )
-                                .shadow(color: accentColor.opacity(0.55), radius: 14)
-                                .transition(.scale.combined(with: .opacity))
-                        }
+                                .shadow(color: accentColor.opacity(0.6), radius: 16)
 
-                        VStack(spacing: 4) {
-                            if isFolderOpen {
-                                HStack(spacing: 6) {
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.pink)
-                                        .frame(width: 24, height: 24)
-                                        .overlay(Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.white))
-
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.orange)
-                                        .frame(width: 24, height: 24)
-                                        .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 11)).foregroundStyle(.white))
-                                }
-                                .frame(width: 72, height: 50)
-                            } else {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            // Les 2 icônes à l'intérieur du dossier
+                            HStack(spacing: 6) {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(Color.pink)
-                                    .frame(width: 48, height: 48)
-                                    .overlay(Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white))
-                            }
+                                    .frame(width: 26, height: 26)
+                                    .overlay(Image(systemName: "music.note").font(.system(size: 12, weight: .bold)).foregroundStyle(.white))
 
-                            Text(isFolderOpen ? "Médias" : "Musique")
-                                .font(.system(size: 10.5, weight: isFolderOpen ? .bold : .medium))
-                                .foregroundStyle(isFolderOpen ? accentColor : .white.opacity(0.75))
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.orange)
+                                    .frame(width: 26, height: 26)
+                                    .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(.white))
+                            }
                         }
+
+                        Text("Médias")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(accentColor)
+                    }
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+
+                } else {
+                    // Les 2 applications séparées avant la création
+                    // Musique (se déplace de -55 vers 0 pour fusionner au milieu)
+                    VStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.pink)
+                            .frame(width: 48, height: 48)
+                            .overlay(Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white))
+
+                        Text("Musique")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .offset(x: musicX)
+
+                    // Emplacement d'origine de Photos (reste visible en pointillés quand Photos est soulevée)
+                    if isLifted {
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.25), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                .frame(width: 48, height: 48)
+
+                            Text("Photos")
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
+                        .offset(x: 55)
                     }
 
-                    // Source (Photos) qui est glissée
-                    VStack(spacing: 4) {
-                        if !isFolderOpen {
-                            if isLifted {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.25), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
-                                    .frame(width: 48, height: 48)
+                    // Photos (se déplace de +55 vers 0 pour fusionner au milieu)
+                    if !isFolderOpen {
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.orange)
+                                .frame(width: isLifted ? 52 : 48, height: isLifted ? 52 : 48)
+                                .overlay(Image(systemName: "photo.stack.fill").font(.system(size: isLifted ? 24 : 22)).foregroundStyle(.white))
+                                .shadow(color: isLifted ? .black.opacity(0.55) : .clear, radius: 14, y: 8)
+                                .scaleEffect(isLifted ? 1.15 : 1.0)
 
-                                Text("Photos")
-                                    .font(.system(size: 10.5, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.3))
-                            } else {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.orange)
-                                    .frame(width: 48, height: 48)
-                                    .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 22)).foregroundStyle(.white))
-
+                            if !isLifted {
                                 Text("Photos")
                                     .font(.system(size: 10.5, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.75))
                             }
-                        } else {
-                            Color.clear.frame(width: 48, height: 66)
                         }
+                        .offset(x: dragX, y: isLifted ? -6 : 0)
                     }
-                }
-
-                // Icône Photos volante (sans label pour éviter toute superposition avec Musique)
-                if isLifted && !isFolderOpen {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.orange)
-                        .frame(width: 52, height: 52)
-                        .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 24)).foregroundStyle(.white))
-                        .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
-                        .scaleEffect(1.15)
-                        .offset(x: dragX, y: dragY - 8)
                 }
 
                 // Curseur macOS
@@ -926,15 +928,15 @@ private struct AnimStep3CreateFolder: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.7), radius: 4, y: 2)
-                    .offset(x: dragX + 22, y: dragY + 16)
+                    .offset(x: isFolderOpen ? 34 : dragX + 22, y: isFolderOpen ? 26 : (isLifted ? 12 : 26))
             }
-            .frame(height: 100)
+            .frame(height: 105)
 
             HStack(spacing: 6) {
                 Image(systemName: isFolderOpen ? "folder.badge.plus" : "square.stack.3d.down.right.fill")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(accentColor)
-                Text(isFolderOpen ? "Dossier 'Médias' créé instantanément !" : "Glissez une application directement sur une autre")
+                Text(isFolderOpen ? "Dossier 'Médias' créé instantanément au centre !" : "Glissez une application directement sur une autre")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isFolderOpen ? accentColor : .white.opacity(0.85))
             }
@@ -947,28 +949,33 @@ private struct AnimStep3CreateFolder: View {
     private func startLoop() {
         Timer.scheduledTimer(withTimeInterval: 3.8, repeats: true) { _ in
             dragX = 55
-            dragY = 0
+            musicX = -55
             isFolderOpen = false
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 isLifted = true
             }
 
+            // Déplacement des deux icônes vers le centre (0)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                withAnimation(.easeInOut(duration: 1.1)) {
-                    dragX = -58
+                withAnimation(.easeInOut(duration: 0.9)) {
+                    dragX = 0
+                    musicX = 0
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            // Fusion au centre
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
                     isFolderOpen = true
                     isLifted = false
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            // Réinitialisation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.9) {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     dragX = 55
+                    musicX = -55
                     isFolderOpen = false
                 }
             }
