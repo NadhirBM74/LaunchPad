@@ -1080,42 +1080,1117 @@ struct TutorialCardView: View {
     }
 }
 
+// MARK: - Visite Guidée Animée en Direct dans le Launchpad (Plein Écran & Spotlight)
+
+struct LaunchpadLiveTutorialView: View {
+    @ObservedObject var vm: LaunchpadViewModel
+    var onDismiss: (() -> Void)? = nil
+
+    @State private var currentStepIndex: Int = 0
+    @State private var showDetailedCard: Bool = false
+    @State private var transitionBlur: CGFloat = 0.0
+    @State private var transitionOpacity: Double = 1.0
+
+    private let steps: [TutorialStep] = [
+        TutorialStep(
+            id: 0,
+            badge: "BIENVENUE",
+            title: "Bienvenue dans LaunchPad",
+            subtitle: "Votre nouveau centre de contrôle et lanceur d'applications rapide, fluide et personnalisable pour macOS.",
+            icon: "sparkles",
+            iconColor: Color(red: 0.22, green: 0.64, blue: 1.0),
+            features: [
+                TutorialFeature(icon: "bolt.fill", title: "Ultra-rapide et natif", description: "Développé en Swift pur pour une réactivité instantanée à 120 FPS.", tag: "Performance"),
+                TutorialFeature(icon: "macwindow.badge.plus", title: "Plein écran ou fenêtre", description: "Adaptez l'affichage selon votre espace de travail et vos préférences.", tag: "Affichage"),
+                TutorialFeature(icon: "heart.fill", title: "Conçu pour vous", description: "Organisez vos outils favoris, widgets et raccourcis au même endroit.", tag: "Expérience")
+            ]
+        ),
+        TutorialStep(
+            id: 1,
+            badge: "ACCÈS RAPIDE",
+            title: "Ouvrez LaunchPad en un geste",
+            subtitle: "Pincez sur votre trackpad ou pressez ⌃ Espace pour ouvrir LaunchPad immédiatement.",
+            icon: "keyboard.fill",
+            iconColor: Color(red: 0.38, green: 0.85, blue: 0.55),
+            features: [
+                TutorialFeature(icon: "command", title: "Raccourci clavier ⌃ Espace", description: "Invoquez le panneau immédiatement d'une seule main (modifiable dans les réglages).", tag: "Clavier"),
+                TutorialFeature(icon: "hand.draw.fill", title: "Geste Trackpad naturel", description: "Pincez avec 3 ou 4 doigts sur votre trackpad pour ouvrir LaunchPad comme sur iOS.", tag: "Trackpad"),
+                TutorialFeature(icon: "menubar.arrow.up.rectangle", title: "Barre des menus & Coins actifs", description: "Cliquez sur l'icône de la barre des menus ou glissez votre curseur dans un coin d'écran.", tag: "Système")
+            ]
+        ),
+        TutorialStep(
+            id: 2,
+            badge: "ORGANISATION",
+            title: "Organisation & Dossiers en direct",
+            subtitle: "Glissez une application sur une autre pour créer un dossier instantanément.",
+            icon: "square.grid.3x3.fill",
+            iconColor: Color(red: 1.0, green: 0.60, blue: 0.20),
+            features: [
+                TutorialFeature(icon: "arrow.up.and.down.and.arrow.left.and.right", title: "Glisser-déposer libre", description: "Déplacez vos applications d'un emplacement à un autre ou vers une autre page.", tag: "Grille"),
+                TutorialFeature(icon: "folder.badge.plus", title: "Dossiers automatiques", description: "Superposez deux icônes pour créer un dossier instantanément et les regrouper.", tag: "Dossiers"),
+                TutorialFeature(icon: "contextualmenu.and.cursor", title: "Menu contextuel complet", description: "Faites un clic droit sur une icône pour la renommer, la masquer ou la désinstaller.", tag: "Actions")
+            ]
+        ),
+        TutorialStep(
+            id: 3,
+            badge: "RECHERCHE",
+            title: "Recherche instantanée au clavier",
+            subtitle: "Tapez directement le nom d'une application au clavier et appuyez sur Entrée.",
+            icon: "magnifyingglass",
+            iconColor: Color(red: 0.85, green: 0.40, blue: 1.0),
+            features: [
+                TutorialFeature(icon: "character.textbox", title: "Tapez directement", description: "Dès l'ouverture, commencez à saisir du texte : la recherche se focalise automatiquement.", tag: "Direct"),
+                TutorialFeature(icon: "return", title: "Lancement à la touche Entrée", description: "Appuyez sur Entrée pour exécuter immédiatement le premier résultat sélectionné.", tag: "Efficace"),
+                TutorialFeature(icon: "escape", title: "Touche Échap", description: "Une pression efface votre recherche, une seconde referme immédiatement le panneau.", tag: "Raccourci")
+            ]
+        ),
+        TutorialStep(
+            id: 4,
+            badge: "PERSONNALISATION & PRO",
+            title: "Widgets & Finitions d'exception",
+            subtitle: "Sublimez votre écran avec des widgets interactifs, vinyle et le thème Liquid Glass.",
+            icon: "crown.fill",
+            iconColor: Color(red: 1.0, green: 0.80, blue: 0.15),
+            features: [
+                TutorialFeature(icon: "opticaldisc.fill", title: "Widget Platine Vinyle", description: "Suivez votre musique en direct avec rotation dynamique et commandes Apple Music / Spotify.", tag: "Musique"),
+                TutorialFeature(icon: "sparkles", title: "Thème Liquid Glass", description: "Profitez de reflets lumineux, de verre dépoli dynamique et d'icônes teintées.", tag: "Design"),
+                TutorialFeature(icon: "clock.badge.checkmark.fill", title: "Notes, Horloge & Système", description: "Gardez un œil sur le processeur, la mémoire vive et prenez des notes rapides.", tag: "Widgets")
+            ]
+        )
+    ]
+
+    var body: some View {
+        GeometryReader { geo in
+            let currentStep = steps[currentStepIndex]
+
+            ZStack {
+                if showDetailedCard {
+                    // Mode Fiche Détaillée
+                    ZStack {
+                        Color.black.opacity(0.45)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    showDetailedCard = false
+                                }
+                            }
+
+                        VStack(spacing: 12) {
+                            HStack {
+                                Button {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        showDetailedCard = false
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.left")
+                                        Text("Reprendre la visite en direct dans LaunchPad")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .font(.system(size: 12.5))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Capsule())
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                    .foregroundStyle(.white)
+                                }
+                                .buttonStyle(.plain)
+
+                                Spacer()
+                            }
+                            .frame(maxWidth: 630)
+
+                            TutorialCardView(vm: vm, initialStepIndex: currentStepIndex, onDismiss: onDismiss)
+                        }
+                    }
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+                } else {
+                    // Mode Direct dans le Launchpad (Plein Écran avec animations fluides)
+                    liveLaunchpadOverlay(geo: geo, currentStep: currentStep)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showDetailedCard)
+        }
+        .onExitCommand {
+            dismiss()
+        }
+    }
+
+    // MARK: - Démonstrations Directes dans le Launchpad
+    @ViewBuilder
+    private func liveLaunchpadOverlay(geo: GeometryProxy, currentStep: TutorialStep) -> some View {
+        ZStack {
+            // Voile semi-transparent doux qui laisse respirer le Launchpad
+            Color.black.opacity(currentStepIndex == 3 ? 0.32 : 0.22)
+                .ignoresSafeArea()
+
+            // Orbes lumineuses d'ambiance avec flou
+            Circle()
+                .fill(currentStep.iconColor.opacity(0.22))
+                .frame(width: 480, height: 480)
+                .blur(radius: 120)
+                .offset(x: -geo.size.width * 0.25, y: -geo.size.height * 0.15)
+                .allowsHitTesting(false)
+
+            Circle()
+                .fill(currentStep.iconColor.opacity(0.18))
+                .frame(width: 420, height: 420)
+                .blur(radius: 110)
+                .offset(x: geo.size.width * 0.25, y: geo.size.height * 0.15)
+                .allowsHitTesting(false)
+
+            // Scène d'animation en direct selon l'étape
+            Group {
+                switch currentStepIndex {
+                case 0:
+                    LiveStep0Overview(accentColor: currentStep.iconColor, screenSize: geo.size)
+                case 1:
+                    LiveStep1Triggers(accentColor: currentStep.iconColor, screenSize: geo.size)
+                case 2:
+                    LiveStep2Organize(accentColor: currentStep.iconColor, screenSize: geo.size)
+                case 3:
+                    LiveStep3Search(accentColor: currentStep.iconColor, screenSize: geo.size)
+                case 4:
+                    LiveStep4Widgets(accentColor: currentStep.iconColor, screenSize: geo.size)
+                default:
+                    EmptyView()
+                }
+            }
+            .blur(radius: transitionBlur)
+            .opacity(transitionOpacity)
+
+            // Barre de Contrôle Flottante façon Dynamic Island en bas de l'écran
+            VStack {
+                Spacer()
+
+                HStack(spacing: 16) {
+                    // Bouton Précédent
+                    if currentStepIndex > 0 {
+                        Button {
+                            changeStep(to: currentStepIndex - 1)
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 38, height: 38)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Encart central d'information & progression
+                    VStack(spacing: 5) {
+                        HStack(spacing: 8) {
+                            HStack(spacing: 5) {
+                                Circle().fill(currentStep.iconColor).frame(width: 7, height: 7)
+                                Text("\(currentStepIndex + 1)/\(steps.count) • \(currentStep.badge)")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(currentStep.iconColor)
+                                    .tracking(1.0)
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3)
+                            .background(currentStep.iconColor.opacity(0.18))
+                            .clipShape(Capsule())
+
+                            Text(currentStep.title)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+
+                        Text(currentStep.subtitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(1)
+
+                        // Puces de pagination interactives
+                        HStack(spacing: 6) {
+                            ForEach(0..<steps.count, id: \.self) { idx in
+                                Capsule()
+                                    .fill(idx == currentStepIndex ? currentStep.iconColor : Color.white.opacity(0.3))
+                                    .frame(width: idx == currentStepIndex ? 22 : 6, height: 5)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStepIndex)
+                                    .onTapGesture {
+                                        changeStep(to: idx)
+                                    }
+                            }
+                        }
+                        .padding(.top, 2)
+                    }
+                    .frame(minWidth: 320)
+
+                    // Bouton Suivant / Terminer
+                    if currentStepIndex < steps.count - 1 {
+                        Button {
+                            changeStep(to: currentStepIndex + 1)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("Suivant")
+                                    .font(.system(size: 13, weight: .bold))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(
+                                LinearGradient(
+                                    colors: [currentStep.iconColor, currentStep.iconColor.opacity(0.85)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: currentStep.iconColor.opacity(0.4), radius: 8, y: 3)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button {
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                Text("Terminer")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: .white.opacity(0.3), radius: 8, y: 3)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Bouton bascule vers Fiche complète
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showDetailedCard = true
+                        }
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .frame(width: 34, height: 34)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Afficher la fiche détaillée complète")
+
+                    // Bouton Fermer
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 34, height: 34)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Fermer le tutoriel")
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.40), Color.white.opacity(0.08), Color.white.opacity(0.20)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.2
+                                )
+                        )
+                        .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
+                )
+                .padding(.bottom, 34)
+            }
+        }
+    }
+
+    private func changeStep(to newIndex: Int) {
+        guard newIndex != currentStepIndex, newIndex >= 0, newIndex < steps.count else { return }
+
+        withAnimation(.easeOut(duration: 0.16)) {
+            transitionBlur = 12
+            transitionOpacity = 0.2
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            currentStepIndex = newIndex
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+                transitionBlur = 0.0
+                transitionOpacity = 1.0
+            }
+        }
+    }
+
+    private func dismiss() {
+        Prefs.defaults.set(true, forKey: PrefKey.hasLaunchedBefore)
+        if let onDismiss {
+            onDismiss()
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                vm.showTutorial = false
+            }
+        }
+    }
+}
+
+// MARK: - Étape 0 En Direct : Onde lumineuse fluide & Accueil
+private struct LiveStep0Overview: View {
+    let accentColor: Color
+    let screenSize: CGSize
+
+    @State private var wavePosition: CGFloat = -400
+    @State private var haloPulse = false
+
+    var body: some View {
+        ZStack {
+            // Onde lumineuse balayant doucement le Launchpad
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.clear, accentColor.opacity(0.25), Color.white.opacity(0.20), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 250, height: screenSize.height * 1.5)
+                .rotationEffect(.degrees(30))
+                .offset(x: wavePosition)
+                .blur(radius: 35)
+
+            // Carte d'accueil centrale moderne en verre dépoli
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(accentColor.opacity(haloPulse ? 0.45 : 0.20))
+                        .frame(width: 80, height: 80)
+                        .blur(radius: haloPulse ? 20 : 10)
+
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [accentColor, accentColor.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 64, height: 64)
+                        .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1.5))
+                        .shadow(color: accentColor.opacity(0.6), radius: 14)
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(spacing: 6) {
+                    Text("Bienvenue sur LaunchPad")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.4), radius: 6)
+
+                    Text("Votre bureau macOS réinventé avec une fluidité native exceptionnelle à 120 FPS.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 480)
+                }
+
+                HStack(spacing: 12) {
+                    Label("Ultra-rapide", systemImage: "bolt.fill")
+                    Text("•").foregroundStyle(.white.opacity(0.4))
+                    Label("Personnalisable", systemImage: "slider.horizontal.3")
+                    Text("•").foregroundStyle(.white.opacity(0.4))
+                    Label("Widgets en direct", systemImage: "square.stack.3d.up.fill")
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(accentColor)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+            }
+            .padding(28)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.2
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.45), radius: 26, y: 10)
+            )
+            .offset(y: -40)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: false)) {
+                wavePosition = screenSize.width + 400
+            }
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                haloPulse = true
+            }
+        }
+    }
+}
+
+// MARK: - Étape 1 En Direct : Gestes Trackpad & Clavier
+private struct LiveStep1Triggers: View {
+    let accentColor: Color
+    let screenSize: CGSize
+
+    @State private var pinchProgress: CGFloat = 0.0
+    @State private var rippleScale: CGFloat = 0.8
+    @State private var rippleOpacity: Double = 0.0
+    @State private var isKeyPressed = false
+
+    var body: some View {
+        ZStack {
+            // Onde de choc circulaire se propageant sur le Launchpad
+            Circle()
+                .stroke(accentColor.opacity(0.7), lineWidth: 3)
+                .frame(width: 140, height: 140)
+                .scaleEffect(rippleScale)
+                .opacity(rippleOpacity)
+                .blur(radius: 3)
+                .offset(y: -40)
+
+            HStack(spacing: 36) {
+                // Démonstration Trackpad en grand format
+                VStack(spacing: 12) {
+                    ZStack {
+                        // Surface du Trackpad
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 190, height: 130)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [Color.white.opacity(0.4), Color.white.opacity(0.1)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1.2
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+
+                        // 4 doigts qui se pincent vers le centre
+                        let radius: CGFloat = 44 * (1.0 - pinchProgress * 0.75)
+                        let angles: [Double] = [45, 135, 225, 315]
+
+                        ForEach(0..<4, id: \.self) { i in
+                            let rad = angles[i] * .pi / 180
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 15, height: 15)
+                                .shadow(color: accentColor, radius: 8)
+                                .offset(
+                                    x: cos(rad) * radius,
+                                    y: sin(rad) * radius
+                                )
+                        }
+
+                        // Logo LaunchPad apparaissant au centre lors du pincement
+                        Image(systemName: "square.grid.3x3.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(accentColor)
+                            .scaleEffect(pinchProgress > 0.5 ? 1.0 : 0.0)
+                            .opacity(Double(pinchProgress))
+                            .blur(radius: (1.0 - pinchProgress) * 6)
+                    }
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "hand.draw.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(accentColor)
+                        Text("Pincement Trackpad à 3 ou 4 doigts")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                }
+
+                // Démonstration Touches Clavier
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        // Touche Control
+                        VStack(spacing: 2) {
+                            Text("control")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.65))
+                            Text("⌃")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(width: 68, height: 74)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(isKeyPressed ? accentColor.opacity(0.4) : Color.white.opacity(0.10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(isKeyPressed ? accentColor : Color.white.opacity(0.25), lineWidth: 1.5)
+                                )
+                        )
+                        .shadow(color: isKeyPressed ? accentColor.opacity(0.6) : .black.opacity(0.25), radius: isKeyPressed ? 12 : 4)
+                        .offset(y: isKeyPressed ? 4 : 0)
+
+                        // Touche Espace
+                        VStack(spacing: 2) {
+                            Text("espace")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.65))
+                            Image(systemName: "space")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(width: 104, height: 74)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(isKeyPressed ? accentColor.opacity(0.4) : Color.white.opacity(0.10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(isKeyPressed ? accentColor : Color.white.opacity(0.25), lineWidth: 1.5)
+                                )
+                        )
+                        .shadow(color: isKeyPressed ? accentColor.opacity(0.6) : .black.opacity(0.25), radius: isKeyPressed ? 12 : 4)
+                        .offset(y: isKeyPressed ? 4 : 0)
+                    }
+                    .frame(height: 130)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "keyboard.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(accentColor)
+                        Text("Raccourci Clavier ⌃ Espace")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                }
+            }
+            .offset(y: -40)
+
+            // Badges discrets aux 4 coins pour les coins actifs
+            VStack {
+                HStack {
+                    hotCornerBadge(label: "Coin Actif", corner: "↖")
+                    Spacer()
+                    hotCornerBadge(label: "Coin Actif", corner: "↗")
+                }
+                Spacer()
+                HStack {
+                    hotCornerBadge(label: "Coin Actif", corner: "↙")
+                    Spacer()
+                    hotCornerBadge(label: "Coin Actif", corner: "↘")
+                }
+                .padding(.bottom, 120)
+            }
+            .padding(24)
+        }
+        .onAppear {
+            startLoop()
+        }
+    }
+
+    private func hotCornerBadge(label: String, corner: String) -> some View {
+        HStack(spacing: 4) {
+            Text(corner).font(.system(size: 13, weight: .bold)).foregroundStyle(accentColor)
+            Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+    }
+
+    private func startLoop() {
+        Timer.scheduledTimer(withTimeInterval: 2.6, repeats: true) { _ in
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                pinchProgress = 1.0
+                isKeyPressed = true
+            }
+
+            withAnimation(.easeOut(duration: 1.0)) {
+                rippleScale = 2.6
+                rippleOpacity = 0.85
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation(.easeOut(duration: 0.5)) {
+                    rippleOpacity = 0.0
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    pinchProgress = 0.0
+                    rippleScale = 0.8
+                    isKeyPressed = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Étape 2 En Direct : Glisser-Déposer & Création de dossiers
+private struct LiveStep2Organize: View {
+    let accentColor: Color
+    let screenSize: CGSize
+
+    @State private var dragOffset: CGFloat = 0.0
+    @State private var isDragging = false
+    @State private var isFolderFormed = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            ZStack {
+                // Démonstration visuelle au format réel
+                HStack(spacing: 64) {
+                    // Application cible (Musique) qui reçoit pour former un dossier
+                    ZStack {
+                        if isFolderFormed {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Color.white.opacity(0.16))
+                                .frame(width: 88, height: 88)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .stroke(accentColor, lineWidth: 2)
+                                )
+                                .shadow(color: accentColor.opacity(0.6), radius: 18)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+
+                        VStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(LinearGradient(colors: [Color.pink, Color.red], startPoint: .top, endPoint: .bottom))
+                                .frame(width: isFolderFormed ? 38 : 68, height: isFolderFormed ? 38 : 68)
+                                .overlay(
+                                    Image(systemName: "music.note")
+                                        .font(.system(size: isFolderFormed ? 18 : 30))
+                                        .foregroundStyle(.white)
+                                )
+                                .offset(x: isFolderFormed ? -16 : 0, y: isFolderFormed ? -8 : 0)
+
+                            if !isFolderFormed {
+                                Text("Musique")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+
+                    // Application déplacée (Safari)
+                    VStack(spacing: 6) {
+                        ZStack {
+                            if isDragging {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(Color.cyan.opacity(0.4))
+                                    .frame(width: 76, height: 76)
+                                    .blur(radius: 12)
+                            }
+
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(LinearGradient(colors: [Color.cyan, Color.blue], startPoint: .top, endPoint: .bottom))
+                                .frame(width: isFolderFormed ? 38 : 68, height: isFolderFormed ? 38 : 68)
+                                .overlay(
+                                    Image(systemName: "safari.fill")
+                                        .font(.system(size: isFolderFormed ? 18 : 30))
+                                        .foregroundStyle(.white)
+                                )
+                                .shadow(color: isDragging ? .black.opacity(0.5) : .clear, radius: 16, y: 10)
+                                .scaleEffect(isDragging ? 1.2 : 1.0)
+                        }
+
+                        if !isFolderFormed {
+                            Text("Safari")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .offset(x: dragOffset, y: isFolderFormed ? -8 : (isDragging ? -14 : 0))
+                }
+
+                // Curseur de souris animé
+                Image(systemName: "cursorarrow")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.7), radius: 6, y: 3)
+                    .offset(x: dragOffset + 48, y: isDragging ? 16 : 36)
+            }
+            .frame(height: 120)
+
+            // Info-bulle flottante avec flèche
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: isFolderFormed ? "folder.badge.plus" : "hand.tap.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(accentColor)
+                    Text(isFolderFormed ? "Dossier créé automatiquement !" : "Glissez une icône sur une autre pour créer un dossier")
+                        .font(.system(size: 13.5, weight: .bold))
+                        .foregroundStyle(isFolderFormed ? accentColor : .white)
+                }
+                Text("Vous pouvez réorganiser toutes vos applications librement par simple glisser-déposer.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+        }
+        .offset(y: -40)
+        .onAppear {
+            startLoop()
+        }
+    }
+
+    private func startLoop() {
+        Timer.scheduledTimer(withTimeInterval: 3.8, repeats: true) { _ in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                isDragging = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                withAnimation(.easeInOut(duration: 1.1)) {
+                    dragOffset = -132
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    isFolderFormed = true
+                    isDragging = false
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    dragOffset = 0.0
+                    isFolderFormed = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Étape 3 En Direct : Spotlight sur la Barre de Recherche & Filtre Dynamique
+private struct LiveStep3Search: View {
+    let accentColor: Color
+    let screenSize: CGSize
+
+    @State private var typedText: String = ""
+    @State private var cursorVisible = true
+
+    private let sampleApps = [
+        ("Notes", "note.text", Color.yellow),
+        ("Safari", "safari.fill", Color.blue),
+        ("Xcode", "hammer.fill", Color.cyan),
+        ("Photos", "photo.stack.fill", Color.pink)
+    ]
+
+    var body: some View {
+        ZStack {
+            // Projecteur lumineux (Spotlight) centré directement sur la vraie barre de recherche en haut
+            VStack {
+                ZStack {
+                    // Halo de lumière diffuse sur la barre de recherche du Launchpad
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(accentColor.opacity(0.35))
+                        .frame(width: 360, height: 50)
+                        .blur(radius: 16)
+
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(accentColor, lineWidth: 2)
+                        .frame(width: 340, height: 44)
+                        .shadow(color: accentColor.opacity(0.8), radius: 12)
+
+                    // Bulle d'annotation dynamique pointant vers la barre de recherche
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(accentColor)
+                        HStack(spacing: 0) {
+                            Text(typedText.isEmpty ? "Recherche au clavier..." : typedText)
+                                .font(.system(size: 14, weight: typedText.isEmpty ? .regular : .bold))
+                                .foregroundStyle(typedText.isEmpty ? .white.opacity(0.4) : .white)
+                            if cursorVisible {
+                                Rectangle().fill(accentColor).frame(width: 2, height: 16).padding(.leading, 2)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(width: 330)
+                }
+                .padding(.top, 44)
+
+                Spacer()
+            }
+
+            // Démonstration sur les applications : le filtre en action
+            VStack(spacing: 16) {
+                Text("Tapez simplement au clavier à n'importe quel moment")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+
+                HStack(spacing: 32) {
+                    ForEach(sampleApps, id: \.0) { item in
+                        let isExact = item.0.lowercased() == typedText.lowercased()
+                        let isMatch = item.0.lowercased().contains(typedText.lowercased()) || typedText.isEmpty
+
+                        VStack(spacing: 6) {
+                            ZStack {
+                                if isExact {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(accentColor.opacity(0.55))
+                                        .frame(width: 78, height: 78)
+                                        .blur(radius: 12)
+                                }
+
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(item.2)
+                                    .frame(width: 64, height: 64)
+                                    .overlay(
+                                        Image(systemName: item.1)
+                                            .font(.system(size: 28))
+                                            .foregroundStyle(.white)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(isExact ? Color.white : Color.clear, lineWidth: 2)
+                                    )
+                                    .scaleEffect(isExact ? 1.18 : 1.0)
+                            }
+
+                            Text(item.0)
+                                .font(.system(size: 12, weight: isExact ? .bold : .medium))
+                                .foregroundStyle(isExact ? .white : .white.opacity(0.7))
+                        }
+                        .opacity(isMatch ? 1.0 : 0.20)
+                        .blur(radius: isMatch ? 0 : 5)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: typedText)
+                    }
+                }
+
+                // Touche Entrée clignotante
+                HStack(spacing: 8) {
+                    HStack(spacing: 5) {
+                        Text("↵")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("Entrée")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(accentColor)
+                    .clipShape(Capsule())
+                    .foregroundStyle(.white)
+                    .shadow(color: accentColor.opacity(0.5), radius: 8)
+
+                    Text("Appuyez sur Entrée pour ouvrir immédiatement !")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .padding(.top, 6)
+            }
+            .offset(y: 20)
+        }
+        .onAppear {
+            startTypingLoop()
+        }
+    }
+
+    private func startTypingLoop() {
+        Timer.scheduledTimer(withTimeInterval: 3.6, repeats: true) { _ in
+            let word = "Safari"
+            typedText = ""
+            for (index, char) in word.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.18 + 0.3) {
+                    typedText.append(char)
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    typedText = ""
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Étape 4 En Direct : Widgets & Effets Liquid Glass
+private struct LiveStep4Widgets: View {
+    let accentColor: Color
+    let screenSize: CGSize
+
+    @State private var vinylAngle: Double = 0
+    @State private var sheenOffset: CGFloat = -260
+    @State private var noteOffset: CGFloat = 0
+
+    var body: some View {
+        HStack(spacing: 36) {
+            // Widget Platine Vinyle en grand format
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(white: 0.10), Color(white: 0.18), Color(white: 0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 100, height: 100)
+                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                        .overlay(Circle().stroke(Color.white.opacity(0.08), lineWidth: 1).frame(width: 80, height: 80))
+                        .overlay(Circle().stroke(Color.white.opacity(0.08), lineWidth: 1).frame(width: 60, height: 60))
+                        .rotationEffect(.degrees(vinylAngle))
+
+                    Circle()
+                        .fill(LinearGradient(colors: [accentColor, .orange], startPoint: .top, endPoint: .bottom))
+                        .frame(width: 36, height: 36)
+                        .overlay(Image(systemName: "music.note").font(.system(size: 15)).foregroundStyle(.white))
+                        .rotationEffect(.degrees(vinylAngle))
+
+                    Rectangle()
+                        .fill(Color(white: 0.85))
+                        .frame(width: 3.5, height: 48)
+                        .rotationEffect(.degrees(24), anchor: .top)
+                        .offset(x: 38, y: -22)
+
+                    Image(systemName: "music.quarternote.3")
+                        .font(.system(size: 18))
+                        .foregroundStyle(accentColor)
+                        .offset(x: 16, y: noteOffset)
+                        .opacity(Double(1.0 - abs(noteOffset) / 40))
+                        .blur(radius: abs(noteOffset) / 18)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Widget Platine Vinyle")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Contrôlez votre musique en direct avec rotation dynamique.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(maxWidth: 160)
+                }
+            }
+            .padding(18)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
+
+            // Carte de style Liquid Glass
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.07))
+                    .frame(width: 220, height: 115)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.5), Color.white.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.2
+                            )
+                    )
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.clear, Color.white.opacity(0.4), Color.clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 55, height: 130)
+                    .rotationEffect(.degrees(25))
+                    .offset(x: sheenOffset)
+                    .blur(radius: 8)
+                    .mask(RoundedRectangle(cornerRadius: 20, style: .continuous).frame(width: 220, height: 115))
+
+                VStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 22))
+                        .foregroundStyle(accentColor)
+                    Text("Thème Liquid Glass")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Reflets lumineux & verre dépoli")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+            }
+        }
+        .offset(y: -40)
+        .onAppear {
+            withAnimation(.linear(duration: 8.0).repeatForever(autoreverses: false)) {
+                vinylAngle = 360
+            }
+            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: false)) {
+                sheenOffset = 260
+            }
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                noteOffset = -32
+            }
+        }
+    }
+}
+
 // MARK: - Modal immersif intégré au Launchpad avec effet de flou en arrière-plan
 
 struct TutorialModalView: View {
     @ObservedObject var vm: LaunchpadViewModel
 
     var body: some View {
-        ZStack {
-            // Arrière-plan flou en verre dépoli ultra-immersif
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(Color.black.opacity(0.38))
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        vm.showTutorial = false
-                    }
-                }
-
-            // Orbes lumineuses d'ambiance avec flou diffus
-            Circle()
-                .fill(Color(red: 0.22, green: 0.64, blue: 1.0).opacity(0.25))
-                .frame(width: 460, height: 460)
-                .blur(radius: 110)
-                .offset(x: -160, y: -100)
-                .allowsHitTesting(false)
-
-            Circle()
-                .fill(Color(red: 0.85, green: 0.40, blue: 1.0).opacity(0.20))
-                .frame(width: 400, height: 400)
-                .blur(radius: 120)
-                .offset(x: 180, y: 120)
-                .allowsHitTesting(false)
-
-            TutorialCardView(vm: vm)
-                .transition(.scale(scale: 0.94).combined(with: .opacity))
+        LaunchpadLiveTutorialView(vm: vm) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                vm.showTutorial = false
+            }
         }
         .zIndex(100)
     }
