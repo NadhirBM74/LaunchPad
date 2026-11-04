@@ -1534,19 +1534,27 @@ struct SettingsPanel: View {
                         }
 
                         if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Nouveautés :")
+                            let cleanNotes = notes
+                                .replacingOccurrences(of: "### ", with: "")
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Nouveautés de cette version :")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(.secondary)
-                                Text(notes)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.primary.opacity(0.85))
-                                    .lineLimit(5)
+                                Text(LocalizedStringKey(cleanNotes))
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(.primary.opacity(0.92))
+                                    .lineSpacing(3)
                             }
-                            .padding(10)
+                            .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.primary.opacity(0.04))
-                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                            .cornerRadius(10)
                         }
                     }
 

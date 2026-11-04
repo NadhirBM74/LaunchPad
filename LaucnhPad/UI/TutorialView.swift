@@ -24,11 +24,19 @@ struct TutorialFeature: Identifiable {
 // MARK: - Vue Principale du Tutoriel
 
 struct TutorialCardView: View {
-    @ObservedObject var vm: LaunchpadViewModel
+    var vm: LaunchpadViewModel? = nil
+    var initialStepIndex: Int = 0
     var onDismiss: (() -> Void)? = nil
 
-    @State private var currentStepIndex = 0
+    @State private var currentStepIndex: Int
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+
+    init(vm: LaunchpadViewModel? = nil, initialStepIndex: Int = 0, onDismiss: (() -> Void)? = nil) {
+        self.vm = vm
+        self.initialStepIndex = initialStepIndex
+        self.onDismiss = onDismiss
+        self._currentStepIndex = State(initialValue: initialStepIndex)
+    }
 
     private let steps: [TutorialStep] = [
         TutorialStep(
@@ -350,8 +358,10 @@ struct TutorialCardView: View {
 
     private func dismiss() {
         Prefs.defaults.set(true, forKey: PrefKey.hasLaunchedBefore)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            vm.showTutorial = false
+        if let vm {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                vm.showTutorial = false
+            }
         }
         onDismiss?()
     }

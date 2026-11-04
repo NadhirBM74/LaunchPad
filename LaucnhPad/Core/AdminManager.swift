@@ -66,10 +66,11 @@ public final class AdminManager: ObservableObject {
         log(category: "Auth", message: "Déconnexion de l'administrateur '\(prevUser)'", isSuccess: true)
     }
 
-    /// Ouvre la fenêtre / le menu du Centre de Test
+    /// Ouvre la fenêtre / le menu du Centre de Test et referme les paramètres
     public func openTestCenter() {
+        NotificationCenter.default.post(name: .closeSettings, object: nil)
         NotificationCenter.default.post(name: .openAdminTestCenter, object: nil)
-        log(category: "TestCenter", message: "Ouverture du Centre de Test & Diagnostics")
+        log(category: "TestCenter", message: "Fermeture des paramètres et ouverture du Centre de Test & Diagnostics")
     }
 
     /// Ajoute une entrée dans le journal de bord de l'administrateur

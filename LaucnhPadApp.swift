@@ -119,7 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         center.addObserver(forName: .openAdminTestCenter, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.settings.close()
                 AdminTestWindowController.shared.show(store: self.store)
+            }
+        }
+
+        center.addObserver(forName: .closeSettings, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.settings.close()
             }
         }
 

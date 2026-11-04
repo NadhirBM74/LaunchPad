@@ -352,6 +352,7 @@ extension Notification.Name {
     public static let openSettingsTab = Notification.Name("OpenSettingsTab")
     public static let openTutorial = Notification.Name("OpenTutorial")
     public static let openAdminTestCenter = Notification.Name("OpenAdminTestCenter")
+    public static let closeSettings = Notification.Name("CloseSettings")
     public static let triggerTestToast = Notification.Name("TriggerTestToast")
 }
 
