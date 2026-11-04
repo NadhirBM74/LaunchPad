@@ -159,6 +159,7 @@ final class LaunchpadViewModel: ObservableObject {
     @Published var customTileModal: CustomTileModalModel?
     @Published var showWidgetGallery: Bool = false
     @Published var showTutorial: Bool = false
+    @Published var tutorialStepIndex: Int = 0
     @Published private(set) var favoritesRevision = 0
     @Published private(set) var toast: String?
     @MainActor static var isLaunchpadVisible = false
