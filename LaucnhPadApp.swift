@@ -111,7 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         center.addObserver(forName: .openTutorial, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.settings.close()
                 self.launchpad.show()
+                self.launchpad.viewModel.tutorialStepIndex = 0
                 self.launchpad.viewModel.showTutorial = true
             }
         }

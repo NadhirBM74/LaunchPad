@@ -1712,6 +1712,7 @@ struct SettingsPanel: View {
                 Spacer(minLength: 12)
 
                 Button {
+                    NotificationCenter.default.post(name: .closeSettings, object: nil)
                     NotificationCenter.default.post(name: .openTutorial, object: nil)
                 } label: {
                     Label("Lancer le tutoriel", systemImage: "play.circle.fill")
