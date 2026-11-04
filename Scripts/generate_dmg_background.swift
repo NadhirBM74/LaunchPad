@@ -55,7 +55,11 @@ struct DMGBackgroundOpaque: View {
             // Header (titre + badge PRO + sous-titre)
             VStack(spacing: 5) {
                 HStack(spacing: 8) {
-                    if let logoImg = NSImage(contentsOfFile: "/tmp/launchpad_transparent_icon.png") {
+                    let fallbackIcon = NSImage(contentsOfFile: "/tmp/launchpad_transparent_icon.png")
+                        ?? NSImage(contentsOfFile: "LaucnhPad/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png")
+                        ?? NSImage(contentsOfFile: "../LaucnhPad/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png")
+
+                    if let logoImg = fallbackIcon {
                         Image(nsImage: logoImg)
                             .resizable()
                             .aspectRatio(contentMode: .fit)

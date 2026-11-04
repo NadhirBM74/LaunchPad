@@ -23,6 +23,15 @@ xcodebuild -scheme LaunchPad -configuration Release -derivedDataPath /tmp/Launch
 
 BUILT_APP="/tmp/LaunchPad_DerivedData/Build/Products/Release/LaunchPad.app"
 
+# Fallback pour l'icône icns et png si pas dans /tmp
+if [ ! -f "$ICON_ICNS" ] && [ -f "$BUILT_APP/Contents/Resources/AppIcon.icns" ]; then
+    ICON_ICNS="$BUILT_APP/Contents/Resources/AppIcon.icns"
+fi
+
+if [ ! -f "$ICON_PNG" ] && [ -f "$PROJECT_DIR/LaucnhPad/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png" ]; then
+    ICON_PNG="$PROJECT_DIR/LaucnhPad/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png"
+fi
+
 echo "🧹 3. Préparation du dossier source DMG..."
 rm -rf "$TEMP_DMG_SOURCE" && mkdir -p "$TEMP_DMG_SOURCE"
 ditto "$BUILT_APP" "$TEMP_DMG_SOURCE/LaunchPad.app"
@@ -38,9 +47,14 @@ echo "🔨 5. Création du fichier DMG avec create-dmg..."
 mkdir -p "$DIST_DIR"
 rm -f "$OUTPUT_DMG"
 
+VOLICON_ARGS=()
+if [ -f "$ICON_ICNS" ]; then
+    VOLICON_ARGS=(--volicon "$ICON_ICNS")
+fi
+
 create-dmg \
   --volname "LaunchPad" \
-  --volicon "$ICON_ICNS" \
+  "${VOLICON_ARGS[@]}" \
   --background "$BG_IMAGE" \
   --window-pos 200 120 \
   --window-size 640 440 \

@@ -50,11 +50,33 @@ jobs:
           mkdir -p dist
           APP_PATH="./build/Build/Products/Release/LaunchPad.app"
           
-          # Création du zip
+          # Création du zip de release
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/LaunchPad-${VERSION}.zip"
           
-          # Création du DMG simple
-          hdiutil create -volname "LaunchPad" -srcfolder "$APP_PATH" -ov -format UDZO "dist/LaunchPad-${VERSION}.dmg"
+          # Installation de create-dmg pour le DMG personnalisé
+          brew install create-dmg || true
+          
+          # Génération du fond Liquid Glass Retina opaque
+          swiftc -parse-as-library Scripts/generate_dmg_background.swift -o /tmp/gen_dmg_bg
+          /tmp/gen_dmg_bg
+          
+          # Préparation et création du DMG avec fond Liquid Glass
+          mkdir -p /tmp/dmg_source
+          ditto "$APP_PATH" "/tmp/dmg_source/LaunchPad.app"
+          
+          create-dmg \
+            --volname "LaunchPad" \
+            --background "/tmp/launchpad_bg_opaque.png" \
+            --window-pos 200 120 \
+            --window-size 640 440 \
+            --icon-size 96 \
+            --text-size 13 \
+            --icon "LaunchPad.app" 175 195 \
+            --hide-extension "LaunchPad.app" \
+            --app-drop-link 465 195 \
+            --overwrite \
+            "dist/LaunchPad-${VERSION}.dmg" \
+            "/tmp/dmg_source" || hdiutil create -volname "LaunchPad" -srcfolder "$APP_PATH" -ov -format UDZO "dist/LaunchPad-${VERSION}.dmg"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
