@@ -801,149 +801,242 @@ private struct AnimStep1SearchLaunch: View {
 private struct AnimStep2DragAndPage: View {
     let accentColor: Color
 
-    @State private var dragX: CGFloat = 80.0
-    @State private var dragY: CGFloat = 0.0
-    @State private var isLifted = false
-    @State private var isDroppedOnPage2 = false
-    @State private var pageOffset: CGFloat = 0.0
+    @State private var phase: Int = 0 // 0: repos, 1: levé, 2: bord droit, 3: flip page, 4: dépose, 5: succès
     @State private var activePage: Int = 0
+    @State private var timer: Timer? = nil
+
+    // Coordonnées de Safari
+    private var safariX: CGFloat {
+        switch phase {
+        case 0: return 0
+        case 1: return 0
+        case 2: return 125
+        case 3: return 125
+        case 4, 5: return 75
+        default: return 0
+        }
+    }
+
+    private var safariY: CGFloat {
+        switch phase {
+        case 0: return 0
+        case 1, 2, 3: return -8
+        case 4, 5: return 0
+        default: return 0
+        }
+    }
+
+    private var isSafariLifted: Bool {
+        phase >= 1 && phase <= 3
+    }
+
+    // Coordonnées du curseur
+    private var cursorX: CGFloat {
+        switch phase {
+        case 0: return 20
+        case 1: return 18
+        case 2, 3: return 143
+        case 4: return 93
+        case 5: return 110
+        default: return 20
+        }
+    }
+
+    private var cursorY: CGFloat {
+        switch phase {
+        case 0: return 32
+        case 1, 2, 3: return 10
+        case 4: return 10
+        case 5: return 36
+        default: return 32
+        }
+    }
+
+    // Décalage des pages
+    private var page1Offset: CGFloat {
+        phase >= 3 ? -320 : 0
+    }
+
+    private var page2Offset: CGFloat {
+        phase >= 3 ? 0 : 320
+    }
+
+    private var statusText: String {
+        switch phase {
+        case 0:
+            return "Cliquez et maintenez une application..."
+        case 1:
+            return "L'icône se soulève..."
+        case 2:
+            return "Glissez vers le bord droit de l'écran..."
+        case 3:
+            return "La Page 2 s'affiche automatiquement !"
+        case 4, 5:
+            return "Déposez l'application dans son nouvel emplacement !"
+        default:
+            return ""
+        }
+    }
 
     var body: some View {
         VStack(spacing: 14) {
             ZStack {
-                // Cadre de l'écran avec bordure et fond sombre
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                // Cadre de l'écran LaunchPad
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color.white.opacity(0.04))
-                    .frame(width: 380, height: 110)
+                    .frame(width: 350, height: 115)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     )
 
-                // Deux pages côte à côte qui glissent fluidement
-                HStack(spacing: 0) {
-                    // PAGE 1
-                    HStack(spacing: 36) {
-                        appIcon(name: "Finder", icon: "macwindow", color: .blue)
-                        appIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
+                // Halo lumineux sur le bord droit lorsque l'icône atteint le bord
+                if phase == 2 || phase == 3 {
+                    HStack {
+                        Spacer()
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                LinearGradient(
+                                    colors: [accentColor.opacity(0.5), accentColor.opacity(0.0)],
+                                    startPoint: .trailing,
+                                    endPoint: .leading
+                                )
+                            )
+                            .frame(width: 34, height: 115)
+                    }
+                    .frame(width: 350)
+                    .transition(.opacity)
+                }
 
-                        // Emplacement d'origine de Safari sur la Page 1 (devient un cadre en pointillés lors du glissement)
-                        VStack(spacing: 4) {
-                            if isLifted || isDroppedOnPage2 {
+                // CONTENU DES PAGES
+                ZStack {
+                    // PAGE 1 : Finder (-75), Emplacement Safari vide (0), Photos (+75)
+                    ZStack {
+                        appTile(name: "Finder", icon: "macwindow", color: .blue)
+                            .offset(x: -75)
+
+                        // Emplacement d'origine en pointillés quand Safari est soulevée
+                        if isSafariLifted {
+                            VStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.25), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .strokeBorder(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
                                     .frame(width: 48, height: 48)
-                                    .overlay(
-                                        Image(systemName: "safari.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundStyle(.white.opacity(0.2))
-                                    )
-
-                                Text("Safari")
-                                    .font(.system(size: 10.5, weight: .medium))
+                                Text("Page 1")
+                                    .font(.system(size: 10))
                                     .foregroundStyle(.white.opacity(0.25))
-                            } else {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.cyan)
-                                    .frame(width: 48, height: 48)
-                                    .overlay(Image(systemName: "safari.fill").font(.system(size: 22)).foregroundStyle(.white))
-
-                                Text("Safari")
-                                    .font(.system(size: 10.5, weight: .bold))
-                                    .foregroundStyle(.white)
                             }
+                            .offset(x: 0)
                         }
+
+                        appTile(name: "Photos", icon: "photo.stack.fill", color: .pink)
+                            .offset(x: 75)
                     }
-                    .frame(width: 380)
+                    .offset(x: page1Offset)
+                    .opacity(phase >= 3 ? 0.0 : 1.0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: page1Offset)
 
-                    // PAGE 2
-                    HStack(spacing: 36) {
-                        appIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
-                        appIcon(name: "Xcode", icon: "hammer.fill", color: Color(red: 0.2, green: 0.6, blue: 1.0))
+                    // PAGE 2 : Terminal (-75), Xcode (0)
+                    ZStack {
+                        appTile(name: "Terminal", icon: "terminal.fill", color: .gray)
+                            .offset(x: -75)
 
-                        // Emplacement cible sur la Page 2 où Safari se dépose
-                        VStack(spacing: 4) {
-                            if isDroppedOnPage2 {
+                        appTile(name: "Xcode", icon: "hammer.fill", color: Color(red: 0.2, green: 0.6, blue: 1.0))
+                            .offset(x: 0)
+
+                        // Emplacement cible récepteur en pointillés (avant que Safari se pose)
+                        if phase == 3 {
+                            VStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.cyan)
-                                    .frame(width: 48, height: 48)
-                                    .overlay(Image(systemName: "safari.fill").font(.system(size: 22)).foregroundStyle(.white))
-                                    .transition(.scale.combined(with: .opacity))
-
-                                Text("Safari")
-                                    .font(.system(size: 10.5, weight: .bold))
-                                    .foregroundStyle(.white)
-                            } else {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(accentColor.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .strokeBorder(accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
                                     .frame(width: 48, height: 48)
                                     .overlay(
-                                        Image(systemName: "arrow.down")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundStyle(accentColor.opacity(0.5))
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(accentColor.opacity(0.7))
                                     )
-
-                                Text("Page 2")
-                                    .font(.system(size: 10.5, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.4))
+                                Text("Déposer")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(accentColor)
                             }
+                            .offset(x: 75)
+                            .transition(.opacity)
                         }
                     }
-                    .frame(width: 380)
-                }
-                .frame(width: 760, alignment: .leading)
-                .offset(x: pageOffset)
+                    .offset(x: page2Offset)
+                    .opacity(phase >= 3 ? 1.0 : 0.0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: page2Offset)
 
-                // Icône Safari volante (soulevée par le curseur sans son étiquette texte pour éviter tout chevauchement)
-                if isLifted && !isDroppedOnPage2 {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.cyan)
-                        .frame(width: 52, height: 52)
-                        .overlay(Image(systemName: "safari.fill").font(.system(size: 24)).foregroundStyle(.white))
-                        .shadow(color: .black.opacity(0.6), radius: 16, y: 8)
-                        .scaleEffect(1.15)
-                        .offset(x: dragX, y: dragY - 8)
-                }
+                    // ICÔNE UNIQUE DE SAFARI (Qui se déplace fluidement sans duplication)
+                    VStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.cyan)
+                            .frame(width: isSafariLifted ? 52 : 48, height: isSafariLifted ? 52 : 48)
+                            .overlay(
+                                Image(systemName: "safari.fill")
+                                    .font(.system(size: isSafariLifted ? 24 : 22))
+                                    .foregroundStyle(.white)
+                            )
+                            .shadow(color: isSafariLifted ? .black.opacity(0.6) : .clear, radius: isSafariLifted ? 14 : 0, y: isSafariLifted ? 8 : 0)
+                            .scaleEffect(isSafariLifted ? 1.12 : 1.0)
 
-                // Curseur de souris macOS
-                Image(systemName: "cursorarrow")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.7), radius: 4, y: 2)
-                    .offset(x: dragX + 22, y: dragY + 16)
+                        Text("Safari")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .opacity(isSafariLifted ? 0.0 : 1.0)
+                    }
+                    .offset(x: safariX, y: safariY)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.78), value: safariX)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.78), value: safariY)
+
+                    // CURSEUR SOURIS MACOS
+                    Image(systemName: "cursorarrow")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.8), radius: 4, y: 2)
+                        .offset(x: cursorX, y: cursorY)
+                        .animation(.spring(response: 0.45, dampingFraction: 0.78), value: cursorX)
+                        .animation(.spring(response: 0.45, dampingFraction: 0.78), value: cursorY)
+                }
             }
-            .frame(width: 380, height: 110)
+            .frame(width: 350, height: 115)
             .clipped()
 
             // Indicateur de page (Dots)
             HStack(spacing: 8) {
                 Capsule()
                     .fill(activePage == 0 ? accentColor : Color.white.opacity(0.25))
-                    .frame(width: activePage == 0 ? 22 : 6, height: 6)
+                    .frame(width: activePage == 0 ? 20 : 6, height: 6)
                     .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activePage)
 
                 Capsule()
                     .fill(activePage == 1 ? accentColor : Color.white.opacity(0.25))
-                    .frame(width: activePage == 1 ? 22 : 6, height: 6)
+                    .frame(width: activePage == 1 ? 20 : 6, height: 6)
                     .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activePage)
             }
 
-            // Explication de l'action
+            // Explication dynamique de l'action
             HStack(spacing: 6) {
-                Image(systemName: activePage == 1 ? "checkmark.circle.fill" : "arrow.right.circle.fill")
+                Image(systemName: phase >= 4 ? "checkmark.circle.fill" : "arrow.right.circle.fill")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(activePage == 1 ? Color.green : accentColor)
-                Text(activePage == 1 ? "Page 2 atteinte : l'icône est déposée sans aucun conflit !" : "Glissez l'icône vers le bord pour faire défiler la page")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(activePage == 1 ? Color.green : .white.opacity(0.85))
+                    .foregroundStyle(phase >= 4 ? Color.green : accentColor)
+                Text(statusText)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(phase >= 4 ? Color.green : .white.opacity(0.88))
             }
         }
         .onAppear {
-            startLoop()
+            runCycle()
+            timer = Timer.scheduledTimer(withTimeInterval: 4.8, repeats: true) { _ in
+                runCycle()
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 
-    private func appIcon(name: String, icon: String, color: Color) -> some View {
+    private func appTile(name: String, icon: String, color: Color) -> some View {
         VStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(color)
@@ -956,52 +1049,35 @@ private struct AnimStep2DragAndPage: View {
         }
     }
 
-    private func startLoop() {
-        Timer.scheduledTimer(withTimeInterval: 4.2, repeats: true) { _ in
-            // Étape 1 : Le curseur attrape Safari sur la Page 1
-            dragX = 85
-            dragY = 0
-            pageOffset = 0
-            activePage = 0
-            isDroppedOnPage2 = false
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                isLifted = true
-            }
+    private func runCycle() {
+        // Étape 0 : Début au repos sur Page 1
+        phase = 0
+        activePage = 0
 
-            // Étape 2 : Déplacement vers le bord droit de l'écran
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                withAnimation(.easeInOut(duration: 0.8)) {
-                    dragX = 170
-                }
-            }
+        // Étape 1 : Le curseur attrape et soulève Safari
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            phase = 1
+        }
 
-            // Étape 3 : La page glisse vers la Page 2
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.25) {
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                    pageOffset = -380
-                    activePage = 1
-                    dragX = 85
-                }
-            }
+        // Étape 2 : Déplacement vers le bord droit de l'écran
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            phase = 2
+        }
 
-            // Étape 4 : Dépose de Safari sur la Page 2
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    isLifted = false
-                    isDroppedOnPage2 = true
-                }
-            }
+        // Étape 3 : Déclenchement de la Page 2
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            phase = 3
+            activePage = 1
+        }
 
-            // Étape 5 : Réinitialisation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    dragX = 85
-                    dragY = 0
-                    pageOffset = 0
-                    activePage = 0
-                    isDroppedOnPage2 = false
-                }
-            }
+        // Étape 4 : Dépose de Safari sur la Page 2
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.7) {
+            phase = 4
+        }
+
+        // Étape 5 : Curseur s'éloigne, état final validé
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
+            phase = 5
         }
     }
 }
