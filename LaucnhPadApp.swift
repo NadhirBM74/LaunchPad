@@ -107,6 +107,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Observateurs pour le mode Admin, le tutoriel et les tests
+        center.addObserver(forName: .openTutorial, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.launchpad.show()
+                self.launchpad.viewModel.showTutorial = true
+            }
+        }
+
+        center.addObserver(forName: .openAdminTestCenter, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                AdminTestWindowController.shared.show(store: self.store)
+            }
+        }
+
+        center.addObserver(forName: .triggerTestToast, object: nil, queue: .main) { [weak self] note in
+            let msg = (note.object as? String) ?? "Test LaunchPad"
+            Task { @MainActor [weak self] in
+                self?.launchpad.viewModel.showToast(msg)
+            }
+        }
+
         if UpdateManager.shared.autoCheckEnabled {
             Task {
                 try? await Task.sleep(for: .seconds(3))
@@ -115,8 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !Prefs.defaults.bool(forKey: PrefKey.hasLaunchedBefore) {
-            Prefs.defaults.set(true, forKey: PrefKey.hasLaunchedBefore)
-            settings.show()
+            launchpad.show()
+            launchpad.viewModel.showTutorial = true
         }
 
         // Arguments de test : ouvre directement une fenêtre au lancement.

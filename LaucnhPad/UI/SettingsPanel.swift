@@ -66,6 +66,11 @@ struct SettingsPanel: View {
     @ObservedObject private var customTileManager = CustomTileManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
     @ObservedObject private var updateManager = UpdateManager.shared
+    @ObservedObject private var adminManager = AdminManager.shared
+    @State private var adminUsername = ""
+    @State private var adminPassword = ""
+    @State private var adminErrorMessage: String?
+    @State private var isPasswordVisible = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var accessibilityGranted = AXIsProcessTrusted()
     @State private var selectedTab = SettingsPanel.initialTab
@@ -1625,6 +1630,169 @@ struct SettingsPanel: View {
 
                 SettingsRow("Recherche automatique", subtitle: "Vérifier régulièrement si une nouvelle version est disponible.") {
                     SettingsSwitch(isOn: $updateManager.autoCheckEnabled)
+                }
+            }
+        }
+
+        // Section Guide & Tutoriel
+        SettingsCardBox {
+            SettingsRow("Tutoriel de bienvenue", subtitle: "Revoir le guide interactif présentant toutes les fonctionnalités de LaunchPad.") {
+                Button {
+                    NotificationCenter.default.post(name: .openTutorial, object: nil)
+                } label: {
+                    Label("Lancer le tutoriel", systemImage: "graduationcap.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+
+        // Section Mode Administrateur & Tests
+        SettingsCardBox {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(adminManager.isAuthenticated ? Color.green.opacity(0.18) : SettingsStyle.accent.opacity(0.18))
+                            .frame(width: 38, height: 38)
+                        Image(systemName: adminManager.isAuthenticated ? "checkmark.shield.fill" : "lock.shield.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(adminManager.isAuthenticated ? Color.green : SettingsStyle.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text("Mode Administrateur")
+                                .font(.system(size: 14, weight: .semibold))
+                            if adminManager.isAuthenticated {
+                                Text("DÉVERROUILLÉ")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.green.opacity(0.18))
+                                    .foregroundStyle(.green)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        Text(adminManager.isAuthenticated ? "Connecté en tant que \(adminManager.authenticatedUser) — Accès complet au menu de tests" : "Accès réservé pour tester tous les sous-systèmes, widgets, animations et fonctionnalités.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+
+                SettingsSeparator()
+
+                if adminManager.isAuthenticated {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Le mode administrateur est actuellement actif. Vous pouvez ouvrir le Centre de Test pour expérimenter toutes les fonctionnalités de LaunchPad.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 12) {
+                            Button {
+                                adminManager.openTestCenter()
+                            } label: {
+                                Label("Ouvrir le Menu de Test", systemImage: "hammer.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(SettingsStyle.accent)
+
+                            Button("Se déconnecter") {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    adminManager.logout()
+                                    adminUsername = ""
+                                    adminPassword = ""
+                                    adminErrorMessage = nil
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Nom d'utilisateur")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                TextField("admin", text: $adminUsername)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            .frame(maxWidth: 160)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Mot de passe")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                HStack {
+                                    if isPasswordVisible {
+                                        TextField("••••••", text: $adminPassword)
+                                            .textFieldStyle(.roundedBorder)
+                                    } else {
+                                        SecureField("••••••", text: $adminPassword)
+                                            .textFieldStyle(.roundedBorder)
+                                    }
+                                    Button {
+                                        isPasswordVisible.toggle()
+                                    } label: {
+                                        Image(systemName: isPasswordVisible ? "eye.slash" : "eye")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .frame(maxWidth: 160)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(" ")
+                                    .font(.system(size: 11, weight: .medium))
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        let res = adminManager.authenticate(username: adminUsername, password: adminPassword)
+                                        if res.success {
+                                            adminErrorMessage = nil
+                                            adminPassword = ""
+                                            adminManager.openTestCenter()
+                                        } else {
+                                            adminErrorMessage = res.message
+                                        }
+                                    }
+                                } label: {
+                                    Label("Connexion", systemImage: "key.fill")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .padding(.horizontal, 4)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(SettingsStyle.accent)
+                            }
+                        }
+
+                        if let adminErrorMessage {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.red)
+                                Text(adminErrorMessage)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                            .padding(.top, 2)
+                        }
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            Text("Identifiants par défaut : **admin** / **1234**")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 2)
+                    }
                 }
             }
         }

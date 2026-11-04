@@ -74,6 +74,13 @@ public final class UpdateManager: NSObject, ObservableObject {
         setupNotifications()
     }
 
+    // MARK: - Mode Debug / Test Administrateur
+
+    public func setDebugState(_ newState: UpdateState) {
+        self.state = newState
+        self.lastChecked = Date()
+    }
+
     // MARK: - Notifications macOS
 
     private func setupNotifications() {

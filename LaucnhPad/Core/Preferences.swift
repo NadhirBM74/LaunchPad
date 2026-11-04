@@ -350,5 +350,8 @@ extension Notification.Name {
     public static let settingsVisibilityDidChange = Notification.Name("SettingsVisibilityDidChange")
     public static let iconScalePreviewDidChange = Notification.Name("IconScalePreviewDidChange")
     public static let openSettingsTab = Notification.Name("OpenSettingsTab")
+    public static let openTutorial = Notification.Name("OpenTutorial")
+    public static let openAdminTestCenter = Notification.Name("OpenAdminTestCenter")
+    public static let triggerTestToast = Notification.Name("TriggerTestToast")
 }
 

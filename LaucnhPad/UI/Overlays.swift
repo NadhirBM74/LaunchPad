@@ -30,6 +30,10 @@ struct LaunchpadOverlays: View {
                 AddCustomTileCard(modal: modal, vm: vm)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
+            if vm.showTutorial {
+                TutorialModalView(vm: vm)
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
             if let toast = vm.toast {
                 VStack {
                     Spacer()
@@ -64,6 +68,7 @@ struct LaunchpadOverlays: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.rename?.id)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.uninstall?.id)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.customTileModal?.id)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: vm.showTutorial)
     }
 
     private func dimmer(_ action: @escaping () -> Void) -> some View {

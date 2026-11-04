@@ -158,6 +158,7 @@ final class LaunchpadViewModel: ObservableObject {
     @Published var uninstall: UninstallSession?
     @Published var customTileModal: CustomTileModalModel?
     @Published var showWidgetGallery: Bool = false
+    @Published var showTutorial: Bool = false
     @Published private(set) var favoritesRevision = 0
     @Published private(set) var toast: String?
     @MainActor static var isLaunchpadVisible = false
@@ -368,7 +369,7 @@ final class LaunchpadViewModel: ObservableObject {
     var columns: Int { metrics?.columns ?? Prefs.columns }
     var rows: Int { metrics?.rows ?? Prefs.rows }
 
-    var isPresentingModal: Bool { dialog != nil || rename != nil || uninstall != nil || customTileModal != nil }
+    var isPresentingModal: Bool { dialog != nil || rename != nil || uninstall != nil || customTileModal != nil || showTutorial }
     var showsDeleteBadges: Bool { (editing || optionHeld) && !isSearching }
 
     var overlayFolder: FolderData? {
@@ -652,7 +653,8 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     func escape() {
-        if uninstall != nil, uninstall?.working == false { uninstall = nil; focusSearch() }
+        if showTutorial { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showTutorial = false }; focusSearch() }
+        else if uninstall != nil, uninstall?.working == false { uninstall = nil; focusSearch() }
         else if customTileModal != nil { customTileModal = nil; focusSearch() }
         else if rename != nil { rename = nil; textInputActive = false; focusSearch() }
         else if dialog != nil { dialog = nil }
