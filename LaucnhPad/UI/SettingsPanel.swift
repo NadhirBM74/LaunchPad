@@ -1560,6 +1560,40 @@ struct SettingsPanel: View {
                         ProgressView(value: progress)
                     }
 
+                case .readyToRestart(let version):
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Mise à jour v\(version) téléchargée avec succès !")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(.green)
+                                Text("L'ancienne version sera automatiquement remplacée et supprimée.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button {
+                                updateManager.applyUpdateAndRelaunch()
+                            } label: {
+                                Label("Redémarrer l'application", systemImage: "arrow.clockwise.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                        }
+                    }
+                    .padding(10)
+                    .background(Color.green.opacity(0.08))
+                    .cornerRadius(10)
+
                 case .installing:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)

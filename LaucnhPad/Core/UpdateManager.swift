@@ -11,6 +11,7 @@ public enum UpdateState: Equatable, Sendable {
     case upToDate(version: String)
     case updateAvailable(version: String, notes: String, downloadUrl: URL?)
     case downloading(progress: Double)
+    case readyToRestart(version: String)
     case installing
     case error(message: String)
 
@@ -24,6 +25,8 @@ public enum UpdateState: Equatable, Sendable {
             return v1 == v2
         case (.downloading(let p1), .downloading(let p2)):
             return abs(p1 - p2) < 0.001
+        case (.readyToRestart(let v1), .readyToRestart(let v2)):
+            return v1 == v2
         case (.error(let m1), .error(let m2)):
             return m1 == m2
         default:
@@ -57,6 +60,7 @@ public final class UpdateManager: NSObject, ObservableObject {
     private var activeDownloadTask: URLSessionDownloadTask?
     private var downloadObservation: NSKeyValueObservation?
     private var notificationDelegateProxy: NotificationDelegateProxy?
+    private var stagedUpdateContext: (tempDir: URL, newAppURL: URL, targetAppPath: String)?
 
     override private init() {
         if UserDefaults.standard.object(forKey: PrefKey.autoCheckUpdates) == nil {
@@ -196,13 +200,13 @@ public final class UpdateManager: NSObject, ObservableObject {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
-    // MARK: - Envoi de la notification macOS
+    // MARK: - Envoi des notifications macOS
 
     private func sendSystemNotification(version: String) {
         let content = UNMutableNotificationContent()
-        content.title = "LaucnhPad — Mise à jour disponible 🚀"
+        content.title = "LaunchPad — Mise à jour disponible 🚀"
         content.subtitle = "Version \(version)"
-        content.body = "Une nouvelle version est disponible. Ouvrez les Réglages > À propos pour l'installer automatiquement."
+        content.body = "Une nouvelle version est disponible. Ouvrez les Réglages > À propos pour l'installer."
         content.sound = .default
 
         let request = UNNotificationRequest(
@@ -218,10 +222,30 @@ public final class UpdateManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Téléchargement et Auto-Installation silencieuse
+    private func sendReadyToRestartNotification(version: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "LaunchPad — Mise à jour téléchargée 🚀"
+        content.subtitle = "Version \(version)"
+        content.body = "L'application a bien été téléchargée. Cliquez sur « Redémarrer l'application » pour finaliser l'installation."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "launchpad.update.ready.\(version)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                print("[UpdateManager] Erreur notification: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Téléchargement et Préparation
 
     public func downloadAndInstall() {
-        guard case .updateAvailable(_, _, let downloadUrl) = state,
+        guard case .updateAvailable(let version, _, let downloadUrl) = state,
               let url = downloadUrl else {
             return
         }
@@ -250,10 +274,8 @@ public final class UpdateManager: NSObject, ObservableObject {
                     return
                 }
 
-                self.state = .installing
-
                 Task.detached(priority: .userInitiated) {
-                    await self.performInPlaceUpdate(archiveUrl: tempUrl, fileExtension: ext)
+                    await self.performInPlaceUpdate(archiveUrl: tempUrl, fileExtension: ext, version: version)
                 }
             }
         }
@@ -268,8 +290,8 @@ public final class UpdateManager: NSObject, ObservableObject {
         task.resume()
     }
 
-    /// Extrait la nouvelle application, lance le script de swap et redémarre l'app
-    private nonisolated func performInPlaceUpdate(archiveUrl: URL, fileExtension: String) async {
+    /// Extrait la nouvelle application et prépare le remplacement
+    private nonisolated func performInPlaceUpdate(archiveUrl: URL, fileExtension: String, version: String) async {
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let extractedAppDir = tempDir.appendingPathComponent("Extracted")
@@ -342,52 +364,73 @@ public final class UpdateManager: NSObject, ObservableObject {
                 targetAppPath = "/Applications/LaunchPad.app"
             }
 
-            let currentPID = ProcessInfo.processInfo.processIdentifier
+            // Mise à jour de l'état : l'application est bien téléchargée et prête à être redémarrée par l'utilisateur
+            await MainActor.run {
+                self.stagedUpdateContext = (tempDir, newAppURL, targetAppPath)
+                self.state = .readyToRestart(version: version)
+                self.sendReadyToRestartNotification(version: version)
+            }
+        } catch {
+            await MainActor.run {
+                self.state = .error(message: "Erreur d'installation : \(error.localizedDescription)")
+            }
+        }
+    }
 
-            // Création du script de swap et relance
-            let scriptURL = tempDir.appendingPathComponent("relaunch.sh")
-            let scriptContent = """
-            #!/bin/bash
-            exec > /tmp/launchpad_updater.log 2>&1
-            set -x
+    /// Applique la mise à jour, supprime l'ancienne version et relance la nouvelle
+    public func applyUpdateAndRelaunch() {
+        guard let context = stagedUpdateContext else {
+            state = .error(message: "Aucune mise à jour prête à installer.")
+            return
+        }
 
-            PID=\(currentPID)
-            NEW_APP="\(newAppURL.path)"
-            TARGET_APP="\(targetAppPath)"
-            TEMP_DIR="\(tempDir.path)"
+        state = .installing
 
-            # Attente polie max 3 secondes de la fermeture de l'ancien processus
-            COUNT=0
-            while kill -0 "$PID" 2>/dev/null; do
-                sleep 0.2
-                COUNT=$((COUNT + 1))
-                if [ $COUNT -ge 15 ]; then
-                    echo "Force killing hanging PID $PID"
-                    kill -9 "$PID" 2>/dev/null || true
-                    break
-                fi
-            done
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        let scriptURL = context.tempDir.appendingPathComponent("relaunch.sh")
+        let scriptContent = """
+        #!/bin/bash
+        exec > /tmp/launchpad_updater.log 2>&1
+        set -x
 
-            # Retirer la quarantaine macOS sur la nouvelle app
-            /usr/bin/xattr -r -d com.apple.quarantine "$NEW_APP" 2>/dev/null || true
+        PID=\(currentPID)
+        NEW_APP="\(context.newAppURL.path)"
+        TARGET_APP="\(context.targetAppPath)"
+        TEMP_DIR="\(context.tempDir.path)"
 
-            # Remplacement atomique de l'application
-            rm -rf "$TARGET_APP"
-            /usr/bin/ditto "$NEW_APP" "$TARGET_APP"
+        # Attente polie max 3 secondes de la fermeture de l'ancien processus
+        COUNT=0
+        while kill -0 "$PID" 2>/dev/null; do
+            sleep 0.2
+            COUNT=$((COUNT + 1))
+            if [ $COUNT -ge 15 ]; then
+                echo "Force killing hanging PID $PID"
+                kill -9 "$PID" 2>/dev/null || true
+                break
+            fi
+        done
 
-            # Retirer la quarantaine macOS sur l'application installée finale
-            /usr/bin/xattr -r -d com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
+        # Retirer la quarantaine macOS sur la nouvelle app
+        /usr/bin/xattr -r -d com.apple.quarantine "$NEW_APP" 2>/dev/null || true
 
-            # Petite pause pour s'assurer que macOS a libéré les verrous de fichiers
-            sleep 0.5
+        # Remplacement atomique de l'application (suppression de l'ancienne version)
+        rm -rf "$TARGET_APP"
+        /usr/bin/ditto "$NEW_APP" "$TARGET_APP"
 
-            # Relance de la nouvelle version
-            /usr/bin/open "$TARGET_APP" || /usr/bin/open -n "$TARGET_APP"
+        # Retirer la quarantaine macOS sur l'application installée finale
+        /usr/bin/xattr -r -d com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
 
-            # Nettoyage
-            rm -rf "$TEMP_DIR"
-            """
+        # Petite pause pour s'assurer que macOS a libéré les verrous de fichiers
+        sleep 0.5
 
+        # Relance de la nouvelle version
+        /usr/bin/open "$TARGET_APP" || /usr/bin/open -n "$TARGET_APP"
+
+        # Nettoyage des fichiers temporaires téléchargés
+        rm -rf "$TEMP_DIR"
+        """
+
+        do {
             try scriptContent.write(to: scriptURL, atomically: true, encoding: .utf8)
 
             // Rendre le script exécutable
@@ -403,18 +446,13 @@ public final class UpdateManager: NSObject, ObservableObject {
             relaunchProcess.arguments = ["/bin/bash", scriptURL.path]
             try relaunchProcess.run()
 
-            // Fermeture de l'application
-            await MainActor.run {
-                NSApp.terminate(nil)
-                // Garantie de fermeture immédiate si NSApp.terminate est temporairement bloqué par la fenêtre modale
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    exit(0)
-                }
+            // Fermeture immédiate de l'application
+            NSApp.terminate(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                exit(0)
             }
         } catch {
-            await MainActor.run {
-                self.state = .error(message: "Erreur d'installation : \(error.localizedDescription)")
-            }
+            state = .error(message: "Erreur lors du redémarrage : \(error.localizedDescription)")
         }
     }
 
