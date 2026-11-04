@@ -623,74 +623,141 @@ private struct AnimStep1SearchLaunch: View {
 private struct AnimStep2DragAndPage: View {
     let accentColor: Color
 
-    @State private var dragX: CGFloat = 0.0
+    @State private var dragX: CGFloat = 80.0
+    @State private var dragY: CGFloat = 0.0
     @State private var isLifted = false
-    @State private var activePage = 0
+    @State private var isDroppedOnPage2 = false
+    @State private var pageOffset: CGFloat = 0.0
+    @State private var activePage: Int = 0
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Grille avec simulation de changement de page
+        VStack(spacing: 14) {
             ZStack {
-                // Zone de glissement
-                HStack(spacing: 32) {
-                    appIcon(name: "Finder", icon: "macwindow", color: .blue)
-                    appIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
+                // Cadre de l'écran avec bordure et fond sombre
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .frame(width: 380, height: 110)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
 
-                    // Icône déplacée par le curseur
-                    VStack(spacing: 4) {
-                        ZStack {
-                            if isLifted {
+                // Deux pages côte à côte qui glissent fluidement
+                HStack(spacing: 0) {
+                    // PAGE 1
+                    HStack(spacing: 36) {
+                        appIcon(name: "Finder", icon: "macwindow", color: .blue)
+                        appIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
+
+                        // Emplacement d'origine de Safari sur la Page 1 (devient un cadre en pointillés lors du glissement)
+                        VStack(spacing: 4) {
+                            if isLifted || isDroppedOnPage2 {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.cyan.opacity(0.45))
-                                    .frame(width: 54, height: 54)
-                                    .blur(radius: 8)
+                                    .strokeBorder(Color.white.opacity(0.25), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .frame(width: 48, height: 48)
+                                    .overlay(
+                                        Image(systemName: "safari.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundStyle(.white.opacity(0.2))
+                                    )
+
+                                Text("Safari")
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.25))
+                            } else {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.cyan)
+                                    .frame(width: 48, height: 48)
+                                    .overlay(Image(systemName: "safari.fill").font(.system(size: 22)).foregroundStyle(.white))
+
+                                Text("Safari")
+                                    .font(.system(size: 10.5, weight: .bold))
+                                    .foregroundStyle(.white)
                             }
-
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.cyan)
-                                .frame(width: 48, height: 48)
-                                .overlay(Image(systemName: "safari.fill").font(.system(size: 22)).foregroundStyle(.white))
-                                .shadow(color: isLifted ? .black.opacity(0.5) : .clear, radius: 14, y: 8)
-                                .scaleEffect(isLifted ? 1.2 : 1.0)
                         }
-
-                        Text("Safari")
-                            .font(.system(size: 10.5, weight: .bold))
-                            .foregroundStyle(.white)
                     }
-                    .offset(x: dragX, y: isLifted ? -6 : 0)
+                    .frame(width: 380)
 
-                    appIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
+                    // PAGE 2
+                    HStack(spacing: 36) {
+                        appIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
+                        appIcon(name: "Xcode", icon: "hammer.fill", color: Color(red: 0.2, green: 0.6, blue: 1.0))
+
+                        // Emplacement cible sur la Page 2 où Safari se dépose
+                        VStack(spacing: 4) {
+                            if isDroppedOnPage2 {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.cyan)
+                                    .frame(width: 48, height: 48)
+                                    .overlay(Image(systemName: "safari.fill").font(.system(size: 22)).foregroundStyle(.white))
+                                    .transition(.scale.combined(with: .opacity))
+
+                                Text("Safari")
+                                    .font(.system(size: 10.5, weight: .bold))
+                                    .foregroundStyle(.white)
+                            } else {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(accentColor.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .frame(width: 48, height: 48)
+                                    .overlay(
+                                        Image(systemName: "arrow.down")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundStyle(accentColor.opacity(0.5))
+                                    )
+
+                                Text("Page 2")
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                        }
+                    }
+                    .frame(width: 380)
+                }
+                .frame(width: 760, alignment: .leading)
+                .offset(x: pageOffset)
+
+                // Icône Safari volante (soulevée par le curseur sans son étiquette texte pour éviter tout chevauchement)
+                if isLifted && !isDroppedOnPage2 {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.cyan)
+                        .frame(width: 52, height: 52)
+                        .overlay(Image(systemName: "safari.fill").font(.system(size: 24)).foregroundStyle(.white))
+                        .shadow(color: .black.opacity(0.6), radius: 16, y: 8)
+                        .scaleEffect(1.15)
+                        .offset(x: dragX, y: dragY - 8)
                 }
 
-                // Curseur de souris
+                // Curseur de souris macOS
                 Image(systemName: "cursorarrow")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 4, y: 2)
-                    .offset(x: dragX + 28, y: isLifted ? 12 : 26)
+                    .shadow(color: .black.opacity(0.7), radius: 4, y: 2)
+                    .offset(x: dragX + 22, y: dragY + 16)
             }
-            .frame(height: 90)
+            .frame(width: 380, height: 110)
+            .clipped()
 
             // Indicateur de page (Dots)
             HStack(spacing: 8) {
                 Capsule()
-                    .fill(activePage == 0 ? accentColor : Color.white.opacity(0.3))
-                    .frame(width: activePage == 0 ? 20 : 6, height: 6)
+                    .fill(activePage == 0 ? accentColor : Color.white.opacity(0.25))
+                    .frame(width: activePage == 0 ? 22 : 6, height: 6)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activePage)
 
                 Capsule()
-                    .fill(activePage == 1 ? accentColor : Color.white.opacity(0.3))
-                    .frame(width: activePage == 1 ? 20 : 6, height: 6)
+                    .fill(activePage == 1 ? accentColor : Color.white.opacity(0.25))
+                    .frame(width: activePage == 1 ? 22 : 6, height: 6)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activePage)
             }
 
             // Explication de l'action
             HStack(spacing: 6) {
-                Image(systemName: "hand.tap.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(accentColor)
-                Text(activePage == 1 ? "Glissée sur la Page 2 avec succès !" : "Glissez vers le bord pour changer de page")
+                Image(systemName: activePage == 1 ? "checkmark.circle.fill" : "arrow.right.circle.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(activePage == 1 ? Color.green : accentColor)
+                Text(activePage == 1 ? "Page 2 atteinte : l'icône est déposée sans aucun conflit !" : "Glissez l'icône vers le bord pour faire défiler la page")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(activePage == 1 ? accentColor : .white.opacity(0.85))
+                    .foregroundStyle(activePage == 1 ? Color.green : .white.opacity(0.85))
             }
         }
         .onAppear {
@@ -712,28 +779,49 @@ private struct AnimStep2DragAndPage: View {
     }
 
     private func startLoop() {
-        Timer.scheduledTimer(withTimeInterval: 3.5, repeats: true) { _ in
+        Timer.scheduledTimer(withTimeInterval: 4.2, repeats: true) { _ in
+            // Étape 1 : Le curseur attrape Safari sur la Page 1
+            dragX = 85
+            dragY = 0
+            pageOffset = 0
+            activePage = 0
+            isDroppedOnPage2 = false
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 isLifted = true
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.easeInOut(duration: 1.1)) {
-                    dragX = 110
+            // Étape 2 : Déplacement vers le bord droit de l'écran
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                withAnimation(.easeInOut(duration: 0.8)) {
+                    dragX = 170
+                }
+            }
+
+            // Étape 3 : La page glisse vers la Page 2
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.25) {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                    pageOffset = -380
                     activePage = 1
+                    dragX = 85
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            // Étape 4 : Dépose de Safari sur la Page 2
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                     isLifted = false
+                    isDroppedOnPage2 = true
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.7) {
+            // Étape 5 : Réinitialisation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
                 withAnimation(.easeInOut(duration: 0.5)) {
-                    dragX = 0
+                    dragX = 85
+                    dragY = 0
+                    pageOffset = 0
                     activePage = 0
+                    isDroppedOnPage2 = false
                 }
             }
         }
@@ -745,22 +833,23 @@ private struct AnimStep2DragAndPage: View {
 private struct AnimStep3CreateFolder: View {
     let accentColor: Color
 
-    @State private var dragX: CGFloat = 0.0
+    @State private var dragX: CGFloat = 55.0
+    @State private var dragY: CGFloat = 0.0
     @State private var isLifted = false
     @State private var isFolderOpen = false
 
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
-                HStack(spacing: 60) {
+                HStack(spacing: 64) {
                     // Cible (Musique) qui devient un dossier
                     ZStack {
                         if isFolderOpen {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.white.opacity(0.14))
-                                .frame(width: 66, height: 66)
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.white.opacity(0.15))
+                                .frame(width: 72, height: 72)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                                         .stroke(accentColor, lineWidth: 2)
                                 )
                                 .shadow(color: accentColor.opacity(0.55), radius: 14)
@@ -768,11 +857,25 @@ private struct AnimStep3CreateFolder: View {
                         }
 
                         VStack(spacing: 4) {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.pink)
-                                .frame(width: isFolderOpen ? 28 : 48, height: isFolderOpen ? 28 : 48)
-                                .overlay(Image(systemName: "music.note").font(.system(size: isFolderOpen ? 13 : 22)).foregroundStyle(.white))
-                                .offset(x: isFolderOpen ? -12 : 0, y: isFolderOpen ? -6 : 0)
+                            if isFolderOpen {
+                                HStack(spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color.pink)
+                                        .frame(width: 24, height: 24)
+                                        .overlay(Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.white))
+
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color.orange)
+                                        .frame(width: 24, height: 24)
+                                        .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 11)).foregroundStyle(.white))
+                                }
+                                .frame(width: 72, height: 50)
+                            } else {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.pink)
+                                    .frame(width: 48, height: 48)
+                                    .overlay(Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white))
+                            }
 
                             Text(isFolderOpen ? "Médias" : "Musique")
                                 .font(.system(size: 10.5, weight: isFolderOpen ? .bold : .medium))
@@ -782,39 +885,50 @@ private struct AnimStep3CreateFolder: View {
 
                     // Source (Photos) qui est glissée
                     VStack(spacing: 4) {
-                        ZStack {
+                        if !isFolderOpen {
                             if isLifted {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.orange.opacity(0.4))
-                                    .frame(width: 54, height: 54)
-                                    .blur(radius: 8)
+                                    .strokeBorder(Color.white.opacity(0.25), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .frame(width: 48, height: 48)
+
+                                Text("Photos")
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.3))
+                            } else {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.orange)
+                                    .frame(width: 48, height: 48)
+                                    .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 22)).foregroundStyle(.white))
+
+                                Text("Photos")
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.75))
                             }
-
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.orange)
-                                .frame(width: isFolderOpen ? 28 : 48, height: isFolderOpen ? 28 : 48)
-                                .overlay(Image(systemName: "photo.stack.fill").font(.system(size: isFolderOpen ? 13 : 22)).foregroundStyle(.white))
-                                .shadow(color: isLifted ? .black.opacity(0.4) : .clear, radius: 12, y: 6)
-                                .scaleEffect(isLifted ? 1.2 : 1.0)
-                        }
-
-                        if !isFolderOpen {
-                            Text("Photos")
-                                .font(.system(size: 10.5, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.75))
+                        } else {
+                            Color.clear.frame(width: 48, height: 66)
                         }
                     }
-                    .offset(x: dragX, y: isFolderOpen ? -6 : (isLifted ? -6 : 0))
+                }
+
+                // Icône Photos volante (sans label pour éviter toute superposition avec Musique)
+                if isLifted && !isFolderOpen {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.orange)
+                        .frame(width: 52, height: 52)
+                        .overlay(Image(systemName: "photo.stack.fill").font(.system(size: 24)).foregroundStyle(.white))
+                        .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
+                        .scaleEffect(1.15)
+                        .offset(x: dragX, y: dragY - 8)
                 }
 
                 // Curseur macOS
                 Image(systemName: "cursorarrow")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 4, y: 2)
-                    .offset(x: dragX + 32, y: isLifted ? 14 : 26)
+                    .shadow(color: .black.opacity(0.7), radius: 4, y: 2)
+                    .offset(x: dragX + 22, y: dragY + 16)
             }
-            .frame(height: 90)
+            .frame(height: 100)
 
             HStack(spacing: 6) {
                 Image(systemName: isFolderOpen ? "folder.badge.plus" : "square.stack.3d.down.right.fill")
@@ -831,27 +945,30 @@ private struct AnimStep3CreateFolder: View {
     }
 
     private func startLoop() {
-        Timer.scheduledTimer(withTimeInterval: 3.6, repeats: true) { _ in
+        Timer.scheduledTimer(withTimeInterval: 3.8, repeats: true) { _ in
+            dragX = 55
+            dragY = 0
+            isFolderOpen = false
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 isLifted = true
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.easeInOut(duration: 1.0)) {
-                    dragX = -108
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeInOut(duration: 1.1)) {
+                    dragX = -58
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     isFolderOpen = true
                     isLifted = false
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.7) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 withAnimation(.easeInOut(duration: 0.5)) {
-                    dragX = 0
+                    dragX = 55
                     isFolderOpen = false
                 }
             }
