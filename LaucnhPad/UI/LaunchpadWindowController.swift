@@ -11,6 +11,12 @@ final class LaunchpadPanel: NSPanel {
 /// (boutons du widget musique, barre de lecture…) même si le panneau vient d'être activé.
 final class LaunchpadHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    // Contournement d'un crash du compilateur Swift 6.3 en Release : le deinit
+    // synthétisé d'une sous-classe générique de NSHostingView fait planter
+    // EarlyPerfInliner (isCallerAndCalleeLayoutConstraintsCompatible).
+    // Un deinit explicite non isolé évite le passage problématique.
+    nonisolated deinit {}
 }
 
 @MainActor
