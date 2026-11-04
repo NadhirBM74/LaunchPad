@@ -337,8 +337,8 @@ public final class UpdateManager: NSObject, ObservableObject {
 
             // Détermine l'emplacement cible
             var targetAppPath = Bundle.main.bundleURL.path
-            // Si on exécute depuis Xcode/DerivedData en mode test, on installe dans /Applications/LaunchPad.app
-            if targetAppPath.contains("DerivedData") || !fileManager.fileExists(atPath: targetAppPath) {
+            // Si on exécute depuis un DMG (/Volumes/...), depuis Xcode/DerivedData ou un dossier temporaire, on installe dans /Applications/LaunchPad.app
+            if targetAppPath.hasPrefix("/Volumes/") || targetAppPath.contains("DerivedData") || targetAppPath.contains("/var/folders/") || !fileManager.fileExists(atPath: targetAppPath) {
                 targetAppPath = "/Applications/LaunchPad.app"
             }
 
@@ -348,25 +348,41 @@ public final class UpdateManager: NSObject, ObservableObject {
             let scriptURL = tempDir.appendingPathComponent("relaunch.sh")
             let scriptContent = """
             #!/bin/bash
+            exec > /tmp/launchpad_updater.log 2>&1
+            set -x
+
             PID=\(currentPID)
             NEW_APP="\(newAppURL.path)"
             TARGET_APP="\(targetAppPath)"
             TEMP_DIR="\(tempDir.path)"
 
-            # Attente de la fermeture de l'ancien processus
+            # Attente polie max 3 secondes de la fermeture de l'ancien processus
+            COUNT=0
             while kill -0 "$PID" 2>/dev/null; do
-                sleep 0.1
+                sleep 0.2
+                COUNT=$((COUNT + 1))
+                if [ $COUNT -ge 15 ]; then
+                    echo "Force killing hanging PID $PID"
+                    kill -9 "$PID" 2>/dev/null || true
+                    break
+                fi
             done
 
-            # Retirer la quarantaine macOS
+            # Retirer la quarantaine macOS sur la nouvelle app
             /usr/bin/xattr -r -d com.apple.quarantine "$NEW_APP" 2>/dev/null || true
 
             # Remplacement atomique de l'application
             rm -rf "$TARGET_APP"
             /usr/bin/ditto "$NEW_APP" "$TARGET_APP"
 
+            # Retirer la quarantaine macOS sur l'application installée finale
+            /usr/bin/xattr -r -d com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
+
+            # Petite pause pour s'assurer que macOS a libéré les verrous de fichiers
+            sleep 0.5
+
             # Relance de la nouvelle version
-            /usr/bin/open "$TARGET_APP"
+            /usr/bin/open "$TARGET_APP" || /usr/bin/open -n "$TARGET_APP"
 
             # Nettoyage
             rm -rf "$TEMP_DIR"
@@ -381,15 +397,19 @@ public final class UpdateManager: NSObject, ObservableObject {
             try chmod.run()
             chmod.waitUntilExit()
 
-            // Lancement du script de mise à jour en arrière-plan
+            // Lancement du script de mise à jour totalement détaché en arrière-plan
             let relaunchProcess = Process()
-            relaunchProcess.executableURL = URL(fileURLWithPath: "/bin/bash")
-            relaunchProcess.arguments = [scriptURL.path]
+            relaunchProcess.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
+            relaunchProcess.arguments = ["/bin/bash", scriptURL.path]
             try relaunchProcess.run()
 
-            // Fermeture immédiate de l'application pour laisser le script terminer l'installation
+            // Fermeture de l'application
             await MainActor.run {
                 NSApp.terminate(nil)
+                // Garantie de fermeture immédiate si NSApp.terminate est temporairement bloqué par la fenêtre modale
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    exit(0)
+                }
             }
         } catch {
             await MainActor.run {
