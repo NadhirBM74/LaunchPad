@@ -59,10 +59,15 @@ final class AdminTestWindowController: NSObject, NSWindowDelegate {
             win.isReleasedWhenClosed = false
             win.delegate = self
             win.minSize = NSSize(width: 820, height: 560)
+            win.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 4)
+            win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            win.isMovableByWindowBackground = true
             self.window = win
         }
 
         guard let window else { return }
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 4)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentViewController = NSHostingController(rootView: AdminTestCenterView(store: store))
         window.center()
         NSApp.activate(ignoringOtherApps: true)

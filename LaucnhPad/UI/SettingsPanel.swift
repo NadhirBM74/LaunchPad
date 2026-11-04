@@ -1432,8 +1432,14 @@ struct SettingsPanel: View {
                             ProBadge()
                         }
                     }
-                    Text(loc("about.version", updateManager.currentAppVersion))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text("Version installée :")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                        Text("v\(updateManager.currentAppVersion)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.primary)
+                    }
                     Text(loc("about.created_by")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
