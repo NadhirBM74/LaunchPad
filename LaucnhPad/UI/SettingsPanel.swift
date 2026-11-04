@@ -1560,21 +1560,14 @@ struct SettingsPanel: View {
                         ProgressView(value: progress)
                     }
 
-                case .readyToInstall(let fileUrl):
-                    HStack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text("Mise à jour téléchargée !")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        Spacer()
-                        Button("Ouvrir l'installateur") {
-                            NSWorkspace.shared.open(fileUrl)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(SettingsStyle.accent)
+                case .installing:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Installation et redémarrage automatique en cours...")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(SettingsStyle.accent)
                     }
+                    .padding(.vertical, 4)
 
                 case .error(let message):
                     HStack {
