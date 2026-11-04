@@ -603,7 +603,7 @@ private struct AnimStep0OpenClose: View {
         }
         .onAppear {
             runAnimationCycle()
-            timer = Timer.scheduledTimer(withTimeInterval: 3.2, repeats: true) { _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 5.8, repeats: true) { _ in
                 runAnimationCycle()
             }
         }
@@ -645,34 +645,49 @@ private struct AnimStep0OpenClose: View {
     }
 
     private func runAnimationCycle() {
-        // 1. Déclenchement : Pincement sur trackpad et raccourci clavier
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-            pinchProgress = 1.0
-            isKeyPressed = true
-            statusMessage = "Pincement & ⌃ Espace activés !"
+        // 0. ÉTAT AU REPOS (Bureau macOS)
+        withAnimation(.easeOut(duration: 0.3)) {
+            isOpen = false
+            pinchProgress = 0.0
+            isKeyPressed = false
+            statusMessage = "1. Pincez ou pressez ⌃ Espace"
         }
 
-        // 2. Ouverture fluide du LaunchPad avec flou
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+        // 1. GESTE D'OUVERTURE SYNCHRONISÉ : Doigts pincent + touches s'enfoncent -> LaunchPad s'ouvre !
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                pinchProgress = 1.0
+                isKeyPressed = true
                 isOpen = true
-                statusMessage = "LaunchPad s'ouvre instantanément"
+                statusMessage = "✦ Le geste ouvre LaunchPad !"
             }
         }
 
-        // 3. Relâchement des doigts et des touches
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.easeOut(duration: 0.3)) {
+        // 2. Relâchement des doigts : LaunchPad reste ouvert et visible
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
+            withAnimation(.easeOut(duration: 0.35)) {
                 pinchProgress = 0.0
                 isKeyPressed = false
+                statusMessage = "✦ LaunchPad est ouvert et prêt"
             }
         }
 
-        // 4. Fermeture et retour au bureau
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.3) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        // 3. GESTE DE FERMETURE SYNCHRONISÉ : Doigts pincent à nouveau -> LaunchPad se ferme !
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.7) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                pinchProgress = 1.0
+                isKeyPressed = true
                 isOpen = false
-                statusMessage = "Répétez le geste pour fermer"
+                statusMessage = "✦ Répétez le geste pour fermer"
+            }
+        }
+
+        // 4. Relâchement des doigts : Retour au Bureau macOS
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
+            withAnimation(.easeOut(duration: 0.35)) {
+                pinchProgress = 0.0
+                isKeyPressed = false
+                statusMessage = "✦ Retour au bureau macOS"
             }
         }
     }
