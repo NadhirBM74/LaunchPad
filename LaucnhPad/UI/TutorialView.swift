@@ -353,23 +353,41 @@ private struct AnimStep0OpenClose: View {
     @State private var pinchProgress: CGFloat = 0.0
     @State private var isOpen = false
     @State private var isKeyPressed = false
+    @State private var statusMessage = "Pincement 3-4 doigts ou ⌃ Espace"
+    @State private var timer: Timer? = nil
 
     var body: some View {
-        HStack(spacing: 24) {
-            // Trackpad réaliste avec geste de pincement
-            VStack(spacing: 8) {
+        HStack(spacing: 26) {
+            // CONTRÔLES TACTILES & CLAVIER (À GAUCHE)
+            VStack(spacing: 12) {
+                // Trackpad réaliste en verre dépoli
                 ZStack {
-                    // Surface du Trackpad
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                        .frame(width: 140, height: 100)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.10), Color.white.opacity(0.04)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 145, height: 95)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                .stroke(pinchProgress > 0.5 ? accentColor.opacity(0.8) : Color.white.opacity(0.18), lineWidth: 1.2)
                         )
+                        .shadow(color: pinchProgress > 0.5 ? accentColor.opacity(0.25) : Color.black.opacity(0.3), radius: 8)
 
-                    // 4 doigts tactiles avec animation de pincement
-                    let radius: CGFloat = 34 * (1.0 - pinchProgress * 0.75)
+                    // Onde de choc tactile quand on pince
+                    if pinchProgress > 0.7 {
+                        Circle()
+                            .stroke(accentColor.opacity(0.4), lineWidth: 2)
+                            .frame(width: 50, height: 50)
+                            .scaleEffect(pinchProgress * 1.3)
+                            .opacity(Double(1.0 - pinchProgress * 0.5))
+                    }
+
+                    // 4 doigts tactiles avec trajectoire de pincement
+                    let radius: CGFloat = 34 * (1.0 - pinchProgress * 0.72)
                     let angles: [Double] = [45, 135, 225, 315]
 
                     ForEach(0..<4, id: \.self) { i in
@@ -377,124 +395,300 @@ private struct AnimStep0OpenClose: View {
                         Circle()
                             .fill(Color.white)
                             .frame(width: 12, height: 12)
-                            .shadow(color: accentColor, radius: 6)
+                            .shadow(color: accentColor.opacity(0.9), radius: 6)
                             .offset(
                                 x: cos(rad) * radius,
                                 y: sin(rad) * radius
                             )
                     }
 
-                    // Flèches pointant vers le centre
+                    // Flèches centripètes
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(accentColor.opacity(0.8))
-                        .opacity(Double(1.0 - pinchProgress))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(accentColor.opacity(Double(1.0 - pinchProgress)))
                 }
 
-                Text("Pincement 3-4 doigts")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                // Touches clavier 3D (⌃ Control + Espace)
+                HStack(spacing: 6) {
+                    // Touche ⌃ Control
+                    HStack(spacing: 2) {
+                        Text("⌃")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("ctrl")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isKeyPressed ? accentColor : Color.white.opacity(0.14))
+                            .shadow(color: isKeyPressed ? accentColor.opacity(0.6) : .black.opacity(0.3), radius: isKeyPressed ? 6 : 2, y: isKeyPressed ? 0 : 2)
+                    )
+                    .scaleEffect(isKeyPressed ? 0.94 : 1.0)
+                    .offset(y: isKeyPressed ? 1.5 : 0)
+
+                    Text("+")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.5))
+
+                    // Touche Espace
+                    HStack(spacing: 4) {
+                        Text("␣")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Espace")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isKeyPressed ? accentColor : Color.white.opacity(0.14))
+                            .shadow(color: isKeyPressed ? accentColor.opacity(0.6) : .black.opacity(0.3), radius: isKeyPressed ? 6 : 2, y: isKeyPressed ? 0 : 2)
+                    )
+                    .scaleEffect(isKeyPressed ? 0.94 : 1.0)
+                    .offset(y: isKeyPressed ? 1.5 : 0)
+                }
+                .foregroundStyle(.white)
+
+                Text(statusMessage)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 155)
+                    .multilineTextAlignment(.center)
             }
 
-            // Flèche de transition vers l'écran
-            Image(systemName: "arrow.right")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(accentColor)
+            // ÉCRAN MACBOOK RÉALISTE AVEC DESKTOP ET LAUNCHPAD (À DROITE)
+            ZStack {
+                // Cadre extérieur de l'écran MacBook (Aluminium Gris Sidéral)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(white: 0.10))
+                    .frame(width: 330, height: 188)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.22), lineWidth: 1.2)
+                    )
+                    .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
 
-            // Écran macOS simulé qui s'ouvre / se ferme
-            VStack(spacing: 8) {
+                // Dalle de l'écran avec fond d'écran macOS vibrant
                 ZStack {
-                    // Écran d'ordinateur
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(white: 0.12))
-                        .frame(width: 180, height: 100)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                        )
-                        .clipped()
+                    // 1. Fond d'écran dynamique macOS (style Sonoma / Sequoia)
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.16, green: 0.10, blue: 0.36),
+                            Color(red: 0.32, green: 0.16, blue: 0.48),
+                            Color(red: 0.82, green: 0.38, blue: 0.32),
+                            Color(red: 0.14, green: 0.28, blue: 0.52)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
 
-                    // Grille de Launchpad qui apparaît avec un zoom fluide et du flou
-                    ZStack {
-                        // Fond en verre dépoli
-                        Rectangle().fill(.ultraThinMaterial)
+                    // Vague abstraite lumineuse dans le fond d'écran
+                    Circle()
+                        .fill(Color.orange.opacity(0.35))
+                        .frame(width: 180, height: 180)
+                        .blur(radius: 40)
+                        .offset(x: 60, y: 30)
 
-                        // Mini icônes d'apps
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(26)), count: 4), spacing: 8) {
-                            ForEach(0..<8, id: \.self) { i in
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill([Color.blue, Color.cyan, Color.red, Color.green, Color.orange, Color.purple, Color.yellow, Color.pink][i])
-                                    .frame(width: 22, height: 22)
+                    // 2. Barre des menus macOS supérieure (Apple, Finder, Heure)
+                    VStack {
+                        HStack(spacing: 6) {
+                            Text("")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("Finder")
+                                .font(.system(size: 8, weight: .bold))
+                            Text("Fichier")
+                                .font(.system(size: 7.5, weight: .regular))
+                            Text("Édition")
+                                .font(.system(size: 7.5, weight: .regular))
+
+                            Spacer()
+
+                            Image(systemName: "wifi")
+                                .font(.system(size: 7))
+                            Image(systemName: "battery.100")
+                                .font(.system(size: 7))
+                            Text("9:41")
+                                .font(.system(size: 8, weight: .semibold))
+                        }
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.25))
+
+                        Spacer()
+
+                        // 3. Dock macOS en bas de l'écran (visible quand LaunchPad est fermé)
+                        if !isOpen {
+                            HStack(spacing: 6) {
+                                miniDockIcon(icon: "finder", color: .blue)
+                                miniDockIcon(icon: "safari.fill", color: .cyan)
+                                miniDockIcon(icon: "envelope.fill", color: .indigo)
+                                miniDockIcon(icon: "music.note", color: .pink)
+                                miniDockIcon(icon: "photo.stack.fill", color: .orange)
+                                miniDockIcon(icon: "square.grid.2x2.fill", color: accentColor, isLaunchpad: true)
                             }
-                        }
-
-                        // Statut vert
-                        Text("LaunchPad Ouvert")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.green.opacity(0.85))
-                            .clipShape(Capsule())
-                            .offset(y: 34)
-                    }
-                    .scaleEffect(isOpen ? 1.0 : 0.7)
-                    .opacity(isOpen ? 1.0 : 0.0)
-                    .blur(radius: isOpen ? 0 : 8)
-
-                    if !isOpen {
-                        VStack(spacing: 4) {
-                            Image(systemName: "macbook")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white.opacity(0.4))
-                            Text("Bureau macOS")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white.opacity(0.5))
+                            .padding(.vertical, 4)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                            )
+                            .padding(.bottom, 6)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
-                }
 
-                HStack(spacing: 5) {
-                    HStack(spacing: 3) {
-                        Text("⌃").font(.system(size: 11, weight: .bold))
-                        Text("Espace").font(.system(size: 10, weight: .semibold))
+                    // 4. OVERLAY LAUNCHPAD (qui s'ouvre avec flou et zoom fluide)
+                    if isOpen {
+                        ZStack {
+                            // Fond flouté dépoli profond
+                            Rectangle()
+                                .fill(.ultraThinMaterial)
+                                .overlay(Color.black.opacity(0.35))
+
+                            VStack(spacing: 10) {
+                                // Mini barre de recherche
+                                HStack(spacing: 4) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.white.opacity(0.6))
+                                    Text("Rechercher...")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .frame(width: 140)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(Capsule())
+                                .padding(.top, 14)
+
+                                // Grille des applications LaunchPad avec icônes réalistes
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 14), count: 4), spacing: 8) {
+                                    miniLaunchIcon(name: "Safari", icon: "safari.fill", color: .cyan)
+                                    miniLaunchIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
+                                    miniLaunchIcon(name: "Musique", icon: "music.note", color: .red)
+                                    miniLaunchIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
+                                    miniLaunchIcon(name: "Xcode", icon: "hammer.fill", color: .blue)
+                                    miniLaunchIcon(name: "Mail", icon: "envelope.fill", color: .indigo)
+                                    miniLaunchIcon(name: "Notes", icon: "note.text", color: .yellow)
+                                    miniLaunchIcon(name: "Réglages", icon: "gearshape.fill", color: .gray)
+                                }
+
+                                Spacer()
+                            }
+
+                            // Badge de confirmation vert "LaunchPad Ouvert"
+                            HStack(spacing: 4) {
+                                Circle().fill(Color.green).frame(width: 6, height: 6)
+                                Text("LaunchPad Ouvert")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3.5)
+                            .background(Color.black.opacity(0.7))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 1))
+                            .offset(y: 62)
+                        }
+                        .transition(.scale(scale: 0.88).combined(with: .opacity))
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(isKeyPressed ? accentColor : Color.white.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                    .foregroundStyle(.white)
 
-                    Text("Raccourci clavier")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
+                    // Caméra FaceTime HD (Notch) au sommet
+                    VStack {
+                        Capsule()
+                            .fill(Color.black)
+                            .frame(width: 32, height: 4)
+                            .overlay(
+                                Circle()
+                                    .fill(Color(white: 0.2))
+                                    .frame(width: 2.5, height: 2.5)
+                            )
+                        Spacer()
+                    }
+                    .padding(.top, 2)
                 }
+                .frame(width: 318, height: 176)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
         .onAppear {
-            startLoop()
+            runAnimationCycle()
+            timer = Timer.scheduledTimer(withTimeInterval: 3.2, repeats: true) { _ in
+                runAnimationCycle()
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 
-    private func startLoop() {
-        Timer.scheduledTimer(withTimeInterval: 2.8, repeats: true) { _ in
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                pinchProgress = 1.0
-                isKeyPressed = true
-            }
+    private func miniDockIcon(icon: String, color: Color, isLaunchpad: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(color)
+            .frame(width: 14, height: 14)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.system(size: 8))
+                    .foregroundStyle(.white)
+            )
+            .shadow(color: isLaunchpad ? color.opacity(0.8) : .clear, radius: 4)
+    }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
-                    isOpen = true
-                }
-            }
+    private func miniLaunchIcon(name: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    pinchProgress = 0.0
-                    isOpen = false
-                    isKeyPressed = false
-                }
+            Text(name)
+                .font(.system(size: 6.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+        }
+    }
+
+    private func runAnimationCycle() {
+        // 1. Déclenchement : Pincement sur trackpad et raccourci clavier
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+            pinchProgress = 1.0
+            isKeyPressed = true
+            statusMessage = "Pincement & ⌃ Espace activés !"
+        }
+
+        // 2. Ouverture fluide du LaunchPad avec flou
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                isOpen = true
+                statusMessage = "LaunchPad s'ouvre instantanément"
+            }
+        }
+
+        // 3. Relâchement des doigts et des touches
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                pinchProgress = 0.0
+                isKeyPressed = false
+            }
+        }
+
+        // 4. Fermeture et retour au bureau
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.3) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                isOpen = false
+                statusMessage = "Répétez le geste pour fermer"
             }
         }
     }
