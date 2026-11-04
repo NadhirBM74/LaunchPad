@@ -204,51 +204,19 @@ struct TutorialCardView: View {
             .overlay(Capsule().stroke(currentStep.iconColor.opacity(0.3), lineWidth: 1))
             .padding(.top, 10)
 
-            // Sélecteur d'étapes sous forme d'onglets cliquables
-            HStack(spacing: 6) {
-                ForEach(0..<steps.count, id: \.self) { idx in
-                    let step = steps[idx]
-                    Button {
-                        currentStepIndex = idx
-                        vm?.tutorialStepIndex = idx
-                    } label: {
-                        HStack(spacing: 4) {
-                            if idx == currentStepIndex {
-                                Circle().fill(step.iconColor).frame(width: 5, height: 5)
-                            }
-                            Text(step.tabTitle)
-                                .font(.system(size: 11, weight: idx == currentStepIndex ? .bold : .medium))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            idx == currentStepIndex
-                                ? step.iconColor.opacity(0.24)
-                                : Color.white.opacity(0.06)
-                        )
-                        .foregroundStyle(idx == currentStepIndex ? .white : .white.opacity(0.65))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(idx == currentStepIndex ? step.iconColor.opacity(0.5) : Color.clear, lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, 10)
-
             Divider()
                 .background(Color.white.opacity(0.12))
                 .padding(.horizontal, 22)
-                .padding(.top, 12)
+                .padding(.top, 14)
 
-            // Pied de carte : Navigation Suivant / Précédent
+            // Pied de carte : Navigation Suivant / Précédent & Indicateur de progression
             HStack {
                 if currentStepIndex > 0 {
                     Button {
-                        currentStepIndex -= 1
-                        vm?.tutorialStepIndex = currentStepIndex
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            currentStepIndex -= 1
+                            vm?.tutorialStepIndex = currentStepIndex
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
@@ -263,14 +231,30 @@ struct TutorialCardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                } else {
+                    Spacer().frame(width: 80)
+                }
+
+                Spacer()
+
+                // Indicateur de points d'étapes (Apple style discret)
+                HStack(spacing: 6) {
+                    ForEach(0..<steps.count, id: \.self) { idx in
+                        Capsule()
+                            .fill(idx == currentStepIndex ? currentStep.iconColor : Color.white.opacity(0.25))
+                            .frame(width: idx == currentStepIndex ? 18 : 6, height: 6)
+                            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentStepIndex)
+                    }
                 }
 
                 Spacer()
 
                 if currentStepIndex < steps.count - 1 {
                     Button {
-                        currentStepIndex += 1
-                        vm?.tutorialStepIndex = currentStepIndex
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            currentStepIndex += 1
+                            vm?.tutorialStepIndex = currentStepIndex
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Text("Étape suivante")
@@ -315,7 +299,7 @@ struct TutorialCardView: View {
             .padding(.horizontal, 22)
             .padding(.vertical, 14)
         }
-        .frame(width: 650, height: 535)
+        .frame(width: 650, height: 490)
         .background {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(.ultraThinMaterial)
