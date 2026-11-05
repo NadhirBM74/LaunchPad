@@ -69,6 +69,7 @@ final class LicenseManager: ObservableObject {
         if trimmed == "1234" {
             isPro = true
             licenseKey = trimmed
+            AppNotificationManager.shared.sendProActivatedNotification()
             return (true, loc("license.success"))
         } else {
             return (false, loc("license.err_invalid"))

@@ -210,43 +210,17 @@ public final class UpdateManager: NSObject, ObservableObject {
     // MARK: - Envoi des notifications macOS
 
     private func sendSystemNotification(version: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "LaunchPad — Mise à jour disponible 🚀"
-        content.subtitle = "Version \(version)"
-        content.body = "Une nouvelle version est disponible. Ouvrez les Réglages > À propos pour l'installer."
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: "launchpad.update.available.\(version)",
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                print("[UpdateManager] Erreur notification: \(error)")
-            }
-        }
+        AppNotificationManager.shared.sendUpdateAvailableNotification(version: version)
     }
 
     private func sendReadyToRestartNotification(version: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "LaunchPad — Mise à jour téléchargée 🚀"
-        content.subtitle = "Version \(version)"
-        content.body = "L'application a bien été téléchargée. Cliquez sur « Redémarrer l'application » pour finaliser l'installation."
-        content.sound = .default
-
-        let request = UNNotificationRequest(
+        AppNotificationManager.shared.sendNotification(
             identifier: "launchpad.update.ready.\(version)",
-            content: content,
-            trigger: nil
+            title: "LaunchPad — Prêt à redémarrer 🚀",
+            subtitle: "Version \(version)",
+            body: "La mise à jour a été téléchargée avec succès. Cliquez pour redémarrer l'application.",
+            type: .updateAvailable
         )
-
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                print("[UpdateManager] Erreur notification: \(error)")
-            }
-        }
     }
 
     // MARK: - Téléchargement et Préparation

@@ -212,6 +212,7 @@ final class LaunchpadStore: ObservableObject {
         // Nouvelles apps : ajoutées à la fin (ou ordre historique au premier lancement).
         let known = Set(allPlacedAppIDs(in: updated))
         var fresh = allScanned.filter { !known.contains($0.id) }
+        let isSubsequentScan = hasLayoutFile && !previous.isEmpty
         if !hasLayoutFile {
             let legacy = UserDefaults.standard.stringArray(forKey: "LaunchpadSavedAppOrder") ?? []
             let rank = Dictionary(legacy.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
@@ -224,6 +225,10 @@ final class LaunchpadStore: ObservableObject {
             fresh.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         }
         updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
+
+        if isSubsequentScan && !fresh.isEmpty {
+            AppNotificationManager.shared.sendNewAppsDiscoveredNotification(count: fresh.count)
+        }
 
         if updated != items || previous != newCatalog {
             commit(updated, save: updated != items)

@@ -2078,6 +2078,7 @@ struct SettingsPanel: View {
         do {
             try BackupManager.export(store: store, to: url)
             message = loc("advanced.backup_exported", url.path)
+            AppNotificationManager.shared.sendBackupCompletedNotification(isExport: true)
         } catch {
             message = error.localizedDescription
         }
@@ -2098,6 +2099,7 @@ struct SettingsPanel: View {
                 BackupManager.restore(backup, store: store)
                 customSources = Prefs.customSources
                 message = loc("advanced.backup_restored")
+                AppNotificationManager.shared.sendBackupCompletedNotification(isExport: false)
             }
         } catch {
             message = error.localizedDescription

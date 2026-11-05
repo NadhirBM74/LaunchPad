@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         store.start()
+        AppNotificationManager.shared.configure()
         applyConfiguration(force: true)
         importLaunchOSOnce()
         PermissionManager.shared.checkOnLaunch { [weak self] in

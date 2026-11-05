@@ -137,6 +137,8 @@ struct AdminTestCenterView: View {
 
     @State private var soundFeedback = ""
     @State private var toastInput = "Message test depuis le Mode Admin"
+    @State private var customNotificationTitle = "LaunchPad"
+    @State private var customNotificationBody = "Notification personnalisée avec le logo LaunchPad"
 
     var body: some View {
         ZStack {
@@ -878,19 +880,102 @@ struct AdminTestCenterView: View {
                 }
             }
 
-            testCard(title: "Notification Système macOS", subtitle: "Envoie une notification native via le Centre de Notifications.") {
-                Button("Envoyer une Notification Système de Test") {
-                    let content = UNMutableNotificationContent()
-                    content.title = "LaunchPad Admin"
-                    content.body = "Ceci est une notification de test générée avec succès depuis le Mode Administrateur."
-                    content.sound = .default
+            testCard(title: "Notifications Utiles avec Logo LaunchPad", subtitle: "Déclenchez les notifications utiles du système macOS intégrant automatiquement le logo en miniature.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        Button {
+                            AppNotificationManager.shared.sendWelcomeNotification()
+                            triggerFeedback("Notification : Bienvenue & Raccourcis")
+                        } label: {
+                            Label("Bienvenue & Raccourcis", systemImage: "hand.wave.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
 
-                    let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-                    UNUserNotificationCenter.current().add(req)
-                    admin.log(category: "Notification", message: "Notification macOS envoyée au système")
-                    triggerFeedback("Notification système envoyée")
+                        Button {
+                            AppNotificationManager.shared.sendProActivatedNotification()
+                            triggerFeedback("Notification : Version Pro Activée")
+                        } label: {
+                            Label("Version Pro Activée", systemImage: "crown.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            AppNotificationManager.shared.sendBackupCompletedNotification(isExport: true)
+                            triggerFeedback("Notification : Sauvegarde Réussie")
+                        } label: {
+                            Label("Sauvegarde Réussie", systemImage: "arrow.down.doc.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            AppNotificationManager.shared.sendBackupCompletedNotification(isExport: false)
+                            triggerFeedback("Notification : Restauration Terminée")
+                        } label: {
+                            Label("Restauration Terminée", systemImage: "arrow.counterclockwise.doc.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            AppNotificationManager.shared.sendNewAppsDiscoveredNotification(count: 3)
+                            triggerFeedback("Notification : Nouvelles Apps Détectées")
+                        } label: {
+                            Label("Nouvelles Apps (3)", systemImage: "app.badge.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            AppNotificationManager.shared.sendTipNotification()
+                            triggerFeedback("Notification : Astuce de Productivité")
+                        } label: {
+                            Label("Astuce Productivité", systemImage: "lightbulb.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            AppNotificationManager.shared.sendUpdateAvailableNotification(version: "1.0.5")
+                            triggerFeedback("Notification : Mise à Jour Disponible")
+                        } label: {
+                            Label("Mise à jour v1.0.5", systemImage: "arrow.triangle.2.circlepath.circle.fill")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            AppNotificationManager.shared.sendAdminDiagnosticNotification()
+                            triggerFeedback("Notification : Diagnostic Système")
+                        } label: {
+                            Label("Diagnostic 120 FPS", systemImage: "speedometer")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
-                .buttonStyle(.bordered)
+            }
+
+            testCard(title: "Notification Personnalisée (avec Logo)", subtitle: "Composez un message sur mesure et envoyez-le avec le logo de LaunchPad.") {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Titre de la notification", text: $customNotificationTitle)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Corps du message", text: $customNotificationBody)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button("Envoyer la notification avec le logo") {
+                        AppNotificationManager.shared.sendNotification(
+                            title: customNotificationTitle,
+                            body: customNotificationBody,
+                            type: .custom
+                        )
+                        triggerFeedback("Notification envoyée avec le logo LaunchPad")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
         }
     }
