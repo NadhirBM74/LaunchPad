@@ -420,6 +420,33 @@ struct AnalogClockFace: View {
 
 // MARK: - 3. Widget Lecteur Vinyle (Inspiré de la Référence : Vinyle Flottant + Carte Adaptative Clair/Sombre)
 
+/// Suivi continu de la rotation du vinyle à vitesse lente et constante pendant la lecture,
+/// avec arrêt immédiat et conservation de l'angle lors de la mise en pause.
+@MainActor
+private final class VinylSpinTracker {
+    var angle: Double = 0
+    var lastDate: Date? = nil
+    /// Vitesse de rotation lente : 20 degrés par seconde (un tour complet élégant en 18 secondes).
+    let speedDegreesPerSecond: Double = 20.0
+
+    func advance(to date: Date, isSpinning: Bool) -> Double {
+        guard isSpinning else {
+            lastDate = nil
+            return angle
+        }
+        if let last = lastDate {
+            let dt = min(max(0, date.timeIntervalSince(last)), 0.1)
+            angle = (angle + dt * speedDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+        }
+        lastDate = date
+        return angle
+    }
+
+    func reset() {
+        lastDate = nil
+    }
+}
+
 /// Piste de démonstration utilisée lorsqu'aucun lecteur externe n'est actif,
 /// permettant d'apprécier immédiatement le changement de pochette vinyle, la rotation
 /// et le changement de couleur de la barre de lecture comme sur l'animation de référence.
@@ -502,6 +529,8 @@ struct VinylPlayerWidgetView: View {
     @State private var lastManualSkipDate: Date = .distantPast
     @State private var activeRingButton: String? = nil
     @State private var extractedAccentColor: Color? = nil
+    @State private var spinTracker = VinylSpinTracker()
+    @State private var isWindowVisible: Bool = LaunchpadViewModel.isLaunchpadVisible || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
     private var reduceMotion: Bool { userReduceMotion || systemReduceMotion }
 
@@ -569,7 +598,29 @@ struct VinylPlayerWidgetView: View {
     }
 
     private var isPlaying: Bool {
-        track.hasTrack ? track.isPlaying : config.musicIsPlaying
+        if track.hasTrack { return track.isPlaying }
+        if let live = widgetManager.widgets.first(where: { $0.id == config.id || $0.kind == .vinylPlayer }) {
+            return live.musicIsPlaying
+        }
+        return config.musicIsPlaying
+    }
+
+    /// Le vinyle tourne uniquement lorsque la musique est en lecture active,
+    /// que le launchpad/widget est visible et que Réduire les animations n'est pas activé.
+    private var isSpinning: Bool {
+        isPlaying && !reduceMotion && isWindowVisible
+    }
+
+    /// Conteneur réutilisable animant la rotation continue et fluide du disque vinyle à 60/120 Hz
+    /// via TimelineView sans recharger inutilement l'arborescence parente.
+    @ViewBuilder
+    private func rotatingVinylWrapper<V: View>(disc: V) -> some View {
+        TimelineView(.animation(paused: !isSpinning)) { timeline in
+            let spinAngle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
+            disc
+                .scaleEffect(discScale)
+                .rotationEffect(.degrees(discRotation + spinAngle))
+        }
     }
 
     private var elapsed: Int {
@@ -645,6 +696,19 @@ struct VinylPlayerWidgetView: View {
         .onAppear {
             musicManager.refreshNowPlaying()
             updateExtractedAccentColor(from: track.displayImage)
+            if LaunchpadViewModel.isLaunchpadVisible {
+                isWindowVisible = true
+            }
+        }
+        .onDisappear {
+            spinTracker.reset()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
+            let isVisible = (notif.object as? Bool) ?? false
+            isWindowVisible = isVisible
+            if !isVisible {
+                spinTracker.reset()
+            }
         }
         .onChange(of: "\(track.title)|\(track.artist)") { oldVal, newVal in
             guard oldVal != newVal, !newVal.replacingOccurrences(of: "|", with: "").isEmpty else { return }
@@ -808,10 +872,8 @@ struct VinylPlayerWidgetView: View {
             .frame(width: contentWidth, height: contentHeight)
             .position(x: availW / 2, y: contentTopY + contentHeight / 2)
 
-            // 4. Disque Vinyle Circulaire du son en lecture débordant en haut (même disque et animation 360° que le Moyen)
-            vinylRecordDisc(size: discSize)
-                .scaleEffect(discScale)
-                .rotationEffect(.degrees(discRotation))
+            // 4. Disque Vinyle Circulaire du son en lecture débordant en haut (tourne lentement pendant la lecture)
+            rotatingVinylWrapper(disc: vinylRecordDisc(size: discSize))
                 .shadow(
                     color: .black.opacity(isLightTheme ? 0.28 : 0.52),
                     radius: isUltraCompact ? 6 : 8,
@@ -973,10 +1035,8 @@ struct VinylPlayerWidgetView: View {
             .frame(width: contentWidth, height: cardHeight)
             .position(x: contentLeadX + contentWidth / 2, y: availH / 2)
 
-            // 3. Disque Vinyle Circulaire du son en lecture (flottant à gauche et tournant au changement de piste)
-            vinylRecordDisc(size: discSize)
-                .scaleEffect(discScale)
-                .rotationEffect(.degrees(discRotation))
+            // 3. Disque Vinyle Circulaire du son en lecture (flottant à gauche et tournant lentement pendant la lecture)
+            rotatingVinylWrapper(disc: vinylRecordDisc(size: discSize))
                 .shadow(
                     color: .black.opacity(isLightTheme ? 0.30 : 0.54),
                     radius: isCompact ? 7 : 10,
@@ -1019,10 +1079,8 @@ struct VinylPlayerWidgetView: View {
 
             // Plan 2 & 3 : Disque Vinyle flottant + Bras de Lecture flottant (séparés uniquement par des ombres douces)
             ZStack {
-                // Plan 2 : Grand disque vinyle noir épuré avec ombre diffuse profonde sur la carte
-                verticalTurntableVinylDisc(size: discSize)
-                    .scaleEffect(discScale)
-                    .rotationEffect(.degrees(discRotation))
+                // Plan 2 : Grand disque vinyle noir épuré avec ombre diffuse profonde sur la carte (tourne lentement pendant la lecture)
+                rotatingVinylWrapper(disc: verticalTurntableVinylDisc(size: discSize))
                     .shadow(
                         color: .black.opacity(isLightTheme ? 0.22 : 0.50),
                         radius: isCompactVertical ? 14 : 18,
