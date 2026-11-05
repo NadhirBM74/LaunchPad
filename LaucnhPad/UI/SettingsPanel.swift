@@ -550,7 +550,7 @@ struct SettingsPanel: View {
             SettingsSeparator()
             SettingsSliderRow(loc("interface.dimming"), value: $opacity, range: 0...0.8)
 
-            if licenseManager.isPro {
+            if licenseManager.isPro && backgroundStyle == .liquidGlass {
                 SettingsSeparator()
                 SettingsSliderRow(
                     loc("interface.liquid_glass_intensity"),
