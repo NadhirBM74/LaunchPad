@@ -372,7 +372,7 @@ struct LaunchpadRootView: View {
                 .liquidGlass(
                     in: Capsule(),
                     interactive: true,
-                    tint: .white,
+                    tint: nil,
                     prominence: .regular,
                     intensity: liquidGlassIntensity
                 )

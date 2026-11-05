@@ -7,7 +7,7 @@ import AppKit
 struct WidgetContainerView<Content: View>: View {
     let size: WidgetSize
     var targetSize: CGSize? = nil
-    var isWhite: Bool = false
+    var isPureTranslucent: Bool = false
     @ViewBuilder let content: () -> Content
 
     @ObservedObject private var widgetManager = WidgetManager.shared
@@ -21,20 +21,20 @@ struct WidgetContainerView<Content: View>: View {
 
         content()
             .frame(width: w, height: h)
-            .background(isWhite ? AnyView(whiteGlassBackground(cornerRadius: cornerRadius)) : AnyView(glassBackground(cornerRadius: cornerRadius)))
+            .background(isPureTranslucent ? AnyView(translucentGlassBackground(cornerRadius: cornerRadius)) : AnyView(glassBackground(cornerRadius: cornerRadius)))
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(isWhite ? AnyView(whiteLuminousBorder(cornerRadius: cornerRadius)) : AnyView(luminousBorder(cornerRadius: cornerRadius)))
-            .shadow(color: .black.opacity(isWhite ? 0.20 : 0.38), radius: isWhite ? 12 : 14, x: 0, y: isWhite ? 6 : 7)
+            .overlay(isPureTranslucent ? AnyView(EmptyView()) : AnyView(luminousBorder(cornerRadius: cornerRadius)))
+            .shadow(color: .black.opacity(isPureTranslucent ? 0.24 : 0.38), radius: isPureTranslucent ? 12 : 14, x: 0, y: isPureTranslucent ? 6 : 7)
     }
 
     @ViewBuilder
-    private func whiteGlassBackground(cornerRadius: CGFloat) -> some View {
+    private func translucentGlassBackground(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         shape
             .liquidGlass(
                 in: shape,
                 interactive: false,
-                tint: .white,
+                tint: nil,
                 prominence: .regular,
                 intensity: liquidGlassIntensity
             )
@@ -43,11 +43,6 @@ struct WidgetContainerView<Content: View>: View {
                     shape.fill(widgetManager.glowColor.primaryColor.opacity(0.06))
                 }
             }
-    }
-
-    @ViewBuilder
-    private func whiteLuminousBorder(cornerRadius: CGFloat) -> some View {
-        EmptyView()
     }
 
     @ViewBuilder
@@ -3313,7 +3308,7 @@ struct QuickNoteWidgetView: View {
     @State private var showCopiedCheckmark = false
 
     var body: some View {
-        WidgetContainerView(size: config.size, targetSize: targetSize, isWhite: true) {
+        WidgetContainerView(size: config.size, targetSize: targetSize, isPureTranslucent: true) {
             GeometryReader { geo in
                 let isCompact = geo.size.height < 175 || geo.size.width < 175
                 VStack(alignment: .leading, spacing: isCompact ? 5 : 8) {
