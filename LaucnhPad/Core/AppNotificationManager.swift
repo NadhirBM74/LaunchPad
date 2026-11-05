@@ -53,7 +53,8 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     /// Prépare le logo actif de LaunchPad en PNG temporaire pour l'attacher aux notifications.
     public static func prepareLogoAttachment() -> UNNotificationAttachment? {
         let tempDir = FileManager.default.temporaryDirectory
-        let logoFile = tempDir.appendingPathComponent("LaunchPadNotificationIcon.png")
+        let uniqueName = "LaunchPadNotificationLogo_\(UUID().uuidString).png"
+        let logoFile = tempDir.appendingPathComponent(uniqueName)
 
         let logoRaw = Prefs.defaults.integer(forKey: PrefKey.appLogo)
         let appLogo = AppLogo(rawValue: logoRaw) ?? .noir
@@ -62,19 +63,21 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
             sourceImage = img
         } else if let img = NSImage(named: "AppIcon") {
             sourceImage = img
+        } else if let img = Bundle.main.image(forResource: "AppIcon") {
+            sourceImage = img
         } else if let img = NSApp.applicationIconImage {
             sourceImage = img
         } else {
             return nil
         }
 
-        // Rendu net haute définition en 256x256
-        let targetSize = NSSize(width: 256, height: 256)
+        // Rendu net haute définition en 512x512
+        let targetSize = NSSize(width: 512, height: 512)
         let finalImage = NSImage(size: targetSize)
         finalImage.lockFocus()
         sourceImage.draw(in: NSRect(origin: .zero, size: targetSize),
                          from: NSRect(origin: .zero, size: sourceImage.size),
-                         operation: .copy,
+                         operation: .sourceOver,
                          fraction: 1.0)
         finalImage.unlockFocus()
 
@@ -86,7 +89,10 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
 
         do {
             try pngData.write(to: logoFile, options: .atomic)
-            return try UNNotificationAttachment(identifier: "launchpad-app-logo", url: logoFile, options: nil)
+            let options: [AnyHashable: Any] = [
+                UNNotificationAttachmentOptionsThumbnailHiddenKey: false
+            ]
+            return try UNNotificationAttachment(identifier: "launchpad-app-logo", url: logoFile, options: options)
         } catch {
             print("[AppNotificationManager] Impossible de créer l'attachement du logo : \(error)")
             return nil
