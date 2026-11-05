@@ -424,8 +424,19 @@ public final class UpdateManager: NSObject, ObservableObject {
         rm -rf "$TARGET_APP"
         /usr/bin/ditto "$NEW_APP" "$TARGET_APP"
 
-        # Retirer la quarantaine macOS sur l'application installée finale
-        /usr/bin/xattr -r -d com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
+        # Retirer tous les attributs étendus (quarantaine, provenance) sur l'application installée finale
+        /usr/bin/xattr -cr "$TARGET_APP" 2>/dev/null || true
+
+        # Re-signature avec exigence désignée stable me.LaucnhPad pour conserver les autorisations TCC (Accessibilité)
+        DEV_ID=$(/usr/bin/security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F '"' '{print $2}')
+        if [ -n "$DEV_ID" ]; then
+            /usr/bin/codesign --force --deep --sign "$DEV_ID" -r='designated => identifier "me.LaucnhPad"' --identifier "me.LaucnhPad" "$TARGET_APP" 2>/dev/null || true
+        else
+            /usr/bin/codesign --force --deep --sign - -r='designated => identifier "me.LaucnhPad"' --identifier "me.LaucnhPad" "$TARGET_APP" 2>/dev/null || true
+        fi
+
+        # Enregistrement LaunchServices
+        /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f -R -trusted "$TARGET_APP" 2>/dev/null || true
 
         # Petite pause pour s'assurer que macOS a libéré les verrous de fichiers
         sleep 0.5

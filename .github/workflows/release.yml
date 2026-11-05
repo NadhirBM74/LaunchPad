@@ -50,8 +50,8 @@ jobs:
           mkdir -p dist
           APP_PATH="./build/Build/Products/Release/LaunchPad.app"
           
-          # Signature ad-hoc propre liant formellement l'identifiant me.LaucnhPad
-          codesign --force --deep --sign - --identifier "me.LaucnhPad" "$APP_PATH"
+          # Signature ad-hoc avec exigence désignée stable me.LaucnhPad (préserve l'Accessibilité entre mises à jour)
+          codesign --force --deep --sign - -r='designated => identifier "me.LaucnhPad"' --identifier "me.LaucnhPad" "$APP_PATH"
           
           # Création du zip de release
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/LaunchPad-${VERSION}.zip"
