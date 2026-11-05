@@ -123,22 +123,13 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
             }()
 
             content
-                .background {
-                    // La translucidité du fond varie selon le curseur sans JAMAIS altérer la luminosité du contenu
-                    shape
-                        .fill(Color.white.opacity(0.001))
-                        .glassEffect(configuredGlass, in: shape)
-                        .opacity(0.25 + 0.75 * i)
-                        .overlay {
-                            if let tint {
-                                shape.fill(tint.opacity(0.16 + 0.10 * i))
-                            }
-                        }
-                }
+                .glassEffect(configuredGlass, in: shape)
                 .overlay {
-                    shape
-                        .fill(LiquidGlassStyle.surfaceSheen)
-                        .allowsHitTesting(false)
+                    if prominence != .clear {
+                        shape
+                            .fill(LiquidGlassStyle.surfaceSheen)
+                            .allowsHitTesting(false)
+                    }
                 }
                 .overlay {
                     shape
@@ -174,7 +165,9 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                             }
                         }
                         .overlay {
-                            shape.fill(LiquidGlassStyle.surfaceSheen)
+                            if prominence != .clear {
+                                shape.fill(LiquidGlassStyle.surfaceSheen)
+                            }
                         }
                 }
                 .overlay {

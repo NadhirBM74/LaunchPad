@@ -30,12 +30,12 @@ struct WidgetContainerView<Content: View>: View {
     @ViewBuilder
     private func translucentGlassBackground(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        shape
+        Color.clear
             .liquidGlass(
                 in: shape,
                 interactive: false,
                 tint: nil,
-                prominence: .regular,
+                prominence: .clear,
                 intensity: liquidGlassIntensity
             )
             .overlay {

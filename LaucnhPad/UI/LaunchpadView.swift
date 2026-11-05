@@ -367,16 +367,13 @@ struct LaunchpadRootView: View {
         .padding(.leading, 14)
         .padding(.trailing, 8)
         .frame(width: 290, height: 36)
-        .background {
-            Capsule()
-                .liquidGlass(
-                    in: Capsule(),
-                    interactive: true,
-                    tint: nil,
-                    prominence: .regular,
-                    intensity: liquidGlassIntensity
-                )
-        }
+        .liquidGlass(
+            in: Capsule(),
+            interactive: true,
+            tint: nil,
+            prominence: .clear,
+            intensity: liquidGlassIntensity
+        )
         .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
         .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
