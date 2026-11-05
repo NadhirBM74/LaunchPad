@@ -101,6 +101,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.isReleasedWhenClosed = false
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = true
             window.collectionBehavior = [.moveToActiveSpace]
             window.delegate = self
             window.controller = self

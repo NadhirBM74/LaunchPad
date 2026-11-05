@@ -61,6 +61,7 @@ struct LaunchpadRootView: View {
     @AppStorage(PrefKey.showLabels) private var showLabels = true
     @AppStorage(PrefKey.backgroundOpacity) private var backgroundOpacity = 0.35
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
     @AppStorage(PrefKey.showRunningIndicator) private var showRunning = true
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
@@ -121,7 +122,7 @@ struct LaunchpadRootView: View {
                                 hasFavorites: hasFavorites)
         return ZStack(alignment: .topLeading) {
             if vm.isPanelVisible {
-                LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundOpacity)
+                LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundOpacity, liquidGlassIntensity: liquidGlassIntensity)
                     .equatable()
                     .frame(width: size.width, height: size.height)
                     .modifier(PresentationEffect(state: vm.presentation, style: .fade))
@@ -236,7 +237,7 @@ struct LaunchpadRootView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .liquidGlassCapsule(interactive: true)
+                    .liquidGlassCapsule(interactive: true, intensity: liquidGlassIntensity)
                     .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
@@ -252,7 +253,7 @@ struct LaunchpadRootView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .liquidGlassCapsule(interactive: true)
+                        .liquidGlassCapsule(interactive: true, intensity: liquidGlassIntensity)
                         .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
@@ -369,7 +370,7 @@ struct LaunchpadRootView: View {
         .background {
             if backgroundStyle == .liquidGlass {
                 Capsule()
-                    .liquidGlass(in: Capsule(), interactive: true)
+                    .liquidGlass(in: Capsule(), interactive: true, intensity: liquidGlassIntensity)
             } else {
                 Capsule()
                     .fill(Color.white.opacity(0.06))
@@ -378,7 +379,7 @@ struct LaunchpadRootView: View {
         }
         .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
-        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? 0.32 : 0.20), radius: 12, x: 0, y: 6)
+        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? (0.16 + 0.22 * liquidGlassIntensity) : 0.20), radius: 12, x: 0, y: 6)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
 

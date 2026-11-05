@@ -9,6 +9,7 @@ nonisolated enum PrefKey: Sendable {
     static let backgroundOpacity = "LaunchpadBackgroundOpacity"
     static let backgroundStyle = "LaunchpadBackgroundStyle"
     static let iconScale = "LaunchpadIconScale"
+    static let liquidGlassIntensity = "LaunchpadLiquidGlassIntensity"
     static let showLabels = "LaunchpadShowLabels"
     static let reduceMotion = "LaunchpadReduceMotion"
     static let launchAtLogin = "LaunchpadLaunchAtLogin"
@@ -228,6 +229,7 @@ enum Prefs {
             PrefKey.columns: 7,
             PrefKey.rows: 5,
             PrefKey.backgroundOpacity: 0.15,
+            PrefKey.liquidGlassIntensity: 0.85,
             PrefKey.backgroundStyle: AppTheme.liquidGlass.rawValue,
             PrefKey.isProUnlocked: false,
             PrefKey.licenseKey: "",
@@ -304,6 +306,13 @@ enum Prefs {
     static var screenTarget: ScreenTarget { ScreenTarget(rawValue: defaults.string(forKey: PrefKey.screenTarget) ?? "") ?? .cursor }
     static var backgroundStyle: BackgroundStyle {
         BackgroundStyle(rawValue: defaults.string(forKey: PrefKey.backgroundStyle) ?? "") ?? .liquidGlass
+    }
+    static var liquidGlassIntensity: Double {
+        get {
+            if defaults.object(forKey: PrefKey.liquidGlassIntensity) == nil { return 0.85 }
+            return max(0.0, min(1.0, defaults.double(forKey: PrefKey.liquidGlassIntensity)))
+        }
+        set { defaults.set(max(0.0, min(1.0, newValue)), forKey: PrefKey.liquidGlassIntensity) }
     }
     static var isProUnlocked: Bool {
         get { defaults.bool(forKey: PrefKey.isProUnlocked) }

@@ -17,13 +17,16 @@ public enum LiquidGlassProminence: Sendable {
 
 public enum LiquidGlassStyle {
     /// Biseau spéculaire supérieur-gauche vers inférieur-droit simulant la réfraction sur l'arête du verre
-    public static var specularBorder: LinearGradient {
-        LinearGradient(
+    public static var specularBorder: LinearGradient { specularBorder() }
+
+    public static func specularBorder(intensity: Double = 1.0) -> LinearGradient {
+        let i = max(0.0, min(1.0, intensity))
+        return LinearGradient(
             colors: [
-                Color.white.opacity(0.68),
-                Color.white.opacity(0.24),
-                Color.white.opacity(0.06),
-                Color.white.opacity(0.20)
+                Color.white.opacity(0.68 * i),
+                Color.white.opacity(0.24 * i),
+                Color.white.opacity(0.06 * i),
+                Color.white.opacity(0.20 * i)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -31,13 +34,16 @@ public enum LiquidGlassStyle {
     }
 
     /// Biseau spéculaire accentué pour les éléments interactifs survolés
-    public static var specularBorderHovered: LinearGradient {
-        LinearGradient(
+    public static var specularBorderHovered: LinearGradient { specularBorderHovered() }
+
+    public static func specularBorderHovered(intensity: Double = 1.0) -> LinearGradient {
+        let i = max(0.0, min(1.0, intensity))
+        return LinearGradient(
             colors: [
-                Color.white.opacity(0.85),
-                Color.white.opacity(0.35),
-                Color.white.opacity(0.12),
-                Color.white.opacity(0.32)
+                Color.white.opacity(0.85 * i),
+                Color.white.opacity(0.35 * i),
+                Color.white.opacity(0.12 * i),
+                Color.white.opacity(0.32 * i)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -45,11 +51,14 @@ public enum LiquidGlassStyle {
     }
 
     /// Reflet supérieur doux simulant la source de lumière zénithale
-    public static var surfaceSheen: LinearGradient {
-        LinearGradient(
+    public static var surfaceSheen: LinearGradient { surfaceSheen() }
+
+    public static func surfaceSheen(intensity: Double = 1.0) -> LinearGradient {
+        let i = max(0.0, min(1.0, intensity))
+        return LinearGradient(
             colors: [
-                Color.white.opacity(0.18),
-                Color.white.opacity(0.04),
+                Color.white.opacity(0.18 * i),
+                Color.white.opacity(0.04 * i),
                 Color.clear
             ],
             startPoint: .top,
@@ -71,7 +80,9 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
     let tint: Color?
     let prominence: LiquidGlassProminence
     let borderLineWidth: CGFloat
+    let explicitIntensity: Double?
 
+    @AppStorage(PrefKey.liquidGlassIntensity) private var storedIntensity: Double = 0.85
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered: Bool = false
@@ -81,16 +92,23 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
         interactive: Bool = false,
         tint: Color? = nil,
         prominence: LiquidGlassProminence = .regular,
-        borderLineWidth: CGFloat = 1.0
+        borderLineWidth: CGFloat = 1.0,
+        intensity: Double? = nil
     ) {
         self.shape = shape
         self.interactive = interactive
         self.tint = tint
         self.prominence = prominence
         self.borderLineWidth = borderLineWidth
+        self.explicitIntensity = intensity
+    }
+
+    private var effectiveIntensity: Double {
+        max(0.0, min(1.0, explicitIntensity ?? storedIntensity))
     }
 
     public func body(content: Content) -> some View {
+        let i = effectiveIntensity
         if #available(macOS 26.0, *) {
             let glassBase: Glass = {
                 switch prominence {
@@ -109,17 +127,18 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
 
             content
                 .glassEffect(configuredGlass, in: shape)
+                .opacity(0.35 + 0.65 * i)
                 .overlay {
                     shape
-                        .fill(LiquidGlassStyle.surfaceSheen)
+                        .fill(LiquidGlassStyle.surfaceSheen(intensity: i))
                         .allowsHitTesting(false)
                 }
                 .overlay {
                     shape
                         .strokeBorder(
                             isHovered && interactive
-                                ? LiquidGlassStyle.specularBorderHovered
-                                : LiquidGlassStyle.specularBorder,
+                                ? LiquidGlassStyle.specularBorderHovered(intensity: i)
+                                : LiquidGlassStyle.specularBorder(intensity: i),
                             lineWidth: borderLineWidth
                         )
                         .allowsHitTesting(false)
@@ -140,21 +159,22 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                 .background {
                     shape
                         .fill(.ultraThinMaterial)
+                        .opacity(0.30 + 0.70 * i)
                         .overlay {
                             if let tint {
-                                shape.fill(tint.opacity(0.15))
+                                shape.fill(tint.opacity(0.15 * i))
                             }
                         }
                         .overlay {
-                            shape.fill(LiquidGlassStyle.surfaceSheen)
+                            shape.fill(LiquidGlassStyle.surfaceSheen(intensity: i))
                         }
                 }
                 .overlay {
                     shape
                         .strokeBorder(
                             isHovered && interactive
-                                ? LiquidGlassStyle.specularBorderHovered
-                                : LiquidGlassStyle.specularBorder,
+                                ? LiquidGlassStyle.specularBorderHovered(intensity: i)
+                                : LiquidGlassStyle.specularBorder(intensity: i),
                             lineWidth: borderLineWidth
                         )
                         .allowsHitTesting(false)
@@ -261,14 +281,16 @@ public extension View {
         interactive: Bool = false,
         tint: Color? = nil,
         prominence: LiquidGlassProminence = .regular,
-        borderLineWidth: CGFloat = 1.0
+        borderLineWidth: CGFloat = 1.0,
+        intensity: Double? = nil
     ) -> some View {
         modifier(LiquidGlassModifier(
             shape: shape,
             interactive: interactive,
             tint: tint,
             prominence: prominence,
-            borderLineWidth: borderLineWidth
+            borderLineWidth: borderLineWidth,
+            intensity: intensity
         ))
     }
 
@@ -278,14 +300,16 @@ public extension View {
         interactive: Bool = false,
         tint: Color? = nil,
         prominence: LiquidGlassProminence = .regular,
-        borderLineWidth: CGFloat = 1.0
+        borderLineWidth: CGFloat = 1.0,
+        intensity: Double? = nil
     ) -> some View {
         liquidGlass(
             in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous),
             interactive: interactive,
             tint: tint,
             prominence: prominence,
-            borderLineWidth: borderLineWidth
+            borderLineWidth: borderLineWidth,
+            intensity: intensity
         )
     }
 
@@ -294,14 +318,16 @@ public extension View {
         interactive: Bool = false,
         tint: Color? = nil,
         prominence: LiquidGlassProminence = .regular,
-        borderLineWidth: CGFloat = 1.0
+        borderLineWidth: CGFloat = 1.0,
+        intensity: Double? = nil
     ) -> some View {
         liquidGlass(
             in: Capsule(),
             interactive: interactive,
             tint: tint,
             prominence: prominence,
-            borderLineWidth: borderLineWidth
+            borderLineWidth: borderLineWidth,
+            intensity: intensity
         )
     }
 }

@@ -94,24 +94,29 @@ struct VisualEffectBackground: NSViewRepresentable {
 // MARK: - Arrière-plan Liquid Glass (Inspiré du style Apple)
 
 struct LiquidGlassBackground: View, Equatable {
-    static func == (lhs: LiquidGlassBackground, rhs: LiquidGlassBackground) -> Bool { true }
+    var intensity: Double = 0.85
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    static func == (lhs: LiquidGlassBackground, rhs: LiquidGlassBackground) -> Bool {
+        lhs.intensity == rhs.intensity
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
+            let i = max(0.0, min(1.0, intensity))
             ZStack {
                 // 1. Flou d'arrière-plan en temps réel de haute qualité de ce qui est derrière la fenêtre
                 VisualEffectBackground(material: .fullScreenUI)
 
-                // 2. Base semi-translucide sombre pour un contraste optimal des icônes et des textes
-                Color.black.opacity(reduceTransparency ? 0.82 : 0.44)
+                // 2. Base semi-translucide sombre modulée pour un contraste optimal des icônes et du texte
+                Color.black.opacity(reduceTransparency ? 0.82 : (0.54 - 0.20 * i))
 
-                // 3. Halo diffus central (lumière ambiante douce rétro-éclairant la grille d'icônes comme dans la référence 1)
+                // 3. Halo diffus central (lumière ambiante douce rétro-éclairant la grille d'icônes)
                 RadialGradient(
                     colors: [
-                        Color.white.opacity(0.09),
-                        Color.white.opacity(0.02),
+                        Color.white.opacity(0.12 * i),
+                        Color.white.opacity(0.03 * i),
                         Color.clear
                     ],
                     center: UnitPoint(x: 0.5, y: 0.52),
@@ -122,10 +127,10 @@ struct LiquidGlassBackground: View, Equatable {
                 // 4. Couche optique Liquid Glass : reflets iridescents délicats (traitement de surface Apple)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.14),
-                        Color.white.opacity(0.02),
-                        Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.035),
-                        Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.03),
+                        Color.white.opacity(0.18 * i),
+                        Color.white.opacity(0.03 * i),
+                        Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045 * i),
+                        Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04 * i),
                         Color.clear
                     ],
                     startPoint: .topLeading,
@@ -135,8 +140,8 @@ struct LiquidGlassBackground: View, Equatable {
                 // 5. Reflet spéculaire supérieur (biseau lumineux à l'horizon haut caractéristique du verre moulé)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.24),
-                        Color.white.opacity(0.05),
+                        Color.white.opacity(0.32 * i),
+                        Color.white.opacity(0.07 * i),
                         Color.clear
                     ],
                     startPoint: .top,
@@ -150,10 +155,10 @@ struct LiquidGlassBackground: View, Equatable {
                     .strokeBorder(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.48),
-                                Color.white.opacity(0.12),
-                                Color.white.opacity(0.05),
-                                Color.white.opacity(0.28)
+                                Color.white.opacity(0.55 * i),
+                                Color.white.opacity(0.15 * i),
+                                Color.white.opacity(0.06 * i),
+                                Color.white.opacity(0.32 * i)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -171,9 +176,10 @@ struct LaunchpadBackground: View, Equatable {
     @ObservedObject var wallpaper: WallpaperProvider
     let style: BackgroundStyle
     let dimming: Double
+    var liquidGlassIntensity: Double = 0.85
 
     static func == (lhs: LaunchpadBackground, rhs: LaunchpadBackground) -> Bool {
-        lhs.style == rhs.style && lhs.dimming == rhs.dimming && lhs.wallpaper.image === rhs.wallpaper.image
+        lhs.style == rhs.style && lhs.dimming == rhs.dimming && lhs.liquidGlassIntensity == rhs.liquidGlassIntensity && lhs.wallpaper.image === rhs.wallpaper.image
     }
 
     var body: some View {
@@ -202,7 +208,7 @@ struct LaunchpadBackground: View, Equatable {
                 case .glass:
                     VisualEffectBackground(material: .fullScreenUI)
                 case .liquidGlass:
-                    LiquidGlassBackground()
+                    LiquidGlassBackground(intensity: liquidGlassIntensity)
                 }
             }
             .overlay {

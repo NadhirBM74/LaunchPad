@@ -31,6 +31,7 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.columns) private var columns = 7
     @AppStorage(PrefKey.rows) private var rows = 5
     @AppStorage(PrefKey.backgroundOpacity) private var opacity = 0.35
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @AppStorage(PrefKey.iconScale) private var iconScale = 1.0
     @AppStorage(PrefKey.scrollSensitivity) private var scrollSensitivity = 1.0
@@ -142,6 +143,19 @@ struct SettingsPanel: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background(settingsBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            if backgroundStyle == .liquidGlass {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(
+                        LiquidGlassStyle.specularBorder(intensity: liquidGlassIntensity),
+                        lineWidth: 1.2
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1.0)
+            }
+        }
         .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             guard selectedTab == .general, !accessibilityGranted else { return }
@@ -176,32 +190,33 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var settingsBackground: some View {
+        let i = max(0.0, min(1.0, liquidGlassIntensity))
         ZStack {
             switch backgroundStyle {
             case .dark:
-                Rectangle().fill(.ultraThickMaterial)
+                VisualEffectBackground(material: .fullScreenUI)
                 Color.black.opacity(0.72)
             case .light:
-                Rectangle().fill(.regularMaterial)
+                VisualEffectBackground(material: .underWindowBackground)
                 Color.white.opacity(0.62)
             case .glass:
-                Rectangle().fill(.regularMaterial)
+                VisualEffectBackground(material: .fullScreenUI)
                 Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.45)
             case .liquidGlass:
-                Rectangle().fill(.ultraThinMaterial)
-                Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.32)
+                VisualEffectBackground(material: .fullScreenUI)
+                Color.black.opacity(0.32 + (1.0 - i) * 0.22)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.12),
-                        Color.purple.opacity(0.04),
-                        Color.blue.opacity(0.03),
+                        Color.white.opacity(0.18 * i),
+                        Color.purple.opacity(0.06 * i),
+                        Color.blue.opacity(0.05 * i),
                         Color.clear
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 LinearGradient(
-                    colors: [Color.white.opacity(0.18), Color.white.opacity(0.03), Color.clear],
+                    colors: [Color.white.opacity(0.24 * i), Color.white.opacity(0.04 * i), Color.clear],
                     startPoint: .top,
                     endPoint: .center
                 )
@@ -533,6 +548,9 @@ struct SettingsPanel: View {
 
             SettingsSeparator()
             SettingsSliderRow(loc("interface.dimming"), value: $opacity, range: 0...0.8)
+
+            SettingsSeparator()
+            SettingsSliderRow(loc("interface.liquid_glass_intensity"), value: $liquidGlassIntensity, range: 0.05...1.0, step: 0.05, isPercentage: true)
         }
 
         SettingsSectionTitle(loc("section.pro_customization"))
@@ -2493,13 +2511,15 @@ private struct SettingsSliderRow: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     var step: Double?
+    var isPercentage: Bool = false
     var onEditingChanged: ((Bool) -> Void)?
 
-    init(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double? = nil, onEditingChanged: ((Bool) -> Void)? = nil) {
+    init(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double? = nil, isPercentage: Bool = false, onEditingChanged: ((Bool) -> Void)? = nil) {
         self.title = title
         self._value = value
         self.range = range
         self.step = step
+        self.isPercentage = isPercentage
         self.onEditingChanged = onEditingChanged
     }
 
@@ -2516,8 +2536,13 @@ private struct SettingsSliderRow: View {
             }
             .tint(SettingsStyle.accent)
             .frame(width: 180)
-            Text(value, format: .number.precision(.fractionLength(2)))
-                .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+            if isPercentage {
+                Text("\(Int(round(value * 100))) %")
+                    .monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
+            } else {
+                Text(value, format: .number.precision(.fractionLength(2)))
+                    .monospacedDigit().foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+            }
         }
         .padding(.vertical, 12)
     }
