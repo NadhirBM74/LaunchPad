@@ -550,15 +550,17 @@ struct SettingsPanel: View {
             SettingsSeparator()
             SettingsSliderRow(loc("interface.dimming"), value: $opacity, range: 0...0.8)
 
-            SettingsSeparator()
-            SettingsSliderRow(
-                loc("interface.liquid_glass_intensity"),
-                subtitle: loc("interface.liquid_glass_intensity_subtitle"),
-                value: $liquidGlassIntensity,
-                range: 0.05...1.0,
-                step: 0.05,
-                isPercentage: true
-            )
+            if licenseManager.isPro {
+                SettingsSeparator()
+                SettingsSliderRow(
+                    loc("interface.liquid_glass_intensity"),
+                    subtitle: loc("interface.liquid_glass_intensity_subtitle"),
+                    value: $liquidGlassIntensity,
+                    range: 0.05...1.0,
+                    step: 0.05,
+                    isPercentage: true
+                )
+            }
         }
 
         SettingsSectionTitle(loc("section.pro_customization"))
