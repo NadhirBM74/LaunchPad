@@ -196,13 +196,33 @@ final class InputEventMonitor {
         let mode = cachedPinchMode
         guard mode != .off else { return }
 
-        // Récupère l'ensemble des contacts physiques actifs (y compris stationnaires)
-        let rawTouches: Set<NSTouch> = {
-            let touching = event.touches(matching: .touching, in: nil)
-            return touching.isEmpty ? event.allTouches() : touching
-        }()
-        let touches = rawTouches.filter { $0.phase != .ended && $0.phase != .cancelled }
-        let count = touches.count
+        // Récupère l'ensemble des contacts physiques actifs (y compris stationnaires) sans allocations superflues
+        let touching = event.touches(matching: .touching, in: nil)
+        let rawTouches = touching.isEmpty ? event.allTouches() : touching
+        var count = 0
+        var sumX: CGFloat = 0
+        var sumY: CGFloat = 0
+        var p0: CGPoint = .zero
+        var p1: CGPoint = .zero
+        var p2: CGPoint = .zero
+        var p3: CGPoint = .zero
+        var p4: CGPoint = .zero
+        for touch in rawTouches {
+            let phase = touch.phase
+            if phase != .ended && phase != .cancelled {
+                let pos = touch.normalizedPosition
+                sumX += pos.x
+                sumY += pos.y
+                switch count {
+                case 0: p0 = pos
+                case 1: p1 = pos
+                case 2: p2 = pos
+                case 3: p3 = pos
+                default: p4 = pos
+                }
+                count += 1
+            }
+        }
 
         // Tolérance continue : en cours de geste, tolérer 2 à 5 doigts sans interruption
         if interactiveActive {
@@ -218,10 +238,16 @@ final class InputEventMonitor {
             }
         }
 
-        let points = touches.map(\.normalizedPosition)
-        let centroid = CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(count),
-                               y: points.map(\.y).reduce(0, +) / CGFloat(count))
-        let spread = points.map { hypot($0.x - centroid.x, $0.y - centroid.y) }.reduce(0, +) / CGFloat(count)
+        let invCount = 1.0 / CGFloat(count)
+        let centroid = CGPoint(x: sumX * invCount, y: sumY * invCount)
+        var spreadSum: CGFloat = 0
+        let sampleCount = min(count, 5)
+        if sampleCount > 0 { spreadSum += hypot(p0.x - centroid.x, p0.y - centroid.y) }
+        if sampleCount > 1 { spreadSum += hypot(p1.x - centroid.x, p1.y - centroid.y) }
+        if sampleCount > 2 { spreadSum += hypot(p2.x - centroid.x, p2.y - centroid.y) }
+        if sampleCount > 3 { spreadSum += hypot(p3.x - centroid.x, p3.y - centroid.y) }
+        if sampleCount > 4 { spreadSum += hypot(p4.x - centroid.x, p4.y - centroid.y) }
+        let spread = spreadSum / CGFloat(sampleCount)
 
         // Réinitialisation du référentiel initial lors d'un nouveau geste
         if !interactiveActive && (count != pinchFingers || pinchInitialSpread == 0) {
