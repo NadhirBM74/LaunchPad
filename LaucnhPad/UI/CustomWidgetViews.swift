@@ -7,10 +7,12 @@ import AppKit
 struct WidgetContainerView<Content: View>: View {
     let size: WidgetSize
     var targetSize: CGSize? = nil
+    var isWhite: Bool = false
     @ViewBuilder let content: () -> Content
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle = AppTheme.liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
 
     var body: some View {
         let w = targetSize?.width ?? size.width
@@ -19,10 +21,50 @@ struct WidgetContainerView<Content: View>: View {
 
         content()
             .frame(width: w, height: h)
-            .background(glassBackground(cornerRadius: cornerRadius))
+            .background(isWhite ? AnyView(whiteGlassBackground(cornerRadius: cornerRadius)) : AnyView(glassBackground(cornerRadius: cornerRadius)))
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(luminousBorder(cornerRadius: cornerRadius))
-            .shadow(color: .black.opacity(0.38), radius: 14, x: 0, y: 7)
+            .overlay(isWhite ? AnyView(whiteLuminousBorder(cornerRadius: cornerRadius)) : AnyView(luminousBorder(cornerRadius: cornerRadius)))
+            .shadow(color: .black.opacity(isWhite ? 0.20 : 0.38), radius: isWhite ? 12 : 14, x: 0, y: isWhite ? 6 : 7)
+    }
+
+    @ViewBuilder
+    private func whiteGlassBackground(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let i = max(0.05, min(1.0, liquidGlassIntensity))
+        shape
+            .fill(.ultraThinMaterial)
+            .opacity(0.40 + 0.60 * i)
+            .overlay {
+                // Fond blanc soyeux façon papier Apple Notes / verre blanc liquide
+                shape.fill(Color(red: 0.98, green: 0.985, blue: 1.0).opacity(0.82 + 0.14 * i))
+            }
+            .overlay {
+                // Reflet supérieur zénithal
+                shape.fill(LiquidGlassStyle.surfaceSheen)
+            }
+            .overlay {
+                if widgetManager.glowColor != .none {
+                    shape.fill(widgetManager.glowColor.primaryColor.opacity(0.06))
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func whiteLuminousBorder(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        shape.strokeBorder(
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.95),
+                    Color.white.opacity(0.60),
+                    Color(white: 0.85).opacity(0.40),
+                    Color.white.opacity(0.80)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            lineWidth: 1.0
+        )
     }
 
     @ViewBuilder
@@ -3288,11 +3330,11 @@ struct QuickNoteWidgetView: View {
     @State private var showCopiedCheckmark = false
 
     var body: some View {
-        WidgetContainerView(size: config.size, targetSize: targetSize) {
+        WidgetContainerView(size: config.size, targetSize: targetSize, isWhite: true) {
             GeometryReader { geo in
                 let isCompact = geo.size.height < 175 || geo.size.width < 175
                 VStack(alignment: .leading, spacing: isCompact ? 5 : 8) {
-                    // En-tête : Style Apple Notes
+                    // En-tête : Style Apple Notes sur fond blanc soyeux
                     HStack(spacing: isCompact ? 6 : 8) {
                         ZStack {
                             Circle()
@@ -3305,7 +3347,7 @@ struct QuickNoteWidgetView: View {
 
                         Text(loc("widget.quickNote.title"))
                             .font(.system(size: isCompact ? 11.5 : 12.5, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.black.opacity(0.88))
 
                         Spacer()
 
@@ -3329,10 +3371,10 @@ struct QuickNoteWidgetView: View {
                                             .font(.system(size: isCompact ? 8.5 : 9.5, weight: .bold))
                                     }
                                 }
-                                .foregroundStyle(showCopiedCheckmark ? Color.green : Color.white.opacity(0.65))
+                                .foregroundStyle(showCopiedCheckmark ? Color.green : Color.black.opacity(0.65))
                                 .padding(.horizontal, isCompact ? 6 : 7)
                                 .padding(.vertical, isCompact ? 2.5 : 3.5)
-                                .background(Capsule().fill(Color.white.opacity(0.10)))
+                                .background(Capsule().fill(Color.black.opacity(0.06)))
                             }
                             .buttonStyle(.plain)
 
@@ -3344,7 +3386,7 @@ struct QuickNoteWidgetView: View {
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: isCompact ? 11 : 12))
-                                    .foregroundStyle(.white.opacity(0.45))
+                                    .foregroundStyle(Color.black.opacity(0.40))
                             }
                             .buttonStyle(.plain)
                         }
@@ -3355,7 +3397,7 @@ struct QuickNoteWidgetView: View {
                         if noteText.isEmpty {
                             Text(loc("widget.quickNote.placeholder"))
                                 .font(.system(size: isCompact ? 11 : 12, weight: .regular))
-                                .foregroundStyle(.white.opacity(0.35))
+                                .foregroundStyle(Color.black.opacity(0.38))
                                 .padding(.top, 4)
                                 .padding(.leading, 3)
                                 .allowsHitTesting(false)
@@ -3365,7 +3407,7 @@ struct QuickNoteWidgetView: View {
                             .scrollContentBackground(.hidden)
                             .background(Color.clear)
                             .font(.system(size: isCompact ? 11.5 : 12.5))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.black.opacity(0.88))
                             .lineSpacing(isCompact ? 2 : 3)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -3376,7 +3418,7 @@ struct QuickNoteWidgetView: View {
                             Spacer()
                             Text("\(noteText.count) car.")
                                 .font(.system(size: isCompact ? 8.5 : 9.5, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55))
+                                .foregroundStyle(Color.black.opacity(0.45))
                         }
                     }
                 }

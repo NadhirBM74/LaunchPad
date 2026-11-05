@@ -329,27 +329,27 @@ struct LaunchpadRootView: View {
         .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
     }
 
-    // Barre de recherche façon LaunchOS : capsule en verre, loupe à gauche,
+    // Barre de recherche façon LaunchOS : capsule en verre blanc, loupe à gauche,
     // « Rechercher des applications » et bouton ⋯ (réglages) à droite.
     private var searchBar: some View {
         let typing = !vm.query.isEmpty
         return HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
+                .foregroundStyle(Color.black.opacity(0.62))
             ZStack(alignment: .leading) {
                 if !typing {
                     Text(loc("grid.search_placeholder"))
                         .font(.system(size: 15))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(Color.black.opacity(0.42))
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
                 TextField("", text: $vm.query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
-                    .foregroundStyle(.white)
-                    .tint(.white)
+                    .foregroundStyle(Color.black.opacity(0.88))
+                    .tint(Color.black.opacity(0.80))
                     .focused($searchFocused)
             }
             if typing {
@@ -357,10 +357,11 @@ struct LaunchpadRootView: View {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 14))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(Color.black.opacity(0.45))
                 .transition(.opacity)
             }
-            SearchMenuButton(onSettings: { vm.onOpenSettings() },
+            SearchMenuButton(foreground: Color.black.opacity(0.65),
+                             onSettings: { vm.onOpenSettings() },
                              onReorganize: { vm.requestReorganize() },
                              onRefresh: { store.refresh() })
         }
@@ -368,18 +369,24 @@ struct LaunchpadRootView: View {
         .padding(.trailing, 8)
         .frame(width: 290, height: 36)
         .background {
-            if backgroundStyle == .liquidGlass {
+            let i = max(0.05, min(1.0, liquidGlassIntensity))
+            ZStack {
                 Capsule()
-                    .liquidGlass(in: Capsule(), interactive: true, intensity: liquidGlassIntensity)
-            } else {
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.40 + 0.60 * i)
                 Capsule()
-                    .fill(Color.white.opacity(0.06))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+                    .fill(Color.white.opacity(0.80 + 0.15 * i))
+                Capsule()
+                    .fill(LiquidGlassStyle.surfaceSheen)
+            }
+            .overlay {
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.95), lineWidth: 1)
             }
         }
         .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
-        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? 0.24 : 0.20), radius: 12, x: 0, y: 6)
+        .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 5)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
 
@@ -632,6 +639,7 @@ struct PresentationEffect: ViewModifier {
 // MARK: - Bouton ⋯ de la barre de recherche (comme LaunchOS) : clic = réglages, clic droit = menu principal
 
 struct SearchMenuButton: View {
+    var foreground: Color = .white.opacity(0.78)
     let onSettings: () -> Void
     let onReorganize: () -> Void
     let onRefresh: () -> Void
@@ -641,7 +649,7 @@ struct SearchMenuButton: View {
         Button(action: onSettings) {
             Image(systemName: "ellipsis.circle")
                 .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(.white.opacity(hovering ? 1 : 0.78))
+                .foregroundStyle(foreground.opacity(hovering ? 1.0 : 0.85))
                 .frame(width: 26, height: 26)
                 .contentShape(Circle())
         }
