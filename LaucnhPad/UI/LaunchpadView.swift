@@ -329,27 +329,26 @@ struct LaunchpadRootView: View {
         .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
     }
 
-    // Barre de recherche façon LaunchOS : capsule en verre blanc, loupe à gauche,
-    // « Rechercher des applications » et bouton ⋯ (réglages) à droite.
+    // Barre de recherche façon LaunchOS : capsule en Liquid Glass blanc
     private var searchBar: some View {
         let typing = !vm.query.isEmpty
         return HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.62))
+                .foregroundStyle(.white.opacity(0.92))
             ZStack(alignment: .leading) {
                 if !typing {
                     Text(loc("grid.search_placeholder"))
                         .font(.system(size: 15))
-                        .foregroundStyle(Color.black.opacity(0.42))
+                        .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
                 TextField("", text: $vm.query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
-                    .foregroundStyle(Color.black.opacity(0.88))
-                    .tint(Color.black.opacity(0.80))
+                    .foregroundStyle(.white)
+                    .tint(.white)
                     .focused($searchFocused)
             }
             if typing {
@@ -357,10 +356,10 @@ struct LaunchpadRootView: View {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 14))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.black.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.65))
                 .transition(.opacity)
             }
-            SearchMenuButton(foreground: Color.black.opacity(0.65),
+            SearchMenuButton(foreground: .white.opacity(0.85),
                              onSettings: { vm.onOpenSettings() },
                              onReorganize: { vm.requestReorganize() },
                              onRefresh: { store.refresh() })
@@ -369,24 +368,18 @@ struct LaunchpadRootView: View {
         .padding(.trailing, 8)
         .frame(width: 290, height: 36)
         .background {
-            let i = max(0.05, min(1.0, liquidGlassIntensity))
-            ZStack {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.40 + 0.60 * i)
-                Capsule()
-                    .fill(Color.white.opacity(0.80 + 0.15 * i))
-                Capsule()
-                    .fill(LiquidGlassStyle.surfaceSheen)
-            }
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.95), lineWidth: 1)
-            }
+            Capsule()
+                .liquidGlass(
+                    in: Capsule(),
+                    interactive: true,
+                    tint: .white,
+                    prominence: .regular,
+                    intensity: liquidGlassIntensity
+                )
         }
         .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
-        .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 5)
+        .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
 

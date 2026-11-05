@@ -129,6 +129,11 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                         .fill(Color.white.opacity(0.001))
                         .glassEffect(configuredGlass, in: shape)
                         .opacity(0.25 + 0.75 * i)
+                        .overlay {
+                            if let tint {
+                                shape.fill(tint.opacity(0.16 + 0.10 * i))
+                            }
+                        }
                 }
                 .overlay {
                     shape
@@ -165,7 +170,7 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                         .opacity(0.25 + 0.75 * i)
                         .overlay {
                             if let tint {
-                                shape.fill(tint.opacity(0.15))
+                                shape.fill(tint.opacity(0.16 + 0.10 * i))
                             }
                         }
                         .overlay {
