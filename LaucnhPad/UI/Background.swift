@@ -104,19 +104,20 @@ struct LiquidGlassBackground: View, Equatable {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let i = max(0.0, min(1.0, intensity))
+            let i = max(0.05, min(1.0, intensity))
             ZStack {
-                // 1. Flou d'arrière-plan en temps réel de haute qualité de ce qui est derrière la fenêtre
+                // 1. Flou d'arrière-plan en temps réel : l'opacité contrôle directement la transparence
                 VisualEffectBackground(material: .fullScreenUI)
+                    .opacity(reduceTransparency ? 1.0 : (0.25 + 0.75 * i))
 
-                // 2. Base semi-translucide sombre modulée pour un contraste optimal des icônes et du texte
-                Color.black.opacity(reduceTransparency ? 0.82 : (0.54 - 0.20 * i))
+                // 2. Base semi-translucide constante : ne varie JAMAIS avec le curseur pour ne pas altérer la luminosité
+                Color.black.opacity(reduceTransparency ? 0.80 : 0.28)
 
-                // 3. Halo diffus central (lumière ambiante douce rétro-éclairant la grille d'icônes)
+                // 3. Halo diffus central lumineux (lumière ambiante constante)
                 RadialGradient(
                     colors: [
-                        Color.white.opacity(0.12 * i),
-                        Color.white.opacity(0.03 * i),
+                        Color.white.opacity(0.12),
+                        Color.white.opacity(0.03),
                         Color.clear
                     ],
                     center: UnitPoint(x: 0.5, y: 0.52),
@@ -124,24 +125,24 @@ struct LiquidGlassBackground: View, Equatable {
                     endRadius: max(size.width * 0.52, 600)
                 )
 
-                // 4. Couche optique Liquid Glass : reflets iridescents délicats (traitement de surface Apple)
+                // 4. Couche optique Liquid Glass : reflets iridescents (luminosité constante)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.18 * i),
-                        Color.white.opacity(0.03 * i),
-                        Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045 * i),
-                        Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04 * i),
+                        Color.white.opacity(0.16),
+                        Color.white.opacity(0.03),
+                        Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045),
+                        Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04),
                         Color.clear
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
 
-                // 5. Reflet spéculaire supérieur (biseau lumineux à l'horizon haut caractéristique du verre moulé)
+                // 5. Reflet spéculaire supérieur (biseau lumineux à l'horizon haut, éclat préservé)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.32 * i),
-                        Color.white.opacity(0.07 * i),
+                        Color.white.opacity(0.30),
+                        Color.white.opacity(0.06),
                         Color.clear
                     ],
                     startPoint: .top,
@@ -150,15 +151,15 @@ struct LiquidGlassBackground: View, Equatable {
                 .frame(height: max(size.height * 0.42, 220))
                 .frame(maxHeight: .infinity, alignment: .top)
 
-                // 6. Contours lumineux nets et fins simulant la tranche biseautée du verre
+                // 6. Contours lumineux nets et fins simulant la tranche biseautée du verre (luminosité constante)
                 Rectangle()
                     .strokeBorder(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.55 * i),
-                                Color.white.opacity(0.15 * i),
-                                Color.white.opacity(0.06 * i),
-                                Color.white.opacity(0.32 * i)
+                                Color.white.opacity(0.55),
+                                Color.white.opacity(0.15),
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.30)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing

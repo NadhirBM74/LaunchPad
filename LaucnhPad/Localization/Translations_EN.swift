@@ -89,7 +89,8 @@ nonisolated enum Translations_EN: Sendable {
         "interface.reduce_motion": "Reduce motion",
         "interface.reduce_motion_subtitle": "The system setting 'Reduce motion' is always respected.",
         "interface.settings_opacity": "Settings window opacity",
-        "interface.liquid_glass_intensity": "Liquid Glass intensity",
+        "interface.liquid_glass_intensity": "Liquid Glass transparency",
+        "interface.liquid_glass_intensity_subtitle": "Adjusts glass translucency without altering brightness.",
 
         // MARK: - Apps Tab
         "apps.detected": "Detected applications",

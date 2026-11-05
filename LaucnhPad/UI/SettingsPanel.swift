@@ -204,19 +204,20 @@ struct SettingsPanel: View {
                 Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.45)
             case .liquidGlass:
                 VisualEffectBackground(material: .fullScreenUI)
-                Color.black.opacity(0.32 + (1.0 - i) * 0.22)
+                    .opacity(0.30 + 0.70 * i)
+                Color.black.opacity(0.24)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.18 * i),
-                        Color.purple.opacity(0.06 * i),
-                        Color.blue.opacity(0.05 * i),
+                        Color.white.opacity(0.18),
+                        Color.purple.opacity(0.06),
+                        Color.blue.opacity(0.05),
                         Color.clear
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 LinearGradient(
-                    colors: [Color.white.opacity(0.24 * i), Color.white.opacity(0.04 * i), Color.clear],
+                    colors: [Color.white.opacity(0.24), Color.white.opacity(0.04), Color.clear],
                     startPoint: .top,
                     endPoint: .center
                 )
@@ -550,7 +551,14 @@ struct SettingsPanel: View {
             SettingsSliderRow(loc("interface.dimming"), value: $opacity, range: 0...0.8)
 
             SettingsSeparator()
-            SettingsSliderRow(loc("interface.liquid_glass_intensity"), value: $liquidGlassIntensity, range: 0.05...1.0, step: 0.05, isPercentage: true)
+            SettingsSliderRow(
+                loc("interface.liquid_glass_intensity"),
+                subtitle: loc("interface.liquid_glass_intensity_subtitle"),
+                value: $liquidGlassIntensity,
+                range: 0.05...1.0,
+                step: 0.05,
+                isPercentage: true
+            )
         }
 
         SettingsSectionTitle(loc("section.pro_customization"))
@@ -2508,14 +2516,16 @@ private struct SettingsNumberField: View {
 
 private struct SettingsSliderRow: View {
     let title: String
+    var subtitle: String? = nil
     @Binding var value: Double
     let range: ClosedRange<Double>
     var step: Double?
     var isPercentage: Bool = false
     var onEditingChanged: ((Bool) -> Void)?
 
-    init(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double? = nil, isPercentage: Bool = false, onEditingChanged: ((Bool) -> Void)? = nil) {
+    init(_ title: String, subtitle: String? = nil, value: Binding<Double>, range: ClosedRange<Double>, step: Double? = nil, isPercentage: Bool = false, onEditingChanged: ((Bool) -> Void)? = nil) {
         self.title = title
+        self.subtitle = subtitle
         self._value = value
         self.range = range
         self.step = step
@@ -2525,7 +2535,12 @@ private struct SettingsSliderRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(title).font(.system(size: 14))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 14))
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
             Spacer(minLength: 8)
             Group {
                 if let step {

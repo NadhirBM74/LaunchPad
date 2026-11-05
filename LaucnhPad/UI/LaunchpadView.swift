@@ -379,7 +379,7 @@ struct LaunchpadRootView: View {
         }
         .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
-        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? (0.16 + 0.22 * liquidGlassIntensity) : 0.20), radius: 12, x: 0, y: 6)
+        .shadow(color: .black.opacity(backgroundStyle == .liquidGlass ? 0.24 : 0.20), radius: 12, x: 0, y: 6)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
 

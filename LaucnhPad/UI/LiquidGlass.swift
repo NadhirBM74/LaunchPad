@@ -16,49 +16,46 @@ public enum LiquidGlassProminence: Sendable {
 }
 
 public enum LiquidGlassStyle {
-    /// Biseau spéculaire supérieur-gauche vers inférieur-droit simulant la réfraction sur l'arête du verre
+    /// Biseau spéculaire supérieur-gauche vers inférieur-droit simulant la réfraction sur l'arête du verre (luminosité constante)
     public static var specularBorder: LinearGradient { specularBorder() }
 
     public static func specularBorder(intensity: Double = 1.0) -> LinearGradient {
-        let i = max(0.0, min(1.0, intensity))
-        return LinearGradient(
+        LinearGradient(
             colors: [
-                Color.white.opacity(0.68 * i),
-                Color.white.opacity(0.24 * i),
-                Color.white.opacity(0.06 * i),
-                Color.white.opacity(0.20 * i)
+                Color.white.opacity(0.68),
+                Color.white.opacity(0.24),
+                Color.white.opacity(0.06),
+                Color.white.opacity(0.20)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    /// Biseau spéculaire accentué pour les éléments interactifs survolés
+    /// Biseau spéculaire accentué pour les éléments interactifs survolés (luminosité constante)
     public static var specularBorderHovered: LinearGradient { specularBorderHovered() }
 
     public static func specularBorderHovered(intensity: Double = 1.0) -> LinearGradient {
-        let i = max(0.0, min(1.0, intensity))
-        return LinearGradient(
+        LinearGradient(
             colors: [
-                Color.white.opacity(0.85 * i),
-                Color.white.opacity(0.35 * i),
-                Color.white.opacity(0.12 * i),
-                Color.white.opacity(0.32 * i)
+                Color.white.opacity(0.85),
+                Color.white.opacity(0.35),
+                Color.white.opacity(0.12),
+                Color.white.opacity(0.32)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    /// Reflet supérieur doux simulant la source de lumière zénithale
+    /// Reflet supérieur doux simulant la source de lumière zénithale (luminosité constante)
     public static var surfaceSheen: LinearGradient { surfaceSheen() }
 
     public static func surfaceSheen(intensity: Double = 1.0) -> LinearGradient {
-        let i = max(0.0, min(1.0, intensity))
-        return LinearGradient(
+        LinearGradient(
             colors: [
-                Color.white.opacity(0.18 * i),
-                Color.white.opacity(0.04 * i),
+                Color.white.opacity(0.18),
+                Color.white.opacity(0.04),
                 Color.clear
             ],
             startPoint: .top,
@@ -126,19 +123,24 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
             }()
 
             content
-                .glassEffect(configuredGlass, in: shape)
-                .opacity(0.35 + 0.65 * i)
+                .background {
+                    // La translucidité du fond varie selon le curseur sans JAMAIS altérer la luminosité du contenu
+                    shape
+                        .fill(Color.white.opacity(0.001))
+                        .glassEffect(configuredGlass, in: shape)
+                        .opacity(0.25 + 0.75 * i)
+                }
                 .overlay {
                     shape
-                        .fill(LiquidGlassStyle.surfaceSheen(intensity: i))
+                        .fill(LiquidGlassStyle.surfaceSheen)
                         .allowsHitTesting(false)
                 }
                 .overlay {
                     shape
                         .strokeBorder(
                             isHovered && interactive
-                                ? LiquidGlassStyle.specularBorderHovered(intensity: i)
-                                : LiquidGlassStyle.specularBorder(intensity: i),
+                                ? LiquidGlassStyle.specularBorderHovered
+                                : LiquidGlassStyle.specularBorder,
                             lineWidth: borderLineWidth
                         )
                         .allowsHitTesting(false)
@@ -157,24 +159,25 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                         .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.92) : Color.clear)
                 }
                 .background {
+                    // Modulation de la transparence du matériau sans altérer la luminosité des reflets et du texte
                     shape
                         .fill(.ultraThinMaterial)
-                        .opacity(0.30 + 0.70 * i)
+                        .opacity(0.25 + 0.75 * i)
                         .overlay {
                             if let tint {
-                                shape.fill(tint.opacity(0.15 * i))
+                                shape.fill(tint.opacity(0.15))
                             }
                         }
                         .overlay {
-                            shape.fill(LiquidGlassStyle.surfaceSheen(intensity: i))
+                            shape.fill(LiquidGlassStyle.surfaceSheen)
                         }
                 }
                 .overlay {
                     shape
                         .strokeBorder(
                             isHovered && interactive
-                                ? LiquidGlassStyle.specularBorderHovered(intensity: i)
-                                : LiquidGlassStyle.specularBorder(intensity: i),
+                                ? LiquidGlassStyle.specularBorderHovered
+                                : LiquidGlassStyle.specularBorder,
                             lineWidth: borderLineWidth
                         )
                         .allowsHitTesting(false)

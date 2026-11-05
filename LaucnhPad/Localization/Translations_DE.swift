@@ -76,7 +76,8 @@ nonisolated enum Translations_DE: Sendable {
         "interface.reduce_motion": "Bewegung reduzieren",
         "interface.reduce_motion_subtitle": "Die Systemeinstellung 'Bewegung reduzieren' wird stets berücksichtigt.",
         "interface.settings_opacity": "Transparenz der Einstellungen",
-        "interface.liquid_glass_intensity": "Liquid Glass-Intensität",
+        "interface.liquid_glass_intensity": "Liquid Glass Transparenz",
+        "interface.liquid_glass_intensity_subtitle": "Passt die Transluzenz des Glases an, ohne die Helligkeit zu verändern.",
 
         // MARK: - Apps
         "apps.detected": "Erkannte Programme",
