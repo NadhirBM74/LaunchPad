@@ -66,17 +66,37 @@ final class AdminTestWindowController: NSObject, NSWindowDelegate {
         }
 
         guard let window else { return }
+        
+        // Maintient l'application au statut d'application normale pour que la fenêtre
+        // reste interactive, réactive aux clics/clavier même quand le Launchpad est fermé.
+        NSApp.setActivationPolicy(.regular)
+        
         window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 4)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentViewController = NSHostingController(rootView: AdminTestCenterView(store: store))
         window.center()
+        NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
     }
 
+    /// Appelé quand le Launchpad se masque : la fenêtre de test reste active au premier plan.
+    func launchpadDidHide() {
+        guard let window, window.isVisible else { return }
+        NSApp.setActivationPolicy(.regular)
+        window.makeKeyAndOrderFront(nil)
+    }
+
     func close() {
         window?.orderOut(nil)
+        window?.contentViewController = nil
+        
+        let settingsVisible = (NSApp.delegate as? AppDelegate)?.settings.isVisible == true
+        let launchpadVisible = (NSApp.delegate as? AppDelegate)?.launchpad.isVisible == true
+        if !settingsVisible && !launchpadVisible && !Prefs.showDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -801,14 +821,14 @@ struct AdminTestCenterView: View {
 
                     HStack(spacing: 10) {
                         Button("Ouvrir LaunchPad") {
-                            NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: true)
+                            NotificationCenter.default.post(name: .requestOpenLaunchpad, object: nil)
                             admin.log(category: "Affichage", message: "Demande d'ouverture du LaunchPad")
                             triggerFeedback("LaunchPad ouvert")
                         }
                         .buttonStyle(.borderedProminent)
 
                         Button("Fermer LaunchPad") {
-                            NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: false)
+                            NotificationCenter.default.post(name: .requestCloseLaunchpad, object: nil)
                             admin.log(category: "Affichage", message: "Demande de fermeture du LaunchPad")
                             triggerFeedback("LaunchPad fermé")
                         }

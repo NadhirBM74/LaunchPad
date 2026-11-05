@@ -43,9 +43,9 @@ struct RuntimeConfig: Equatable {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let store = LaunchpadStore()
-    private var launchpad: LaunchpadWindowController!
-    private var settings: SettingsWindowController!
+    let store = LaunchpadStore()
+    private(set) var launchpad: LaunchpadWindowController!
+    private(set) var settings: SettingsWindowController!
     private let menuBar = MenuBarManager()
     private var appliedConfig: RuntimeConfig?
     private var configTask: Task<Void, Never>?
@@ -60,9 +60,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchpad = LaunchpadWindowController(store: store)
         settings = SettingsWindowController(store: store)
         launchpad.onOpenSettings = { [weak self] in self?.openSettings() }
-        launchpad.onDidHide = { [weak self] in self?.settings.launchpadDidHide() }
-        launchpad.isOtherWindowVisible = { [weak self] in self?.settings.isVisible ?? false }
-        launchpad.onRequestCloseOtherWindow = { [weak self] in self?.settings.close() }
+        launchpad.onDidHide = { [weak self] in
+            self?.settings.launchpadDidHide()
+            AdminTestWindowController.shared.launchpadDidHide()
+        }
+        launchpad.isOtherWindowVisible = { [weak self] in
+            (self?.settings.isVisible ?? false) || AdminTestWindowController.shared.isVisible
+        }
+        launchpad.onRequestCloseOtherWindow = { [weak self] in
+            if self?.settings.isVisible == true {
+                self?.settings.close()
+            }
+        }
         settings.onClose = { [weak self] in self?.launchpad.focusPanel() }
         NotificationCenter.default.addObserver(forName: .settingsVisibilityDidChange, object: nil, queue: .main) { [weak self] note in
             let visible = (note.object as? Bool) ?? false
@@ -75,6 +84,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuBar.onToggle = { [weak self] in self?.launchpad.toggle() }
         menuBar.onSettings = { [weak self] in self?.openSettings() }
+        menuBar.onAdminTest = { [weak self] in
+            guard let self else { return }
+            if AdminManager.shared.isAuthenticated {
+                AdminTestWindowController.shared.show(store: self.store)
+            } else {
+                SettingsPanel.targetTab = .advanced
+                self.openSettings()
+            }
+        }
         menuBar.onRefresh = { [weak self] in self?.store.refresh() }
         menuBar.shortcutDisplay = { Prefs.hotKeyEnabled ? (Prefs.defaults.string(forKey: PrefKey.hotKeyDisplay) ?? "") : "" }
 
@@ -139,6 +157,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let msg = (note.object as? String) ?? "Test LaunchPad"
             Task { @MainActor [weak self] in
                 self?.launchpad.viewModel.showToast(msg)
+            }
+        }
+
+        center.addObserver(forName: .requestOpenLaunchpad, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.launchpad.show()
+            }
+        }
+
+        center.addObserver(forName: .requestCloseLaunchpad, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.launchpad.hide()
+            }
+        }
+
+        center.addObserver(forName: .requestToggleLaunchpad, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.launchpad.toggle()
             }
         }
 
@@ -395,7 +431,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = config.appLogo.image
         }
         if previous?.showDock != config.showDock {
-            NSApp.setActivationPolicy(config.showDock || settings.isVisible ? .regular : .accessory)
+            NSApp.setActivationPolicy(config.showDock || settings.isVisible || AdminTestWindowController.shared.isVisible ? .regular : .accessory)
         }
         if config.hotKeyEnabled {
             HotKeyManager.shared.register(keyCode: config.hotKeyCode, modifiers: config.hotKeyModifiers)
@@ -419,6 +455,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 final class MenuBarManager: NSObject {
     var onToggle: (() -> Void)?
     var onSettings: (() -> Void)?
+    var onAdminTest: (() -> Void)?
     var onRefresh: (() -> Void)?
     var shortcutDisplay: () -> String = { "" }
     private var item: NSStatusItem?
@@ -452,6 +489,8 @@ final class MenuBarManager: NSObject {
         menu.addItem(open)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: loc("menu.settings"), action: #selector(settingsAction), keyEquivalent: ","))
+        let adminItem = NSMenuItem(title: "Centre de Test (Admin)", action: #selector(adminTestAction), keyEquivalent: "t")
+        menu.addItem(adminItem)
         menu.addItem(NSMenuItem(title: loc("menu.refresh"), action: #selector(refreshAction), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: loc("menu.quit"), action: #selector(quitAction), keyEquivalent: "q"))
@@ -463,6 +502,7 @@ final class MenuBarManager: NSObject {
 
     @objc private func toggleAction() { onToggle?() }
     @objc private func settingsAction() { onSettings?() }
+    @objc private func adminTestAction() { onAdminTest?() }
     @objc private func refreshAction() { onRefresh?() }
     @objc private func quitAction() { NSApp.terminate(nil) }
 }

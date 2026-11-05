@@ -381,5 +381,8 @@ extension Notification.Name {
     public static let openAdminTestCenter = Notification.Name("OpenAdminTestCenter")
     public static let closeSettings = Notification.Name("CloseSettings")
     public static let triggerTestToast = Notification.Name("TriggerTestToast")
+    public static let requestOpenLaunchpad = Notification.Name("RequestOpenLaunchpad")
+    public static let requestCloseLaunchpad = Notification.Name("RequestCloseLaunchpad")
+    public static let requestToggleLaunchpad = Notification.Name("RequestToggleLaunchpad")
 }
 

@@ -81,8 +81,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let wasAbove = isAboveLaunchpad
         isAboveLaunchpad = false
         window.level = .normal
-        if !Prefs.showDockIcon { NSApp.setActivationPolicy(.accessory) }
-        if wasAbove { onClose?() }
+        if !Prefs.showDockIcon && !AdminTestWindowController.shared.isVisible { NSApp.setActivationPolicy(.accessory) }
+        if wasAbove && !AdminTestWindowController.shared.isVisible { onClose?() }
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -193,7 +193,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let wasAbove = isAboveLaunchpad
         isAboveLaunchpad = false
         window?.level = .normal
-        if !Prefs.showDockIcon { NSApp.setActivationPolicy(.accessory) }
-        if wasAbove { onClose?() }
+        if !Prefs.showDockIcon && !AdminTestWindowController.shared.isVisible { NSApp.setActivationPolicy(.accessory) }
+        if wasAbove && !AdminTestWindowController.shared.isVisible { onClose?() }
     }
 }
