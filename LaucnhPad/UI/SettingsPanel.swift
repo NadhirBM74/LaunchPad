@@ -1272,22 +1272,164 @@ struct SettingsPanel: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(licenseManager.isPro ? loc("license.pro_unlocked") : loc("license.free_version"))
-                            .font(.system(size: 16, weight: .bold))
-                        if !licenseManager.isPro {
+                        Text(
+                            licenseManager.isProLifetime
+                                ? loc("license.pro_unlocked")
+                                : (licenseManager.isTrialActive ? loc("license.trial_active") : loc("license.free_version"))
+                        )
+                        .font(.system(size: 16, weight: .bold))
+
+                        if licenseManager.isTrialActive {
+                            HStack(spacing: 4) {
+                                Image(systemName: "hourglass")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("7 JOURS")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2.5)
+                            .background(Color.orange.opacity(0.2))
+                            .foregroundStyle(Color.orange)
+                            .clipShape(Capsule())
+                        } else if !licenseManager.isPro {
                             ProBadge()
                         }
                     }
-                    Text(licenseManager.isPro
-                         ? loc("license.pro_desc")
-                         : loc("license.free_desc"))
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(
+                        licenseManager.isProLifetime
+                            ? loc("license.pro_desc")
+                            : (licenseManager.isTrialActive ? loc("license.trial_desc") : loc("license.free_desc"))
+                    )
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
+
+                if !licenseManager.isProLifetime {
+                    Button {
+                        licenseManager.openGetProPage()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11.5, weight: .semibold))
+                            Text(licenseManager.isTrialActive ? "Payer Pro à vie" : "Get Pro")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .foregroundStyle(Color(red: 0.94, green: 0.90, blue: 1.0))
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            SettingsStyle.accent.opacity(0.28),
+                                            Color.purple.opacity(0.14)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(SettingsStyle.accent.opacity(0.65), lineWidth: 1.2)
+                                )
+                        )
+                        .shadow(color: SettingsStyle.accent.opacity(0.22), radius: 8, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.vertical, 14)
+        }
+
+        // Bandeau Compte à Rebours de l'Essai 7 Jours (si actif)
+        if licenseManager.isTrialActive && !licenseManager.isProLifetime {
+            SettingsCardBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.badge.checkmark.fill")
+                                .foregroundStyle(Color.orange)
+                                .font(.system(size: 14))
+                            Text("Décompte de l'essai gratuit de 7 jours")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+
+                        Spacer()
+
+                        Text(licenseManager.timeRemainingString)
+                            .font(.system(size: 13.5, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.orange)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3)
+                            .background(Color.orange.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+
+                    // Jauge de progression
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(Color.white.opacity(0.10))
+                                .frame(height: 6)
+
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(LinearGradient(colors: [Color.orange, SettingsStyle.accent], startPoint: .leading, endPoint: .trailing))
+                                .frame(width: max(8, geo.size.width * CGFloat(1.0 - licenseManager.trialProgress)), height: 6)
+                        }
+                    }
+                    .frame(height: 6)
+
+                    HStack {
+                        Text("Activé le \(licenseManager.trialStartDate?.formatted(date: .abbreviated, time: .shortened) ?? "récemment")")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("Expiration automatique le \(licenseManager.trialEndDate?.formatted(date: .abbreviated, time: .shortened) ?? "dans 7 jours")")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+        } else if !licenseManager.isPro && !licenseManager.hasUsedTrial {
+            // Proposition de démarrer l'essai 7 jours
+            SettingsCardBox {
+                HStack(spacing: 14) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Color.orange)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Essayez LaunchPad Pro pendant 7 jours gratuitement")
+                            .font(.system(size: 13.5, weight: .semibold))
+                        Text("Sans engagement • Débloquez instantanément tous les thèmes et widgets")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            licenseManager.startSevenDayTrial()
+                        }
+                    } label: {
+                        Text("Activer l'essai 7 jours")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+                .padding(.vertical, 10)
+            }
         }
 
         // Formulaire d'activation ou gestion
@@ -1440,14 +1582,17 @@ struct SettingsPanel: View {
     }
 
     private func validateCurrentLicense() {
-        let result = licenseManager.validate(code: licenseInput)
-        withAnimation(.easeInOut(duration: 0.25)) {
-            licenseFeedback = (isError: !result.success, message: result.message)
-            if result.success {
-                licenseInput = ""
-                NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
-                    showProCelebration = true
+        let codeToValidate = licenseInput
+        Task { @MainActor in
+            let result = await licenseManager.activateLicenseOnline(code: codeToValidate)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                licenseFeedback = (isError: !result.success, message: result.message)
+                if result.success {
+                    licenseInput = ""
+                    NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                        showProCelebration = true
+                    }
                 }
             }
         }

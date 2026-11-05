@@ -39,6 +39,11 @@ nonisolated enum PrefKey: Sendable {
     static let hideDock = "LaunchpadHideDock"
     static let appLogo = "LaunchpadAppLogo"
     static let isProUnlocked = "LaunchpadIsProUnlocked"
+    static let isProLifetime = "LaunchpadIsProLifetime"
+    static let isTrialActive = "LaunchpadIsTrialActive"
+    static let trialStartDate = "LaunchpadTrialStartDate"
+    static let trialEndDate = "LaunchpadTrialEndDate"
+    static let hasUsedTrial = "LaunchpadHasUsedTrial"
     static let licenseKey = "LaunchpadLicenseKey"
     static let tintedIcons = "LaunchpadTintedIcons"
     static let tintedIconColor = "LaunchpadTintedIconColor"
@@ -232,6 +237,9 @@ enum Prefs {
             PrefKey.liquidGlassIntensity: 0.85,
             PrefKey.backgroundStyle: AppTheme.liquidGlass.rawValue,
             PrefKey.isProUnlocked: false,
+            PrefKey.isProLifetime: false,
+            PrefKey.isTrialActive: false,
+            PrefKey.hasUsedTrial: false,
             PrefKey.licenseKey: "",
             PrefKey.iconScale: 1.0,
             PrefKey.showLabels: true,
@@ -318,6 +326,44 @@ enum Prefs {
         get { defaults.bool(forKey: PrefKey.isProUnlocked) }
         set { defaults.set(newValue, forKey: PrefKey.isProUnlocked) }
     }
+    static var isProLifetime: Bool {
+        get { defaults.bool(forKey: PrefKey.isProLifetime) }
+        set { defaults.set(newValue, forKey: PrefKey.isProLifetime) }
+    }
+    static var isTrialActive: Bool {
+        get { defaults.bool(forKey: PrefKey.isTrialActive) }
+        set { defaults.set(newValue, forKey: PrefKey.isTrialActive) }
+    }
+    static var hasUsedTrial: Bool {
+        get { defaults.bool(forKey: PrefKey.hasUsedTrial) }
+        set { defaults.set(newValue, forKey: PrefKey.hasUsedTrial) }
+    }
+    static var trialStartDate: Date? {
+        get {
+            let t = defaults.double(forKey: PrefKey.trialStartDate)
+            return t > 0 ? Date(timeIntervalSince1970: t) : nil
+        }
+        set {
+            if let newValue {
+                defaults.set(newValue.timeIntervalSince1970, forKey: PrefKey.trialStartDate)
+            } else {
+                defaults.removeObject(forKey: PrefKey.trialStartDate)
+            }
+        }
+    }
+    static var trialEndDate: Date? {
+        get {
+            let t = defaults.double(forKey: PrefKey.trialEndDate)
+            return t > 0 ? Date(timeIntervalSince1970: t) : nil
+        }
+        set {
+            if let newValue {
+                defaults.set(newValue.timeIntervalSince1970, forKey: PrefKey.trialEndDate)
+            } else {
+                defaults.removeObject(forKey: PrefKey.trialEndDate)
+            }
+        }
+    }
     static var licenseKey: String {
         get { defaults.string(forKey: PrefKey.licenseKey) ?? "" }
         set { defaults.set(newValue, forKey: PrefKey.licenseKey) }
@@ -384,5 +430,7 @@ extension Notification.Name {
     public static let requestOpenLaunchpad = Notification.Name("RequestOpenLaunchpad")
     public static let requestCloseLaunchpad = Notification.Name("RequestCloseLaunchpad")
     public static let requestToggleLaunchpad = Notification.Name("RequestToggleLaunchpad")
+    public static let trialStatusDidChange = Notification.Name("TrialStatusDidChange")
+    public static let trialDidExpire = Notification.Name("TrialDidExpire")
 }
 

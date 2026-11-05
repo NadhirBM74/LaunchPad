@@ -435,6 +435,7 @@ struct AdminTestCenterView: View {
                         stepButton(number: 3, title: "Organisation & Dossiers", icon: "square.grid.3x3.fill", color: .orange, stepIndex: 2)
                         stepButton(number: 4, title: "Recherche Instantanée au Clavier", icon: "magnifyingglass", color: .purple, stepIndex: 3)
                         stepButton(number: 5, title: "Widgets & Finitions Pro", icon: "crown.fill", color: .yellow, stepIndex: 4)
+                        stepButton(number: 6, title: "Offre Essai 7 Jours & Pro", icon: "hourglass", color: .red, stepIndex: 5)
                     }
                 }
             }
@@ -592,6 +593,64 @@ struct AdminTestCenterView: View {
                     Label("Ouvrir l'onglet Licence dans les Réglages", systemImage: "sparkles")
                 }
                 .buttonStyle(.bordered)
+            }
+
+            // Tests spécifiques de l'essai 7 jours
+            testCard(title: "Simulation & Décompte de l'Essai 7 Jours", subtitle: "Testez l'activation, le décompte en temps réel et l'expiration automatique vers la version gratuite.") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        Text("État de l'essai :")
+                            .font(.system(size: 13))
+
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(license.isTrialActive ? Color.orange : Color.secondary)
+                                .frame(width: 8, height: 8)
+                            Text(
+                                license.isTrialActive
+                                    ? "Actif — \(license.timeRemainingString)"
+                                    : (license.isProLifetime ? "Pro à vie activé" : "Inactif (Gratuit)")
+                            )
+                            .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+                            .foregroundStyle(license.isTrialActive ? Color.orange : Color.secondary)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background((license.isTrialActive ? Color.orange : Color.gray).opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+
+                    HStack(spacing: 8) {
+                        Button("Démarrer Essai 7 Jours") {
+                            license.startSevenDayTrial()
+                            admin.log(category: "Licence", message: "Démarrage forcé de l'essai 7 jours")
+                            triggerFeedback("Essai de 7 jours démarré")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+
+                        Button("Avancer le temps (reste 2h)") {
+                            license.simulateTrialEndingIn(hours: 2.0)
+                            admin.log(category: "Licence", message: "Simulation : temps restant défini à 2 heures")
+                            triggerFeedback("Compte à rebours fixé à 2h restantes")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Simuler Expiration (Gratuit)") {
+                            license.simulateTrialExpired()
+                            admin.log(category: "Licence", message: "Simulation d'expiration de l'essai (retour en gratuit)")
+                            triggerFeedback("Essai expiré : retour en version gratuite")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Réinitialiser Historique") {
+                            license.resetTrialHistory()
+                            admin.log(category: "Licence", message: "Historique d'essai réinitialisé")
+                            triggerFeedback("Historique d'essai remis à zéro")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
             }
         }
     }
@@ -1001,8 +1060,8 @@ struct AdminTestCenterView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.0.6)") {
-                            updates.setDebugState(.upToDate(version: "1.0.6"))
+                        Button("À jour (v1.0.7)") {
+                            updates.setDebugState(.upToDate(version: "1.0.7"))
                             admin.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

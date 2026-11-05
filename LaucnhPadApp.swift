@@ -186,6 +186,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        LicenseManager.shared.checkTrialStatus()
+
         if !Prefs.defaults.bool(forKey: PrefKey.hasLaunchedBefore) {
             launchpad.show()
             launchpad.viewModel.showTutorial = true

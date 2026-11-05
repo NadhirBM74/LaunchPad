@@ -127,6 +127,13 @@ nonisolated enum Translations_IT: Sendable {
         // MARK: - Licenza
         "license.pro_unlocked": "LaucnhPad Pro Sbloccato",
         "license.free_version": "Versione Gratuita",
+        "license.trial_active": "Prova Gratuita Pro Attiva",
+        "license.trial_desc": "La tua prova di 7 giorni è attiva. L'applicazione tornerà automaticamente alla versione gratuita al termine del conto alla rovescia.",
+        "license.trial_countdown": "Tempo rimanente: %@",
+        "license.start_trial_button": "Inizia la prova gratuita di 7 giorni",
+        "license.buy_pro_button": "Acquista la versione Pro a vita",
+        "license.trial_expired_title": "Prova di 7 giorni terminata",
+        "license.trial_expired_desc": "Il tuo periodo di prova è terminato. L'applicazione è tornata alla versione gratuita.",
         "license.pro_desc": "Tutte le funzionalità Pro sono attive e permanenti su questo Mac.",
         "license.free_desc": "Attiva la tua licenza per sbloccare il tema Liquid Glass e le opzioni avanzate.",
         "license.manage_title": "Gestione licenza",

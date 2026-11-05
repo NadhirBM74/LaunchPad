@@ -10,6 +10,8 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public enum NotificationType: String, CaseIterable {
         case welcome = "welcome"
         case proActivated = "pro_activated"
+        case trialStarted = "trial_started"
+        case trialExpired = "trial_expired"
         case backupExported = "backup_exported"
         case backupRestored = "backup_restored"
         case newApps = "new_apps"
@@ -157,6 +159,28 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         )
     }
 
+    /// Notification d'activation de l'essai gratuit de 7 jours
+    public func sendTrialStartedNotification(days: Int = 7) {
+        sendNotification(
+            identifier: "launchpad.trial.started",
+            title: "Essai gratuit de 7 jours activé ⏳",
+            subtitle: "LaunchPad Pro est débloqué sans engagement",
+            body: "Profitez de l'expérience Pro complète pendant \(days) jours. Un compte à rebours est disponible dans l'application.",
+            type: .trialStarted
+        )
+    }
+
+    /// Notification d'expiration de l'essai gratuit de 7 jours
+    public func sendTrialExpiredNotification() {
+        sendNotification(
+            identifier: "launchpad.trial.expired",
+            title: "Votre essai de 7 jours est terminé ⌛️",
+            subtitle: "L'application est repassée en version gratuite",
+            body: "Débloquez la version Pro définitivement pour réactiver le thème Liquid Glass, les widgets vinyle et les dossiers sécurisés.",
+            type: .trialExpired
+        )
+    }
+
     /// 3. Notification de sauvegarde / restauration
     public func sendBackupCompletedNotification(isExport: Bool) {
         if isExport {
@@ -250,7 +274,7 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
             switch type {
             case .welcome, .tip, .newApps:
                 NotificationCenter.default.post(name: .requestOpenLaunchpad, object: nil)
-            case .proActivated:
+            case .proActivated, .trialStarted, .trialExpired:
                 NotificationCenter.default.post(name: .openSettingsTab, object: SettingsPanel.SettingsTab.license)
             case .backupExported, .backupRestored:
                 NotificationCenter.default.post(name: .openSettingsTab, object: SettingsPanel.SettingsTab.advanced)

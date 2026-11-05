@@ -140,6 +140,13 @@ nonisolated enum Translations_EN: Sendable {
         // MARK: - License Tab
         "license.pro_unlocked": "LaucnhPad Pro Unlocked",
         "license.free_version": "Free Version",
+        "license.trial_active": "Pro Free Trial Active",
+        "license.trial_desc": "Your 7-day free trial is currently active. LaunchPad will automatically revert to the free version once the countdown ends.",
+        "license.trial_countdown": "Time remaining: %@",
+        "license.start_trial_button": "Start 7-Day Free Trial",
+        "license.buy_pro_button": "Purchase Pro Lifetime",
+        "license.trial_expired_title": "7-Day Free Trial Ended",
+        "license.trial_expired_desc": "Your trial period has expired. The application has reverted to the free version.",
         "license.pro_desc": "All Pro features are active and permanent on this Mac.",
         "license.free_desc": "Activate your license to unlock the Liquid Glass theme and advanced options.",
         "license.manage_title": "License Management",

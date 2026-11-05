@@ -80,6 +80,16 @@ struct TutorialCardView: View {
             icon: "opticaldisc.fill",
             iconColor: Color(red: 1.0, green: 0.80, blue: 0.15),
             instruction: "Profitez de la platine vinyle interactive et des widgets dynamiques"
+        ),
+        TutorialStep(
+            id: 5,
+            badge: "OFFRE PRO & ESSAI 7 JOURS",
+            tabTitle: "6. Essai Pro",
+            title: "Essayez LaunchPad Pro gratuitement pendant 7 jours",
+            subtitle: "Démarrez votre essai de 7 jours sans engagement ou débloquez la version Pro permanente.",
+            icon: "crown.fill",
+            iconColor: Color(red: 1.0, green: 0.75, blue: 0.15),
+            instruction: "Activez votre essai 7 jours en un clic ou choisissez la version Pro à vie"
         )
     ]
 
@@ -179,6 +189,8 @@ struct TutorialCardView: View {
                         AnimStep3CreateFolder(accentColor: currentStep.iconColor)
                     case 4:
                         AnimStep4WidgetsVinyl(accentColor: currentStep.iconColor)
+                    case 5:
+                        AnimStep5ProTrial(accentColor: currentStep.iconColor)
                     default:
                         EmptyView()
                     }
@@ -277,21 +289,38 @@ struct TutorialCardView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
+                    let isTrial = LicenseManager.shared.isTrialActive
+                    let isLifetime = LicenseManager.shared.isProLifetime
+
                     Button {
                         dismiss()
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
+                            Image(systemName: isLifetime ? "crown.fill" : (isTrial ? "bolt.fill" : "checkmark.circle.fill"))
                                 .font(.system(size: 13, weight: .bold))
-                            Text("Commencer à utiliser LaunchPad")
-                                .font(.system(size: 13, weight: .bold))
+                            Text(
+                                isLifetime
+                                    ? "Commencer avec LaunchPad Pro ✨"
+                                    : (isTrial ? "Commencer avec l'Essai Pro 7 jours 🚀" : "Commencer à utiliser LaunchPad")
+                            )
+                            .font(.system(size: 13, weight: .bold))
                         }
-                        .foregroundStyle(.black)
+                        .foregroundStyle(isLifetime || isTrial ? .white : .black)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 9)
-                        .background(Color.white)
+                        .background(
+                            Group {
+                                if isLifetime {
+                                    LinearGradient(colors: [Color.purple, Color.blue], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                } else if isTrial {
+                                    LinearGradient(colors: [Color.orange, Color(red: 1.0, green: 0.6, blue: 0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                } else {
+                                    LinearGradient(colors: [Color.white, Color(white: 0.9)], startPoint: .top, endPoint: .bottom)
+                                }
+                            }
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: .white.opacity(0.35), radius: 10, y: 3)
+                        .shadow(color: (isTrial ? Color.orange : (isLifetime ? Color.purple : Color.white)).opacity(0.35), radius: 10, y: 3)
                     }
                     .buttonStyle(.plain)
                 }
@@ -299,7 +328,7 @@ struct TutorialCardView: View {
             .padding(.horizontal, 22)
             .padding(.vertical, 14)
         }
-        .frame(width: 650, height: 490)
+        .frame(width: 660, height: 505)
         .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
         .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
     }
@@ -1371,6 +1400,313 @@ private struct AnimStep4WidgetsVinyl: View {
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
                 noteOffset = -28
             }
+        }
+    }
+}
+
+// MARK: - ANIMATION 6 : Essai Gratuit 7 Jours & Paiement Pro
+
+private struct AnimStep5ProTrial: View {
+    let accentColor: Color
+
+    @ObservedObject private var licenseManager = LicenseManager.shared
+    @State private var showingKeyInput = false
+    @State private var enteredKey = ""
+    @State private var feedbackText: String? = nil
+    @State private var feedbackIsError = false
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // CARTE 1 : ESSAI GRATUIT 7 JOURS
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: licenseManager.isTrialActive ? "hourglass" : "gift.fill")
+                            .font(.system(size: 10.5, weight: .bold))
+                        Text(licenseManager.isTrialActive ? "ESSAI EN COURS" : "OFFRE 7 JOURS")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .tracking(0.5)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.orange.opacity(0.18))
+                    .foregroundStyle(Color.orange)
+                    .clipShape(Capsule())
+
+                    Spacer()
+
+                    if licenseManager.isTrialActive {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 7, height: 7)
+                            Text("Actif")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+
+                if licenseManager.isTrialActive {
+                    // Compte à rebours dynamique en grand
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Décompte en temps réel :")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+
+                        HStack(spacing: 4) {
+                            countdownBox(val: String(format: "%02d", licenseManager.trialDaysRemaining), unit: "Jours")
+                            Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                            countdownBox(val: String(format: "%02d", licenseManager.trialHoursRemaining), unit: "Heures")
+                            Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                            countdownBox(val: String(format: "%02d", licenseManager.trialMinutesRemaining), unit: "Min")
+                            Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                            countdownBox(val: String(format: "%02d", licenseManager.trialSecondsRemaining), unit: "Sec")
+                        }
+
+                        // Jauge de progression
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.white.opacity(0.12))
+                                    .frame(height: 4)
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(LinearGradient(colors: [Color.orange, Color.yellow], startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: max(6, geo.size.width * CGFloat(1.0 - licenseManager.trialProgress)), height: 4)
+                            }
+                        }
+                        .frame(height: 4)
+                        .padding(.top, 2)
+
+                        Text("À l'issue des 7 jours, l'application repasse automatiquement en gratuit.")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.white.opacity(0.65))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if licenseManager.isProLifetime {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("LaunchPad Pro Débloqué")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Vous possédez la licence permanente complète. Profitez de toutes les fonctionnalités illimitées !")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 6)
+                } else {
+                    // Présentation de l'essai 7 jours
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Essai Gratuit 7 Jours")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Activez toutes les fonctions Pro (Liquid Glass, Vinyle, Touch ID, Sauvegarde). Sans carte bancaire.")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            licenseManager.startSevenDayTrial()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Activer l'Essai 7 Jours")
+                                .font(.system(size: 11.5, weight: .bold))
+                        }
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(red: 1.0, green: 0.82, blue: 0.2), Color.orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .shadow(color: Color.orange.opacity(0.4), radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(licenseManager.isTrialActive ? Color.orange.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
+            )
+
+            // CARTE 2 : PAYER LA VERSION PRO (ACCÈS PERMANENT)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 10.5, weight: .bold))
+                        Text(licenseManager.isProLifetime ? "DÉBLOQUÉ À VIE" : "ACCÈS ILLIMITÉ")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .tracking(0.5)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.purple.opacity(0.2))
+                    .foregroundStyle(Color(red: 0.85, green: 0.65, blue: 1.0))
+                    .clipShape(Capsule())
+
+                    Spacer()
+
+                    if licenseManager.isProLifetime {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(Color.green)
+                            .font(.system(size: 15))
+                    }
+                }
+
+                if licenseManager.isProLifetime {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Licence Permanente Active")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Clé : \(licenseManager.licenseKey.isEmpty ? "1234 (Démo)" : licenseManager.licenseKey)")
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.7))
+
+                        Text("Accès complet et illimité sans aucune restriction de durée.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                    .padding(.vertical, 6)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Payer la Version Pro")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Débloquez LaunchPad Pro pour toujours sur votre Mac. Mises à jour gratuites incluses.")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if showingKeyInput {
+                        HStack(spacing: 5) {
+                            TextField("Clé (ex: 1234)", text: $enteredKey)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 11, design: .monospaced))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2)))
+
+                            Button("OK") {
+                                validateKey()
+                            }
+                            .font(.system(size: 11, weight: .bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+
+                    if let feedback = feedbackText {
+                        Text(feedback)
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundStyle(feedbackIsError ? Color.red : Color.green)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        Button {
+                            licenseManager.openGetProPage()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "cart.fill")
+                                    .font(.system(size: 10))
+                                Text("Acheter Pro")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.purple, Color.blue],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showingKeyInput.toggle()
+                            }
+                        } label: {
+                            Image(systemName: "key.fill")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .padding(7)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Saisir une clé de licence ou le code démo 1234")
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(licenseManager.isProLifetime ? Color.purple.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
+            )
+        }
+    }
+
+    private func countdownBox(val: String, unit: String) -> some View {
+        VStack(spacing: 1.5) {
+            Text(val)
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 3)
+                .background(Color.black.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
+            Text(unit)
+                .font(.system(size: 7.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+        }
+    }
+
+    private func validateKey() {
+        let res = licenseManager.validate(code: enteredKey)
+        if res.success {
+            feedbackText = "Licence activée !"
+            feedbackIsError = false
+            showingKeyInput = false
+            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
+        } else {
+            feedbackText = res.message
+            feedbackIsError = true
         }
     }
 }
