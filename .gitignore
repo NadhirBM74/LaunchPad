@@ -18,3 +18,10 @@ Partage_LaunchPad/
 Site_Web_LaunchPad/
 *.dmg
 *.zip
+
+# Python & Secrets
+.env
+*.env
+venv/
+__pycache__/
+Scripts/discord_bot/

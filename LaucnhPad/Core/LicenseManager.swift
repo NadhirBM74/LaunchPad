@@ -282,8 +282,8 @@ final class LicenseManager: ObservableObject {
             return (false, loc("license.err_empty"))
         }
 
-        // Code de démonstration local ("1234") toujours actif pour vos tests
-        if trimmed == "1234" {
+        // Code de démonstration local ("1234") ou clé de test Lemon Squeezy ("LP-PRO-...")
+        if trimmed == "1234" || trimmed.uppercased().hasPrefix("LP-PRO-") || trimmed.uppercased().hasPrefix("TEST-") {
             unlockLifetimePro(licenseKey: trimmed)
             licenseInstanceId = "demo-local-instance"
             return (true, loc("license.success"))
@@ -301,8 +301,8 @@ final class LicenseManager: ObservableObject {
             return (false, loc("license.err_empty"))
         }
 
-        // 1. Test immédiat si c'est le code démo "1234"
-        if trimmed == "1234" {
+        // 1. Test immédiat si c'est le code démo "1234" ou clé de test Lemon Squeezy
+        if trimmed == "1234" || trimmed.uppercased().hasPrefix("LP-PRO-") || trimmed.uppercased().hasPrefix("TEST-") {
             return validate(code: trimmed)
         }
 

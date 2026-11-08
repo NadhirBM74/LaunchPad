@@ -1074,8 +1074,8 @@ struct VinylPlayerWidgetView: View {
         let playBtnIcon: CGFloat = btnFrame * 0.48
 
         ZStack {
-            // Plan 1 : Surface mate minimaliste et épurée (Ivoire doux en Clair, Anthracite pur en Sombre)
-            verticalDeckBackground(cornerRadius: cornerRadius)
+            // Plan 1 : Jaquette de l'album en flou artistique avec dégradé de contraste et d'ambiance
+            verticalDeckBackground(cornerRadius: cornerRadius, width: availW, height: availH)
 
             // Plan 2 & 3 : Disque Vinyle flottant + Bras de Lecture flottant (séparés uniquement par des ombres douces)
             ZStack {
@@ -1288,46 +1288,66 @@ struct VinylPlayerWidgetView: View {
     // MARK: - Arrière-plan et Composants Minimalistes & Épurés de la Version Verticale
 
     @ViewBuilder
-    private func verticalDeckBackground(cornerRadius: CGFloat) -> some View {
+    private func verticalDeckBackground(cornerRadius: CGFloat, width: CGFloat, height: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if isLightTheme {
-            // Thème Clair : Surface ivoire/crème mate très épurée (fidèle à la photo de référence)
+
+        ZStack {
+            // 1. Fond flouté basé sur la jaquette de l'album en lecture
+            Group {
+                if let artwork = track.displayImage {
+                    Image(nsImage: artwork)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: width, height: height)
+                        .scaleEffect(1.25)
+                        .blur(radius: 30)
+                        .saturation(1.22)
+                } else {
+                    // Fallback élégant si aucune jaquette : fond coloré démo flouté
+                    demoVinylArtwork(diameter: max(width, height))
+                        .frame(width: width, height: height)
+                        .scaleEffect(1.3)
+                        .blur(radius: 35)
+                        .saturation(1.2)
+                }
+            }
+            .frame(width: width, height: height)
+            .clipped()
+
+            // 2. Dégradé translucide pour assurer un contraste optimal :
+            // Protège la lisibilité des textes et contrôles en bas et sublime le disque vinyle noir au centre
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(isLightTheme ? 0.20 : 0.40), location: 0.0),
+                    .init(color: Color.black.opacity(isLightTheme ? 0.14 : 0.24), location: 0.35),
+                    .init(color: Color.black.opacity(isLightTheme ? 0.45 : 0.65), location: 0.70),
+                    .init(color: Color.black.opacity(isLightTheme ? 0.72 : 0.88), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // 3. Matériau ultra-fin pour un grain de verre moderne
             shape
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.968, green: 0.965, blue: 0.946),
-                            Color(red: 0.948, green: 0.944, blue: 0.924)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    shape.strokeBorder(Color.black.opacity(0.06), lineWidth: 0.8)
-                )
-                .shadow(color: .black.opacity(0.16), radius: 14, x: 0, y: 7)
-        } else if backgroundStyle == .dark {
-            // Thème Sombre : Surface carbone/anthracite mate épurée
-            shape
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.14, green: 0.14, blue: 0.16),
-                            Color(red: 0.09, green: 0.09, blue: 0.11)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    shape.strokeBorder(Color.white.opacity(0.10), lineWidth: 0.8)
-                )
-                .shadow(color: .black.opacity(0.45), radius: 14, x: 0, y: 7)
-        } else {
-            // Thème Verre / Liquid Glass : Verre sombre translucide épuré
-            playerCardBackground(cornerRadius: cornerRadius)
+                .fill(.ultraThinMaterial.opacity(isLightTheme ? 0.20 : 0.35))
         }
+        .frame(width: width, height: height)
+        .clipShape(shape)
+        .overlay(
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(isLightTheme ? 0.30 : 0.22),
+                        Color.white.opacity(isLightTheme ? 0.08 : 0.06)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1.0
+            )
+        )
+        .shadow(color: .black.opacity(isLightTheme ? 0.16 : 0.45), radius: 14, x: 0, y: 7)
+        .animation(.easeInOut(duration: 0.45), value: track.artworkData)
     }
 
     /// Disque vinyle noir minimaliste de la version verticale avec sillons subtils
