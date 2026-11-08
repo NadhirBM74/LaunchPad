@@ -127,9 +127,10 @@ struct TutorialCardView: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(Color(red: 0.55, green: 0.65, blue: 1.0))
+                        Image("DiscordLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 11)
                         Text("Discord")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.92))
@@ -1725,9 +1726,10 @@ private struct AnimStep5ProTrial: View {
 
             // Bandeau Communauté Discord officiel
             HStack(spacing: 8) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(red: 0.55, green: 0.65, blue: 1.0))
+                Image("DiscordLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 12)
                 Text("Rejoignez notre Discord pour du support direct et des nouveautés :")
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.8))

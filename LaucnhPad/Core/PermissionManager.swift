@@ -83,7 +83,16 @@ final class PermissionManager: ObservableObject {
         // 2. Notifie l'ensemble de l'application
         NotificationCenter.default.post(name: .accessibilityPermissionDidChange, object: true)
 
-        // 3. Masque automatiquement les invites
+        // 3. Notification système macOS confirmant l'activation du trackpad
+        AppNotificationManager.shared.sendNotification(
+            identifier: "launchpad.accessibility.granted",
+            title: "LaunchPad — Prêt ! 🚀",
+            subtitle: "Gestes trackpad activés",
+            body: "Pincez à 3 ou 4 doigts sur le trackpad pour ouvrir LaunchPad à tout moment.",
+            type: .tip
+        )
+
+        // 4. Masque automatiquement les invites
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 self?.showPermissionCard = false
@@ -91,11 +100,17 @@ final class PermissionManager: ObservableObject {
         }
     }
 
+    /// Déclenche la boîte de dialogue système native de macOS
+    func promptSystemDialogIfNeeded() {
+        guard !isAccessibilityGranted else { return }
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
+
     /// Déclenche la demande d'autorisation système et ouvre Réglages Système > Accessibilité
     func requestAccessibility() {
         // 1. Demande native macOS (affiche l'alerte système si ce n'est pas déjà fait)
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        promptSystemDialogIfNeeded()
 
         // 2. Ouvre directement le panneau Accessibilité dans Réglages Système
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
@@ -116,8 +131,9 @@ final class PermissionManager: ObservableObject {
 
         if !hasPrompted {
             Prefs.defaults.set(true, forKey: promptedKey)
-            // Premier lancement : demande poliment l'autorisation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            // Déclenche l'alerte native macOS pour inscrire directement LaunchPad dans Accessibilité
+            promptSystemDialogIfNeeded()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 guard let self, !self.isAccessibilityGranted else { return }
                 self.showPermissionCard = true
                 onShowLaunchpad?()

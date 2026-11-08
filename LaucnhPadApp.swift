@@ -114,8 +114,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppNotificationManager.shared.configure()
         applyConfiguration(force: true)
         importLaunchOSOnce()
-        PermissionManager.shared.checkOnLaunch { [weak self] in
-            self?.launchpad.show()
+
+        let isFirstLaunch = !Prefs.defaults.bool(forKey: PrefKey.hasLaunchedBefore)
+        if isFirstLaunch {
+            Prefs.defaults.set(true, forKey: PrefKey.hasLaunchedBefore)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let self else { return }
+                self.launchpad.show()
+                if !PermissionManager.shared.isAccessibilityGranted {
+                    PermissionManager.shared.promptSystemDialogIfNeeded()
+                    PermissionManager.shared.showPermissionCard = true
+                }
+            }
+        } else {
+            PermissionManager.shared.checkOnLaunch { [weak self] in
+                self?.launchpad.show()
+            }
         }
 
         let center = NotificationCenter.default

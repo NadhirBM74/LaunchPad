@@ -182,7 +182,7 @@ final class InputEventMonitor {
 
         // Moniteur global compagnon pour garantir la réception sans délai
         if globalGestureMonitor == nil {
-            globalGestureMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.gesture]) { [weak self] event in
+            globalGestureMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.gesture, .magnify]) { [weak self] event in
                 self?.handleGesture(event)
             }
         }
@@ -195,6 +195,24 @@ final class InputEventMonitor {
 
         let mode = cachedPinchMode
         guard mode != .off else { return }
+
+        // Prise en charge directe de l'événement de pincement natif macOS (.magnify) comme secours infaillible
+        if event.type == .magnify {
+            let mag = event.magnification
+            let visible = isLaunchpadVisible()
+            if !interactiveActive && !pinchFired {
+                if !visible && mag < -0.035 {
+                    pinchFired = true
+                    onAction?(.open)
+                    return
+                } else if visible && (mag > 0.04 || mag < -0.05) {
+                    pinchFired = true
+                    onAction?(.close)
+                    return
+                }
+            }
+            return
+        }
 
         // Récupère l'ensemble des contacts physiques actifs (y compris stationnaires) sans allocations superflues
         let touching = event.touches(matching: .touching, in: nil)
@@ -250,19 +268,32 @@ final class InputEventMonitor {
         let spread = spreadSum / CGFloat(sampleCount)
 
         // Réinitialisation du référentiel initial lors d'un nouveau geste
-        if !interactiveActive && (count != pinchFingers || pinchInitialSpread == 0) {
-            pinchFingers = count
-            pinchInitialSpread = spread
-            pinchInitialCentroid = centroid
-            pinchFired = false
-            // Sensibilité relue une seule fois par geste (le réglage s'applique dès le geste suivant)
-            cachedSensitivity = CGFloat(max(0.3, min(Prefs.scrollSensitivity, 2.5)))
-            return
+        // Ne réinitialise pas le référentiel si un 4ème doigt effleure brièvement le trackpad (ex: 3 vers 4 ou 4 vers 3)
+        if !interactiveActive {
+            if pinchInitialSpread == 0 || abs(count - pinchFingers) >= 2 {
+                pinchFingers = count
+                pinchInitialSpread = spread
+                pinchInitialCentroid = centroid
+                pinchFired = false
+                cachedSensitivity = CGFloat(max(0.3, min(Prefs.scrollSensitivity, 2.5)))
+                return
+            } else if count != pinchFingers {
+                pinchFingers = count
+            }
         }
 
-        guard pinchInitialSpread > 0.025 else { return }
+        guard pinchInitialSpread > 0.015 else { return }
         let drift = hypot(centroid.x - pinchInitialCentroid.x, centroid.y - pinchInitialCentroid.y)
         let ratio = spread / pinchInitialSpread
+
+        // Détection complémentaire : balayage franc vers le haut à 3 doigts (geste alternatif intuitif)
+        let upwardDelta = centroid.y - pinchInitialCentroid.y
+        let visible = isLaunchpadVisible()
+        if !interactiveActive, !pinchFired, !visible, count >= 3, upwardDelta > 0.12, ratio > 0.82, abs(centroid.x - pinchInitialCentroid.x) < 0.14 {
+            pinchFired = true
+            onAction?(.open)
+            return
+        }
 
         // Prise en compte directe de la sensibilité configurée par l'utilisateur
         let sensitivity = cachedSensitivity
@@ -271,13 +302,12 @@ final class InputEventMonitor {
 
         if !interactiveActive {
             guard !pinchFired else { return }
-            let visible = isLaunchpadVisible()
 
             let pinchInwardProgress = (1.0 - ratio) / openRange
             let spreadOutwardProgress = (ratio - 1.0) / closeRange
 
-            // Seuil d'initiation équilibré (juste milieu entre réactivité et absence de faux déclenchements)
-            let initThreshold: CGFloat = 0.075 / sensitivity
+            // Seuil d'initiation réactif et fluide
+            let initThreshold: CGFloat = 0.035 / sensitivity
 
             let shouldStart: Bool
             let opening: Bool
@@ -300,8 +330,26 @@ final class InputEventMonitor {
                 }
             }
 
-            // Tolérance de dérive équilibrée : évite les démarrages sur simple balayage
-            guard shouldStart, drift < 0.22 else { return }
+            // Tolérance de dérive équilibrée pour gestes naturels à 3 ou 4 doigts
+            guard shouldStart, drift < 0.38 else { return }
+
+            // Déclenchement direct rapide si le pincement est déjà bien engagé (> 16%)
+            if opening && pinchInwardProgress > 0.16 {
+                if interactiveBegin?(true) == true {
+                    interactiveActive = true
+                    interactiveOpening = true
+                    interactiveProgress = min(max(pinchInwardProgress, 0), 1)
+                    interactiveVelocity = 0.01
+                    interactiveUpdate?(interactiveProgress)
+                    scheduleInteractiveWatchdog()
+                    return
+                } else {
+                    pinchFired = true
+                    onAction?(.open)
+                    return
+                }
+            }
+
             guard interactiveBegin?(opening) == true else { pinchFired = true; return }
             interactiveActive = true
             interactiveOpening = opening
@@ -309,8 +357,8 @@ final class InputEventMonitor {
             interactiveVelocity = 0
         }
 
-        // Annulation si le geste se transforme en balayage (drift excessif)
-        if drift > 0.35 {
+        // Annulation si le geste se transforme en grand balayage (drift excessif)
+        if drift > 0.55 {
             finishInteractive(forceCancel: true)
             return
         }
@@ -355,8 +403,15 @@ final class InputEventMonitor {
         pinchFired = true
         let progress = interactiveProgress, velocity = interactiveVelocity
 
-        // Validation au juste milieu : engagement franc requis (> 34 % ou > 22 % avec vitesse nette)
-        let commit = !forceCancel && (progress > 0.34 || (progress > 0.22 && velocity > 0.003))
+        // Si l'utilisateur ouvrait LaunchPad : tout pincement engagé (> 8%) ou vitesse positive confirme l'ouverture !
+        let commit: Bool
+        if forceCancel {
+            commit = false
+        } else if interactiveOpening {
+            commit = progress > 0.08 || velocity >= 0.0
+        } else {
+            commit = progress > 0.28 || (progress > 0.16 && velocity > 0.002)
+        }
         interactiveEnd?(commit)
     }
 

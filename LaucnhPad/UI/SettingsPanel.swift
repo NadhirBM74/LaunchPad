@@ -1587,9 +1587,10 @@ struct SettingsPanel: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.18))
                         .frame(width: 34, height: 34)
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color(red: 0.45, green: 0.50, blue: 1.0))
+                    Image("DiscordLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 22, height: 17)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -1608,7 +1609,10 @@ struct SettingsPanel: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "arrow.up.right.square.fill")
+                        Image("DiscordLogoWhite")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 11)
                         Text("Rejoindre le Discord")
                             .fontWeight(.semibold)
                     }
@@ -2012,10 +2016,11 @@ struct SettingsPanel: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .fill(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.18))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color(red: 0.45, green: 0.50, blue: 1.0))
+                        .frame(width: 34, height: 34)
+                    Image("DiscordLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 22, height: 17)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -2047,7 +2052,10 @@ struct SettingsPanel: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.up.right.square.fill")
+                        Image("DiscordLogoWhite")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 11)
                         Text("Rejoindre le Discord")
                             .fontWeight(.semibold)
                     }
