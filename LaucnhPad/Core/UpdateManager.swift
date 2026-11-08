@@ -240,24 +240,60 @@ public final class UpdateManager: NSObject, ObservableObject {
 
         state = .downloading(progress: 0.0)
 
+        var request = URLRequest(url: url)
+        request.setValue("LaunchPad-Updater/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/octet-stream, application/zip, */*", forHTTPHeaderField: "Accept")
+
         let session = URLSession(configuration: .default)
-        let task = session.downloadTask(with: url) { [weak self] tempUrl, response, error in
-            Task { @MainActor [weak self] in
+        let task = session.downloadTask(with: request) { [weak self] tempUrl, response, error in
+            if let error {
+                Task { @MainActor [weak self] in
+                    self?.state = .error(message: "Échec du téléchargement : \(error.localizedDescription)")
+                }
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+                Task { @MainActor [weak self] in
+                    self?.state = .error(message: "Erreur serveur GitHub (HTTP \(httpResponse.statusCode)).")
+                }
+                return
+            }
+
+            guard let tempUrl else {
+                Task { @MainActor [weak self] in
+                    self?.state = .error(message: "Fichier temporaire manquant.")
+                }
+                return
+            }
+
+            // Vérification de la taille du fichier téléchargé (> 500 Ko pour exclure les pages HTML d'erreur 504/404)
+            let fileManager = FileManager.default
+            let fileSize = (try? fileManager.attributesOfItem(atPath: tempUrl.path)[.size] as? Int64) ?? 0
+            if fileSize < 500_000 {
+                Task { @MainActor [weak self] in
+                    self?.state = .error(message: "L'archive téléchargée est incomplète ou corrompue.")
+                }
+                return
+            }
+
+            // Déplacement immédiat et synchrone avant que URLSession ne supprime tempUrl
+            let workDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let localArchive = workDir.appendingPathComponent("update.\(ext)")
+
+            do {
+                try fileManager.createDirectory(at: workDir, withIntermediateDirectories: true)
+                try fileManager.moveItem(at: tempUrl, to: localArchive)
+            } catch {
+                Task { @MainActor [weak self] in
+                    self?.state = .error(message: "Erreur de préparation : \(error.localizedDescription)")
+                }
+                return
+            }
+
+            Task.detached(priority: .userInitiated) { [weak self] in
                 guard let self else { return }
-
-                if let error {
-                    self.state = .error(message: "Échec du téléchargement : \(error.localizedDescription)")
-                    return
-                }
-
-                guard let tempUrl else {
-                    self.state = .error(message: "Fichier temporaire manquant.")
-                    return
-                }
-
-                Task.detached(priority: .userInitiated) {
-                    await self.performInPlaceUpdate(archiveUrl: tempUrl, fileExtension: ext, version: version)
-                }
+                await self.performInPlaceUpdate(archiveDest: localArchive, tempDir: workDir, fileExtension: ext, version: version)
             }
         }
 
@@ -272,17 +308,12 @@ public final class UpdateManager: NSObject, ObservableObject {
     }
 
     /// Extrait la nouvelle application et prépare le remplacement
-    private nonisolated func performInPlaceUpdate(archiveUrl: URL, fileExtension: String, version: String) async {
+    private nonisolated func performInPlaceUpdate(archiveDest: URL, tempDir: URL, fileExtension: String, version: String) async {
         let fileManager = FileManager.default
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let extractedAppDir = tempDir.appendingPathComponent("Extracted")
 
         do {
             try fileManager.createDirectory(at: extractedAppDir, withIntermediateDirectories: true)
-
-            // Déplacement de l'archive téléchargée vers le dossier de travail temporaire
-            let archiveDest = tempDir.appendingPathComponent("update.\(fileExtension)")
-            try fileManager.moveItem(at: archiveUrl, to: archiveDest)
 
             if fileExtension == "zip" {
                 // Extraction via ditto pour préserver les permissions et signatures
@@ -321,13 +352,14 @@ public final class UpdateManager: NSObject, ObservableObject {
                 detach.waitUntilExit()
             }
 
-            // Recherche du .app extrait
+            // Recherche récursive du .app extrait
             var finalNewAppURL: URL? = nil
-            let items = (try? fileManager.contentsOfDirectory(at: extractedAppDir, includingPropertiesForKeys: nil)) ?? []
-            for item in items {
-                if item.pathExtension == "app" {
-                    finalNewAppURL = item
-                    break
+            if let enumerator = fileManager.enumerator(at: extractedAppDir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+                for case let itemURL as URL in enumerator {
+                    if itemURL.pathExtension == "app" {
+                        finalNewAppURL = itemURL
+                        break
+                    }
                 }
             }
 
