@@ -93,10 +93,9 @@ final class LicenseManager: ObservableObject {
     // =========================================================================
 
     /// Démarre un essai gratuit de 7 jours avec toutes les fonctionnalités Pro actives.
-    @discardableResult
-    func startSevenDayTrial() -> Bool {
+    func startSevenDayTrial() {
         if isProLifetime {
-            return false // Déjà pro permanent
+            return // Déjà pro permanent
         }
 
         let now = Date()
@@ -120,8 +119,6 @@ final class LicenseManager: ObservableObject {
         AppNotificationManager.shared.sendTrialStartedNotification(days: 7)
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
         AdminManager.shared.log(category: "Licence", message: "Essai gratuit de 7 jours activé jusqu'au \(end.formatted(date: .abbreviated, time: .shortened))")
-
-        return true
     }
 
     /// Démarre le minuteur qui rafraîchit le compte à rebours chaque seconde.
