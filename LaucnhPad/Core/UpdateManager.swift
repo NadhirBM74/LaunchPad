@@ -118,19 +118,24 @@ public final class UpdateManager: NSObject, ObservableObject {
     private func fetchLatestRelease() async throws -> [String: Any]? {
         // 1. TENTATIVE PRIORITAIRE CDN HAUTE DISPONIBILITÉ :
         // raw.githubusercontent.com via Fastly Varnish CDN (réponse instantanée ~30ms, sans quota d'API et immunisé contre les 502/503/504)
-        let rawEndpoint = "https://raw.githubusercontent.com/\(Self.repoOwner)/\(Self.repoName)/main/version.json"
-        if let rawUrl = URL(string: rawEndpoint) {
-            var rawReq = URLRequest(url: rawUrl)
-            rawReq.timeoutInterval = 4
-            rawReq.cachePolicy = .reloadIgnoringLocalCacheData
-            rawReq.setValue("LaunchPad-App/\(currentAppVersion) (Macintosh; macOS)", forHTTPHeaderField: "User-Agent")
+        let rawEndpoints = [
+            "https://raw.githubusercontent.com/\(Self.repoOwner)/\(Self.repoName)/refs/heads/main/version.json",
+            "https://raw.githubusercontent.com/\(Self.repoOwner)/\(Self.repoName)/main/version.json"
+        ]
+        for rawEndpoint in rawEndpoints {
+            if let rawUrl = URL(string: rawEndpoint) {
+                var rawReq = URLRequest(url: rawUrl)
+                rawReq.timeoutInterval = 4
+                rawReq.cachePolicy = .reloadIgnoringLocalCacheData
+                rawReq.setValue("LaunchPad-App/\(currentAppVersion) (Macintosh; macOS)", forHTTPHeaderField: "User-Agent")
 
-            if let (data, response) = try? await URLSession.shared.data(for: rawReq),
-               let httpResponse = response as? HTTPURLResponse,
-               (200...299).contains(httpResponse.statusCode),
-               let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-               let tag = json["tag_name"] as? String, !tag.isEmpty {
-                return json
+                if let (data, response) = try? await URLSession.shared.data(for: rawReq),
+                   let httpResponse = response as? HTTPURLResponse,
+                   (200...299).contains(httpResponse.statusCode),
+                   let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                   let tag = json["tag_name"] as? String, !tag.isEmpty {
+                    return json
+                }
             }
         }
 
