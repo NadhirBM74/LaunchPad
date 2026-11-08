@@ -59,6 +59,8 @@ public final class UpdateManager: NSObject, ObservableObject {
 
     private var activeDownloadTask: URLSessionDownloadTask?
     private var downloadObservation: NSKeyValueObservation?
+    private var pendingApiAssetUrl: URL?
+    private var pendingAssetExtension: String = "zip"
     private var notificationDelegateProxy: NotificationDelegateProxy?
     private var stagedUpdateContext: (tempDir: URL, newAppURL: URL, targetAppPath: String)?
 
@@ -155,6 +157,9 @@ public final class UpdateManager: NSObject, ObservableObject {
 
             // Cherche un asset .zip (prioritaire) ou .dmg
             var directAssetUrl: URL? = nil
+            var directApiUrl: URL? = nil
+            var detectedExt = "zip"
+
             if let assets = json["assets"] as? [[String: Any]] {
                 for asset in assets {
                     if let name = asset["name"] as? String,
@@ -162,6 +167,10 @@ public final class UpdateManager: NSObject, ObservableObject {
                        let downloadStr = asset["browser_download_url"] as? String,
                        let u = URL(string: downloadStr) {
                         directAssetUrl = u
+                        detectedExt = "zip"
+                        if let apiStr = asset["url"] as? String {
+                            directApiUrl = URL(string: apiStr)
+                        }
                         break
                     }
                 }
@@ -172,11 +181,18 @@ public final class UpdateManager: NSObject, ObservableObject {
                            let downloadStr = asset["browser_download_url"] as? String,
                            let u = URL(string: downloadStr) {
                             directAssetUrl = u
+                            detectedExt = "dmg"
+                            if let apiStr = asset["url"] as? String {
+                                directApiUrl = URL(string: apiStr)
+                            }
                             break
                         }
                     }
                 }
             }
+
+            self.pendingApiAssetUrl = directApiUrl
+            self.pendingAssetExtension = detectedExt
 
             let currentVersion = currentAppVersion
             let cleanRemoteVersion = tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
@@ -231,46 +247,61 @@ public final class UpdateManager: NSObject, ObservableObject {
             return
         }
 
-        // Si l'URL n'est ni zip ni dmg, on l'ouvre dans le navigateur
-        let ext = url.pathExtension.lowercased()
+        let ext = url.pathExtension.isEmpty ? self.pendingAssetExtension : url.pathExtension.lowercased()
         if ext != "zip" && ext != "dmg" {
             NSWorkspace.shared.open(url)
             return
         }
 
         state = .downloading(progress: 0.0)
+        startDownloadTask(targetUrl: url, isApiFallback: false, ext: ext, version: version)
+    }
 
-        var request = URLRequest(url: url)
+    private func startDownloadTask(targetUrl: URL, isApiFallback: Bool, ext: String, version: String) {
+        var request = URLRequest(url: targetUrl)
         request.setValue("LaunchPad-Updater/1.0", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream, application/zip, */*", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 30
 
         let session = URLSession(configuration: .default)
         let task = session.downloadTask(with: request) { [weak self] tempUrl, response, error in
-            if let error {
+            guard let self = self else { return }
+
+            let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let isSuccessfulHttp = (200...299).contains(httpStatus)
+
+            var validFile = false
+            if let tempUrl = tempUrl, isSuccessfulHttp, error == nil {
+                let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempUrl.path)[.size] as? Int64) ?? 0
+                if fileSize >= 500_000 {
+                    validFile = true
+                }
+            }
+
+            // Si le téléchargement échoue et qu'on a une URL API alternative directe non encore tentée
+            if !validFile, !isApiFallback, let fallbackApiUrl = self.pendingApiAssetUrl, fallbackApiUrl != targetUrl {
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.startDownloadTask(targetUrl: fallbackApiUrl, isApiFallback: true, ext: ext, version: version)
+                }
+                return
+            }
+
+            if let error = error {
                 Task { @MainActor [weak self] in
                     self?.state = .error(message: "Échec du téléchargement : \(error.localizedDescription)")
                 }
                 return
             }
 
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            if !isSuccessfulHttp {
                 Task { @MainActor [weak self] in
-                    self?.state = .error(message: "Erreur serveur GitHub (HTTP \(httpResponse.statusCode)).")
+                    self?.state = .error(message: "Erreur serveur GitHub (HTTP \(httpStatus)).")
                 }
                 return
             }
 
-            guard let tempUrl else {
-                Task { @MainActor [weak self] in
-                    self?.state = .error(message: "Fichier temporaire manquant.")
-                }
-                return
-            }
-
-            // Vérification de la taille du fichier téléchargé (> 500 Ko pour exclure les pages HTML d'erreur 504/404)
-            let fileManager = FileManager.default
-            let fileSize = (try? fileManager.attributesOfItem(atPath: tempUrl.path)[.size] as? Int64) ?? 0
-            if fileSize < 500_000 {
+            guard let tempUrl = tempUrl, validFile else {
                 Task { @MainActor [weak self] in
                     self?.state = .error(message: "L'archive téléchargée est incomplète ou corrompue.")
                 }
@@ -278,6 +309,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
 
             // Déplacement immédiat et synchrone avant que URLSession ne supprime tempUrl
+            let fileManager = FileManager.default
             let workDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             let localArchive = workDir.appendingPathComponent("update.\(ext)")
 
@@ -292,7 +324,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
 
             Task.detached(priority: .userInitiated) { [weak self] in
-                guard let self else { return }
+                guard let self = self else { return }
                 await self.performInPlaceUpdate(archiveDest: localArchive, tempDir: workDir, fileExtension: ext, version: version)
             }
         }
