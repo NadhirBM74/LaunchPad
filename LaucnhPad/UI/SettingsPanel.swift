@@ -1279,11 +1279,13 @@ struct SettingsPanel: View {
                         )
                         .font(.system(size: 16, weight: .bold))
 
-                        if licenseManager.isTrialActive {
+                        if licenseManager.isProLifetime {
+                            ProBadge()
+                        } else if licenseManager.isTrialActive {
                             HStack(spacing: 4) {
                                 Image(systemName: "hourglass")
                                     .font(.system(size: 10, weight: .bold))
-                                Text("7 JOURS")
+                                Text(licenseManager.trialDaysRemaining > 0 ? "\(licenseManager.trialDaysRemaining)j restants" : "7 JOURS")
                                     .font(.system(size: 10, weight: .bold))
                             }
                             .padding(.horizontal, 7)
@@ -1291,8 +1293,6 @@ struct SettingsPanel: View {
                             .background(Color.orange.opacity(0.2))
                             .foregroundStyle(Color.orange)
                             .clipShape(Capsule())
-                        } else if !licenseManager.isPro {
-                            ProBadge()
                         }
                     }
 
@@ -1394,6 +1394,32 @@ struct SettingsPanel: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
+
+                    SettingsSeparator()
+                        .padding(.vertical, 2)
+
+                    HStack {
+                        Text("Vous pouvez annuler l'essai à tout moment et repasser en version gratuite.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                licenseManager.cancelTrial()
+                                licenseFeedback = nil
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle")
+                                Text("Annuler l'essai gratuit")
+                            }
+                            .font(.system(size: 11.5, weight: .medium))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
                 }
                 .padding(.vertical, 10)
             }
@@ -1435,15 +1461,15 @@ struct SettingsPanel: View {
         // Formulaire d'activation ou gestion
         SettingsCardBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text(licenseManager.isPro ? loc("license.manage_title") : loc("license.activate_title"))
+                Text(licenseManager.isProLifetime ? loc("license.manage_title") : loc("license.activate_title"))
                     .font(.system(size: 14, weight: .semibold))
 
-                if licenseManager.isPro {
+                if licenseManager.isProLifetime {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(loc("license.active_key"))
                                 .font(.system(size: 13))
-                            Text(licenseManager.licenseKey.isEmpty ? "1234 (Démo)" : licenseManager.licenseKey)
+                            Text(licenseManager.licenseKey.isEmpty ? "Licence Active" : licenseManager.licenseKey)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
@@ -1553,6 +1579,48 @@ struct SettingsPanel: View {
             }
             .padding(.vertical, 12)
         }
+
+        // Section Support & Communauté Discord
+        SettingsCardBox {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.18))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color(red: 0.45, green: 0.50, blue: 1.0))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Besoin d'aide ou d'une clé ?")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Rejoignez notre Discord pour obtenir du support direct ou poser des questions.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.up.right.square.fill")
+                        Text("Rejoindre le Discord")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.35, green: 0.40, blue: 0.95))
+            }
+            .padding(.vertical, 12)
+        }
     }
 
     private func tintColor(for key: String) -> Color {
@@ -1649,7 +1717,7 @@ struct SettingsPanel: View {
                     HStack(spacing: 8) {
                         Text("LaucnhPad")
                             .font(.system(size: 19, weight: .bold))
-                        if !licenseManager.isPro {
+                        if licenseManager.isPro {
                             ProBadge()
                         }
                     }
@@ -1934,6 +2002,61 @@ struct SettingsPanel: View {
                         .padding(.vertical, 3)
                 }
                 .buttonStyle(.bordered)
+            }
+            .padding(.vertical, 14)
+        }
+
+        // Section Communauté & Support Discord
+        SettingsCardBox {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.18))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color(red: 0.45, green: 0.50, blue: 1.0))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Communauté Discord")
+                            .font(.system(size: 14, weight: .semibold))
+                        HStack(spacing: 4) {
+                            Circle().fill(Color.green).frame(width: 6, height: 6)
+                            Text("En ligne")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                    Text("Rejoignez le serveur pour du support direct, proposer des fonctionnalités et échanger.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                Button {
+                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.right.square.fill")
+                        Text("Rejoindre le Discord")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.system(size: 12.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.35, green: 0.40, blue: 0.95))
             }
             .padding(.vertical, 14)
         }

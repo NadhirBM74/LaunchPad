@@ -55,8 +55,8 @@ final class LicenseManager: ObservableObject {
     static let getProCheckoutURL = URL(string: "https://github.com/NadhirBM74/LaunchPad#pricing")!
 
     private init() {
-        let loadedLicenseKey = Prefs.licenseKey
-        let loadedIsProLifetime = Prefs.isProLifetime || (!loadedLicenseKey.isEmpty && loadedLicenseKey == "1234")
+        let loadedLicenseKey = Prefs.licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let loadedIsProLifetime = Prefs.isProLifetime && !loadedLicenseKey.isEmpty
         let loadedIsTrialActive = Prefs.isTrialActive
         let loadedTrialStartDate = Prefs.trialStartDate
         let loadedTrialEndDate = Prefs.trialEndDate
@@ -68,18 +68,20 @@ final class LicenseManager: ObservableObject {
         self.isPro = calculatedIsPro
         self.licenseKey = loadedLicenseKey
         self.isProLifetime = loadedIsProLifetime
-        self.isTrialActive = loadedIsTrialActive
+        self.isTrialActive = trialValid
         self.trialStartDate = loadedTrialStartDate
         self.trialEndDate = loadedTrialEndDate
         self.hasUsedTrial = loadedHasUsedTrial
 
         Prefs.isProUnlocked = calculatedIsPro
+        Prefs.isProLifetime = loadedIsProLifetime
+        Prefs.isTrialActive = trialValid
 
         // Si l'essai était marqué actif mais est expiré à l'ouverture, on nettoie
         if loadedIsTrialActive && !loadedIsProLifetime {
             if let end = loadedTrialEndDate, Date() >= end {
                 handleTrialExpiration(notify: false)
-            } else {
+            } else if trialValid {
                 updateCountdownValues()
                 startCountdownTicker()
             }
@@ -190,6 +192,12 @@ final class LicenseManager: ObservableObject {
         Prefs.isTrialActive = false
         Prefs.isProUnlocked = false
 
+        Prefs.defaults.removeObject(forKey: PrefKey.isTrialActive)
+        Prefs.defaults.removeObject(forKey: PrefKey.isProUnlocked)
+        Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
+        Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
+        UserDefaults.standard.synchronize()
+
         // Rétablissement des réglages de base si des éléments Pro étaient sélectionnés
         if Prefs.appLogo.isProOnly {
             Prefs.defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
@@ -206,6 +214,7 @@ final class LicenseManager: ObservableObject {
             NotificationCenter.default.post(name: .trialDidExpire, object: nil)
         }
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
+        NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: nil)
     }
 
     /// Vérifie l'état de l'essai (à appeler au démarrage ou lors du réveil du Mac).
@@ -350,6 +359,13 @@ final class LicenseManager: ObservableObject {
         }
     }
 
+    /// Annule manuellement l'essai gratuit en cours et repasse l'application en mode gratuit.
+    func cancelTrial() {
+        guard isTrialActive else { return }
+        AdminManager.shared.log(category: "Licence", message: "Essai gratuit de 7 jours annulé par l'utilisateur.")
+        deactivate()
+    }
+
     /// Réinitialise l'application en version gratuite et libère l'emplacement Mac sur Lemon Squeezy si applicable.
     func deactivate() {
         stopCountdownTicker()
@@ -364,20 +380,38 @@ final class LicenseManager: ObservableObject {
         trialStartDate = nil
         trialEndDate = nil
         timeRemainingString = ""
+        trialDaysRemaining = 0
+        trialHoursRemaining = 0
+        trialMinutesRemaining = 0
+        trialSecondsRemaining = 0
         trialProgress = 0.0
 
         Prefs.isProLifetime = false
         Prefs.isTrialActive = false
         Prefs.isProUnlocked = false
+        Prefs.licenseKey = ""
         Prefs.trialStartDate = nil
         Prefs.trialEndDate = nil
 
-        NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
+        Prefs.defaults.removeObject(forKey: PrefKey.licenseKey)
+        Prefs.defaults.removeObject(forKey: PrefKey.isProLifetime)
+        Prefs.defaults.removeObject(forKey: PrefKey.isTrialActive)
+        Prefs.defaults.removeObject(forKey: PrefKey.isProUnlocked)
+        Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
+        Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
+        UserDefaults.standard.removeObject(forKey: instanceIdKey)
+        UserDefaults.standard.synchronize()
 
         if Prefs.appLogo.isProOnly {
             Prefs.defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
             NSApp.applicationIconImage = AppLogo.noir.image
         }
+        if Prefs.backgroundStyle == .liquidGlass {
+            Prefs.defaults.set(AppTheme.dark.rawValue, forKey: PrefKey.backgroundStyle)
+        }
+
+        NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
+        NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: nil)
 
         // Libération asynchrone du poste sur Lemon Squeezy (pour les licences 1, 2 ou 5 appareils)
         if !currentKey.isEmpty, currentKey != "1234", !currentInstance.isEmpty {

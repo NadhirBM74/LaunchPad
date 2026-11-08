@@ -1060,8 +1060,8 @@ struct AdminTestCenterView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.0.8)") {
-                            updates.setDebugState(.upToDate(version: "1.0.8"))
+                        Button("À jour (v1.0.9)") {
+                            updates.setDebugState(.upToDate(version: "1.0.9"))
                             admin.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

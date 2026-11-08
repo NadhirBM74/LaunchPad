@@ -122,6 +122,31 @@ struct TutorialCardView: View {
                 Spacer()
 
                 Button {
+                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.55, green: 0.65, blue: 1.0))
+                        Text("Discord")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4.5)
+                    .background(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.28))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(red: 0.45, green: 0.50, blue: 1.0).opacity(0.45), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("Rejoindre la communauté Discord")
+
+                Button {
                     dismiss()
                 } label: {
                     HStack(spacing: 4) {
@@ -1416,268 +1441,320 @@ private struct AnimStep5ProTrial: View {
     @State private var feedbackIsError = false
 
     var body: some View {
-        HStack(spacing: 16) {
-            // CARTE 1 : ESSAI GRATUIT 7 JOURS
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    HStack(spacing: 4) {
-                        Image(systemName: licenseManager.isTrialActive ? "hourglass" : "gift.fill")
-                            .font(.system(size: 10.5, weight: .bold))
-                        Text(licenseManager.isTrialActive ? "ESSAI EN COURS" : "OFFRE 7 JOURS")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .tracking(0.5)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.orange.opacity(0.18))
-                    .foregroundStyle(Color.orange)
-                    .clipShape(Capsule())
+        VStack(spacing: 8) {
+            HStack(spacing: 14) {
+                // CARTE 1 : ESSAI GRATUIT 7 JOURS
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        HStack(spacing: 4) {
+                            Image(systemName: licenseManager.isTrialActive ? "hourglass" : "gift.fill")
+                                .font(.system(size: 10.5, weight: .bold))
+                            Text(licenseManager.isTrialActive ? "ESSAI EN COURS" : "OFFRE 7 JOURS")
+                                .font(.system(size: 9.5, weight: .bold))
+                                .tracking(0.5)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.orange.opacity(0.18))
+                        .foregroundStyle(Color.orange)
+                        .clipShape(Capsule())
 
-                    Spacer()
+                        Spacer()
+
+                        if licenseManager.isTrialActive {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 7, height: 7)
+                                Text("Actif")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
 
                     if licenseManager.isTrialActive {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(width: 7, height: 7)
-                            Text("Actif")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.green)
-                        }
-                    }
-                }
+                        // Compte à rebours dynamique en grand
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Décompte en temps réel :")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
 
-                if licenseManager.isTrialActive {
-                    // Compte à rebours dynamique en grand
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Décompte en temps réel :")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
-
-                        HStack(spacing: 4) {
-                            countdownBox(val: String(format: "%02d", licenseManager.trialDaysRemaining), unit: "Jours")
-                            Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                            countdownBox(val: String(format: "%02d", licenseManager.trialHoursRemaining), unit: "Heures")
-                            Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                            countdownBox(val: String(format: "%02d", licenseManager.trialMinutesRemaining), unit: "Min")
-                            Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                            countdownBox(val: String(format: "%02d", licenseManager.trialSecondsRemaining), unit: "Sec")
-                        }
-
-                        // Jauge de progression
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(Color.white.opacity(0.12))
-                                    .frame(height: 4)
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(LinearGradient(colors: [Color.orange, Color.yellow], startPoint: .leading, endPoint: .trailing))
-                                    .frame(width: max(6, geo.size.width * CGFloat(1.0 - licenseManager.trialProgress)), height: 4)
-                            }
-                        }
-                        .frame(height: 4)
-                        .padding(.top, 2)
-
-                        Text("À l'issue des 7 jours, l'application repasse automatiquement en gratuit.")
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(.white.opacity(0.65))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else if licenseManager.isProLifetime {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("LaunchPad Pro Débloqué")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        Text("Vous possédez la licence permanente complète. Profitez de toutes les fonctionnalités illimitées !")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, 6)
-                } else {
-                    // Présentation de l'essai 7 jours
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Essai Gratuit 7 Jours")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        Text("Activez toutes les fonctions Pro (Liquid Glass, Vinyle, Touch ID, Sauvegarde). Sans carte bancaire.")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            licenseManager.startSevenDayTrial()
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 11, weight: .bold))
-                            Text("Activer l'Essai 7 Jours")
-                                .font(.system(size: 11.5, weight: .bold))
-                        }
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(red: 1.0, green: 0.82, blue: 0.2), Color.orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .shadow(color: Color.orange.opacity(0.4), radius: 6, y: 2)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(licenseManager.isTrialActive ? Color.orange.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
-            )
-
-            // CARTE 2 : PAYER LA VERSION PRO (ACCÈS PERMANENT)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    HStack(spacing: 4) {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 10.5, weight: .bold))
-                        Text(licenseManager.isProLifetime ? "DÉBLOQUÉ À VIE" : "ACCÈS ILLIMITÉ")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .tracking(0.5)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.purple.opacity(0.2))
-                    .foregroundStyle(Color(red: 0.85, green: 0.65, blue: 1.0))
-                    .clipShape(Capsule())
-
-                    Spacer()
-
-                    if licenseManager.isProLifetime {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(Color.green)
-                            .font(.system(size: 15))
-                    }
-                }
-
-                if licenseManager.isProLifetime {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Licence Permanente Active")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        Text("Clé : \(licenseManager.licenseKey.isEmpty ? "1234 (Démo)" : licenseManager.licenseKey)")
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.7))
-
-                        Text("Accès complet et illimité sans aucune restriction de durée.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
-                    .padding(.vertical, 6)
-                } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Payer la Version Pro")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        Text("Débloquez LaunchPad Pro pour toujours sur votre Mac. Mises à jour gratuites incluses.")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if showingKeyInput {
-                        HStack(spacing: 5) {
-                            TextField("Clé (ex: 1234)", text: $enteredKey)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 11, design: .monospaced))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.4))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2)))
-
-                            Button("OK") {
-                                validateKey()
-                            }
-                            .font(.system(size: 11, weight: .bold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                    }
-
-                    if let feedback = feedbackText {
-                        Text(feedback)
-                            .font(.system(size: 9.5, weight: .semibold))
-                            .foregroundStyle(feedbackIsError ? Color.red : Color.green)
-                    }
-
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        Button {
-                            licenseManager.openGetProPage()
-                        } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "cart.fill")
-                                    .font(.system(size: 10))
-                                Text("Acheter Pro")
-                                    .font(.system(size: 11, weight: .bold))
+                                countdownBox(val: String(format: "%02d", licenseManager.trialDaysRemaining), unit: "Jours")
+                                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                                countdownBox(val: String(format: "%02d", licenseManager.trialHoursRemaining), unit: "Heures")
+                                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                                countdownBox(val: String(format: "%02d", licenseManager.trialMinutesRemaining), unit: "Min")
+                                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                                countdownBox(val: String(format: "%02d", licenseManager.trialSecondsRemaining), unit: "Sec")
                             }
-                            .foregroundStyle(.white)
+
+                            // Jauge de progression
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(height: 4)
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(LinearGradient(colors: [Color.orange, Color.yellow], startPoint: .leading, endPoint: .trailing))
+                                        .frame(width: max(6, geo.size.width * CGFloat(1.0 - licenseManager.trialProgress)), height: 4)
+                                }
+                            }
+                            .frame(height: 4)
+                            .padding(.top, 2)
+
+                            HStack {
+                                Text("Retour automatique en gratuit.")
+                                    .font(.system(size: 9.5))
+                                    .foregroundStyle(.white.opacity(0.65))
+
+                                Spacer()
+
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        licenseManager.cancelTrial()
+                                    }
+                                } label: {
+                                    Text("Annuler l'essai")
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .foregroundStyle(Color.red.opacity(0.85))
+                                        .underline()
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } else if licenseManager.isProLifetime {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("LaunchPad Pro Débloqué")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+
+                            Text("Vous possédez la licence permanente complète. Profitez de toutes les fonctionnalités illimitées !")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 6)
+                    } else {
+                        // Présentation de l'essai 7 jours
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Essai Gratuit 7 Jours")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+
+                            Text("Activez toutes les fonctions Pro (Liquid Glass, Vinyle, Touch ID, Sauvegarde). Sans carte bancaire.")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                licenseManager.startSevenDayTrial()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Activer l'Essai 7 Jours")
+                                    .font(.system(size: 11.5, weight: .bold))
+                            }
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 7)
                             .background(
                                 LinearGradient(
-                                    colors: [Color.purple, Color.blue],
+                                    colors: [Color(red: 1.0, green: 0.82, blue: 0.2), Color.orange],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .shadow(color: Color.orange.opacity(0.4), radius: 6, y: 2)
                         }
                         .buttonStyle(.plain)
-
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showingKeyInput.toggle()
-                            }
-                        } label: {
-                            Image(systemName: "key.fill")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .padding(7)
-                                .background(Color.white.opacity(0.12))
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Saisir une clé de licence ou le code démo 1234")
                     }
                 }
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(licenseManager.isTrialActive ? Color.orange.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
+                )
+
+                // CARTE 2 : PAYER LA VERSION PRO (ACCÈS PERMANENT)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        HStack(spacing: 4) {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 10.5, weight: .bold))
+                            Text(licenseManager.isProLifetime ? "DÉBLOQUÉ À VIE" : "ACCÈS ILLIMITÉ")
+                                .font(.system(size: 9.5, weight: .bold))
+                                .tracking(0.5)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.purple.opacity(0.2))
+                        .foregroundStyle(Color(red: 0.85, green: 0.65, blue: 1.0))
+                        .clipShape(Capsule())
+
+                        Spacer()
+
+                        if licenseManager.isProLifetime {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(Color.green)
+                                .font(.system(size: 15))
+                        }
+                    }
+
+                    if licenseManager.isProLifetime {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Licence Permanente Active")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+
+                            if !licenseManager.licenseKey.isEmpty {
+                                Text("Clé : \(licenseManager.licenseKey)")
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+
+                            Text("Accès complet et illimité sans aucune restriction de durée.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        .padding(.vertical, 6)
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Payer la Version Pro")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+
+                            Text("Débloquez LaunchPad Pro pour toujours sur votre Mac. Mises à jour gratuites incluses.")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if showingKeyInput {
+                            HStack(spacing: 5) {
+                                TextField("Clé (ex: 1234)", text: $enteredKey)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 4)
+                                    .background(Color.black.opacity(0.4))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2)))
+
+                                Button("OK") {
+                                    validateKey()
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.2))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
+                        }
+
+                        if let feedback = feedbackText {
+                            Text(feedback)
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundStyle(feedbackIsError ? Color.red : Color.green)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 6) {
+                            Button {
+                                licenseManager.openGetProPage()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "cart.fill")
+                                        .font(.system(size: 10))
+                                    Text("Acheter Pro")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 7)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color.purple, Color.blue],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showingKeyInput.toggle()
+                                }
+                            } label: {
+                                Image(systemName: "key.fill")
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .padding(7)
+                                    .background(Color.white.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Saisir une clé de licence ou le code démo 1234")
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(licenseManager.isProLifetime ? Color.purple.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
+                )
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(licenseManager.isProLifetime ? Color.purple.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
-            )
+
+            // Bandeau Communauté Discord officiel
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(red: 0.55, green: 0.65, blue: 1.0))
+                Text("Rejoignez notre Discord pour du support direct et des nouveautés :")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.8))
+                Spacer()
+                Button {
+                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("discord.gg/VG9rgMjBMf")
+                            .font(.system(size: 10, weight: .bold))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 8.5, weight: .bold))
+                    }
+                    .foregroundStyle(Color(red: 0.65, green: 0.75, blue: 1.0))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3.5)
+                    .background(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.28))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4.5)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
