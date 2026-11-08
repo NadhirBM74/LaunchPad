@@ -1,6 +1,66 @@
 import Foundation
 import Combine
 import AppKit
+import Security
+
+// MARK: - Persistance Indestructible dans le Trousseau d'Accès (Keychain)
+// Garantit que même si l'utilisateur supprime l'application (ou les préférences UserDefaults)
+// et la réinstalle, la date et le décompte exact de son essai gratuit restent préservés.
+
+enum KeychainTrialStorage {
+    private static let service = "me.LaucnhPad.trial"
+    private static let account = "device_trial_info"
+
+    static func save(startDate: Date, endDate: Date, hasUsed: Bool) {
+        let dict: [String: Any] = [
+            "start": startDate.timeIntervalSince1970,
+            "end": endDate.timeIntervalSince1970,
+            "hasUsed": hasUsed
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+
+        var addQuery = query
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    static func load() -> (startDate: Date, endDate: Date, hasUsed: Bool)? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data,
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let startTs = dict["start"] as? TimeInterval,
+              let endTs = dict["end"] as? TimeInterval,
+              let hasUsed = dict["hasUsed"] as? Bool else {
+            return nil
+        }
+        return (Date(timeIntervalSince1970: startTs), Date(timeIntervalSince1970: endTs), hasUsed)
+    }
+
+    static func clear() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
 
 /// Gestionnaire de la licence et de l'état Freemium de l'application.
 ///
@@ -57,10 +117,31 @@ final class LicenseManager: ObservableObject {
     private init() {
         let loadedLicenseKey = Prefs.licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let loadedIsProLifetime = Prefs.isProLifetime && !loadedLicenseKey.isEmpty
-        let loadedIsTrialActive = Prefs.isTrialActive
-        let loadedTrialStartDate = Prefs.trialStartDate
-        let loadedTrialEndDate = Prefs.trialEndDate
-        let loadedHasUsedTrial = Prefs.hasUsedTrial
+
+        // Synchronisation avec le trousseau d'accès (Keychain)
+        // Conserve le minuteur exact même après désinstallation / réinstallation !
+        var loadedTrialStartDate = Prefs.trialStartDate
+        var loadedTrialEndDate = Prefs.trialEndDate
+        var loadedHasUsedTrial = Prefs.hasUsedTrial
+        var loadedIsTrialActive = Prefs.isTrialActive
+
+        if let keychain = KeychainTrialStorage.load() {
+            // Le trousseau fait autorité en cas de réinstallation
+            if loadedTrialStartDate == nil || loadedTrialEndDate == nil || !loadedHasUsedTrial {
+                loadedTrialStartDate = keychain.startDate
+                loadedTrialEndDate = keychain.endDate
+                loadedHasUsedTrial = keychain.hasUsed
+                loadedIsTrialActive = keychain.hasUsed && Date() < keychain.endDate
+
+                Prefs.trialStartDate = loadedTrialStartDate
+                Prefs.trialEndDate = loadedTrialEndDate
+                Prefs.hasUsedTrial = loadedHasUsedTrial
+                Prefs.isTrialActive = loadedIsTrialActive
+            }
+        } else if let start = loadedTrialStartDate, let end = loadedTrialEndDate {
+            // Première synchronisation vers le trousseau
+            KeychainTrialStorage.save(startDate: start, endDate: end, hasUsed: loadedHasUsedTrial)
+        }
 
         let trialValid = loadedIsTrialActive && (loadedTrialEndDate ?? Date.distantPast) > Date()
         let calculatedIsPro = loadedIsProLifetime || trialValid
@@ -112,6 +193,9 @@ final class LicenseManager: ObservableObject {
         Prefs.isTrialActive = true
         Prefs.hasUsedTrial = true
         Prefs.isProUnlocked = true
+
+        // Persistance indestructible dans le Keychain de macOS (survit à la désinstallation)
+        KeychainTrialStorage.save(startDate: now, endDate: end, hasUsed: true)
 
         updateCountdownValues()
         startCountdownTicker()
@@ -194,6 +278,13 @@ final class LicenseManager: ObservableObject {
         Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
         Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
         UserDefaults.standard.synchronize()
+
+        // Maintien permanent de l'état "essai consommé" dans le trousseau Keychain
+        KeychainTrialStorage.save(
+            startDate: self.trialStartDate ?? Date.distantPast,
+            endDate: self.trialEndDate ?? Date(),
+            hasUsed: true
+        )
 
         // Rétablissement des réglages de base si des éléments Pro étaient sélectionnés
         if Prefs.appLogo.isProOnly {
@@ -448,6 +539,8 @@ final class LicenseManager: ObservableObject {
         Prefs.hasUsedTrial = true
         Prefs.isProUnlocked = true
 
+        KeychainTrialStorage.save(startDate: start, endDate: end, hasUsed: true)
+
         updateCountdownValues()
         startCountdownTicker()
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
@@ -459,10 +552,11 @@ final class LicenseManager: ObservableObject {
         handleTrialExpiration(notify: true)
     }
 
-    /// Réinitialise l'historique d'essai pour permettre de retester le tutoriel comme au premier jour.
+    /// Réinitialise l'historique d'essai pour permettre de retester le tutoriel comme au premier jour (Admin).
     func resetTrialHistory() {
         deactivate()
         hasUsedTrial = false
         Prefs.hasUsedTrial = false
+        KeychainTrialStorage.clear()
     }
 }

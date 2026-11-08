@@ -126,23 +126,19 @@ struct TutorialCardView: View {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
-                    HStack(spacing: 5) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.28))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color(red: 0.45, green: 0.50, blue: 1.0).opacity(0.45), lineWidth: 1)
+                            )
                         Image("DiscordLogo")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 14, height: 11)
-                        Text("Discord")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
+                            .frame(width: 15, height: 12)
                     }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4.5)
-                    .background(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.28))
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(red: 0.45, green: 0.50, blue: 1.0).opacity(0.45), lineWidth: 1)
-                    )
                 }
                 .buttonStyle(.plain)
                 .help("Rejoindre la communauté Discord")
@@ -1723,40 +1719,6 @@ private struct AnimStep5ProTrial: View {
                         .stroke(licenseManager.isProLifetime ? Color.purple.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 1.2)
                 )
             }
-
-            // Bandeau Communauté Discord officiel
-            HStack(spacing: 8) {
-                Image("DiscordLogo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 12)
-                Text("Rejoignez notre Discord pour du support direct et des nouveautés :")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.8))
-                Spacer()
-                Button {
-                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("discord.gg/VG9rgMjBMf")
-                            .font(.system(size: 10, weight: .bold))
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 8.5, weight: .bold))
-                    }
-                    .foregroundStyle(Color(red: 0.65, green: 0.75, blue: 1.0))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3.5)
-                    .background(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.28))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4.5)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
