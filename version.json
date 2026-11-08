@@ -1,0 +1,16 @@
+{
+  "tag_name": "v1.1.2",
+  "name": "LaunchPad v1.1.2",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.2",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.1.2\n\n- 🔄 **Système de mise à jour ultra-résilient** : Intégration d'une architecture multi-canaux haute disponibilité garantissant une recherche de mise à jour instantanée sans échec.\n- 🛡️ **Résolution définitive des erreurs 504** : Contournement intelligent des ralentissements de l'API GitHub avec bascule automatique vers le CDN mondial Varnish.\n- ⚡ **Négociation réseau accélérée** : Optimisation des en-têtes et du délai d'expiration pour un téléchargement fluide et fiable des paquets d'installation.\n- 🔒 **Persistance de l'essai 7 jours** : Décompte Pro garanti et synchronisé en permanence dans le Trousseau d'accès macOS sécurisé.\n- 💫 **Stabilité et fluidité globales** : Expérience utilisateur optimisée avec détection réactive des gestes et statut des mises à jour en direct.",
+  "assets": [
+    {
+      "name": "LaunchPad-v1.1.2.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.2/LaunchPad-v1.1.2.zip"
+    },
+    {
+      "name": "LaunchPad-v1.1.2.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.2/LaunchPad-v1.1.2.dmg"
+    }
+  ]
+}

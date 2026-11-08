@@ -114,39 +114,92 @@ public final class UpdateManager: NSObject, ObservableObject {
         }
     }
 
-    private func performCheck(manual: Bool) async {
-        let endpoint = "https://api.github.com/repos/\(Self.repoOwner)/\(Self.repoName)/releases/latest"
-        guard let url = URL(string: endpoint) else {
-            state = .error(message: "URL de mise à jour invalide.")
-            return
+    /// Récupère les métadonnées de version via une architecture ultra-résiliente multi-niveaux.
+    private func fetchLatestRelease() async throws -> [String: Any]? {
+        // 1. TENTATIVE PRIORITAIRE CDN HAUTE DISPONIBILITÉ :
+        // raw.githubusercontent.com via Fastly Varnish CDN (réponse instantanée ~30ms, sans quota d'API et immunisé contre les 502/503/504)
+        let rawEndpoint = "https://raw.githubusercontent.com/\(Self.repoOwner)/\(Self.repoName)/main/version.json"
+        if let rawUrl = URL(string: rawEndpoint) {
+            var rawReq = URLRequest(url: rawUrl)
+            rawReq.timeoutInterval = 4
+            rawReq.cachePolicy = .reloadIgnoringLocalCacheData
+            rawReq.setValue("LaunchPad-App/\(currentAppVersion) (Macintosh; macOS)", forHTTPHeaderField: "User-Agent")
+
+            if let (data, response) = try? await URLSession.shared.data(for: rawReq),
+               let httpResponse = response as? HTTPURLResponse,
+               (200...299).contains(httpResponse.statusCode),
+               let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+               let tag = json["tag_name"] as? String, !tag.isEmpty {
+                return json
+            }
         }
 
-        var request = URLRequest(url: url)
-        request.setValue("LaunchPad-App", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.cachePolicy = .reloadIgnoringLocalCacheData
+        // 2. REPLI SUR L'API REST GITHUB (AVEC RETRY ET EN-TÊTES OPTIMISÉS)
+        let apiEndpoints = [
+            "https://api.github.com/repos/\(Self.repoOwner)/\(Self.repoName)/releases/latest",
+            "https://api.github.com/repos/\(Self.repoOwner)/\(Self.repoName)/releases?per_page=1"
+        ]
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                state = .error(message: "Réponse serveur invalide.")
-                return
+        var lastHttpCode: Int = 0
+
+        for endpoint in apiEndpoints {
+            guard let url = URL(string: endpoint) else { continue }
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 6
+            request.cachePolicy = .useProtocolCachePolicy
+            request.setValue("LaunchPad-App/\(currentAppVersion) (Macintosh; macOS)", forHTTPHeaderField: "User-Agent")
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+
+            for attempt in 1...2 {
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse else { continue }
+                    lastHttpCode = httpResponse.statusCode
+
+                    if httpResponse.statusCode == 200 {
+                        if let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                           let tag = dict["tag_name"] as? String, !tag.isEmpty {
+                            return dict
+                        } else if let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]],
+                                  let first = arr.first,
+                                  let tag = first["tag_name"] as? String, !tag.isEmpty {
+                            return first
+                        }
+                    } else if httpResponse.statusCode == 404 {
+                        return nil
+                    }
+                } catch {
+                    // Erreur transport réseau
+                }
+
+                if attempt < 2 {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                }
             }
+        }
 
-            if httpResponse.statusCode == 404 {
+        if lastHttpCode > 0 {
+            throw NSError(domain: "UpdateManager", code: lastHttpCode, userInfo: [
+                NSLocalizedDescriptionKey: "Serveur GitHub temporairement indisponible (code \(lastHttpCode))."
+            ])
+        } else {
+            throw NSError(domain: "UpdateManager", code: -1, userInfo: [
+                NSLocalizedDescriptionKey: "Connexion impossible au serveur de mise à jour. Vérifiez votre accès internet."
+            ])
+        }
+    }
+
+    private func performCheck(manual: Bool) async {
+        do {
+            guard let json = try await fetchLatestRelease() else {
                 let current = currentAppVersion
                 state = .upToDate(version: current)
                 lastChecked = Date()
                 return
             }
 
-            guard httpResponse.statusCode == 200 else {
-                state = .error(message: "Serveur GitHub : code \(httpResponse.statusCode).")
-                return
-            }
-
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let tagName = json["tag_name"] as? String else {
+            guard let tagName = json["tag_name"] as? String else {
                 state = .error(message: "Données de version introuvables.")
                 return
             }
@@ -259,9 +312,9 @@ public final class UpdateManager: NSObject, ObservableObject {
 
     private func startDownloadTask(targetUrl: URL, isApiFallback: Bool, ext: String, version: String) {
         var request = URLRequest(url: targetUrl)
-        request.setValue("LaunchPad-Updater/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("LaunchPad-Updater/\(currentAppVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream, application/zip, */*", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 30
+        request.timeoutInterval = 60
 
         let session = URLSession(configuration: .default)
         let task = session.downloadTask(with: request) { [weak self] tempUrl, response, error in
