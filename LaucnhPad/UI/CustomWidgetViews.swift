@@ -685,29 +685,29 @@ struct VinylPlayerWidgetView: View {
         track.hasTrack ? Int(track.durationSeconds) : config.musicTotalSeconds
     }
 
-    // Couleurs adaptatives selon le thème (Clair = carte blanche / texte noir comme la référence ; Sombre = carte anthracite / texte blanc)
+    // Couleurs adaptatives selon le thème (Clair = carte blanche / texte noir bien contrasté ; Sombre = carte anthracite / texte blanc)
     private var primaryTextColor: Color {
-        isLightTheme ? Color(white: 0.10) : Color.white
+        isLightTheme ? Color(white: 0.06) : Color.white
     }
 
     private var secondaryTextColor: Color {
-        isLightTheme ? Color(white: 0.48) : Color.white.opacity(0.62)
+        isLightTheme ? Color(white: 0.30) : Color.white.opacity(0.66)
     }
 
     private var muteIconColor: Color {
-        isLightTheme ? Color(white: 0.62) : Color.white.opacity(0.48)
+        isLightTheme ? Color(white: 0.26) : Color.white.opacity(0.55)
     }
 
     private var controlIconColor: Color {
-        isLightTheme ? Color(white: 0.08) : Color.white.opacity(0.95)
+        isLightTheme ? Color(white: 0.06) : Color.white.opacity(0.95)
     }
 
     private var controlRingColor: Color {
-        isLightTheme ? Color.black.opacity(0.20) : Color.white.opacity(0.26)
+        isLightTheme ? Color.black.opacity(0.26) : Color.white.opacity(0.28)
     }
 
     private var seekTrackColor: Color {
-        isLightTheme ? Color.black.opacity(0.11) : Color.white.opacity(0.16)
+        isLightTheme ? Color.black.opacity(0.16) : Color.white.opacity(0.18)
     }
 
     private var spindleHoleColor: Color {
@@ -746,6 +746,7 @@ struct VinylPlayerWidgetView: View {
             }
         }
         .frame(width: w, height: h)
+        .environment(\.colorScheme, isLightTheme ? .light : .dark)
         .animation(.easeInOut(duration: 0.25), value: config.musicAppearance)
         .onAppear {
             if !isPreview {
@@ -1389,32 +1390,46 @@ struct VinylPlayerWidgetView: View {
             .frame(width: width, height: height)
             .clipped()
 
-            // 2. Dégradé translucide pour assurer un contraste optimal :
-            // Protège la lisibilité des textes et contrôles en bas et sublime le disque vinyle noir au centre
-            LinearGradient(
-                stops: [
-                    .init(color: Color.black.opacity(isLightTheme ? 0.20 : 0.40), location: 0.0),
-                    .init(color: Color.black.opacity(isLightTheme ? 0.14 : 0.24), location: 0.35),
-                    .init(color: Color.black.opacity(isLightTheme ? 0.45 : 0.65), location: 0.70),
-                    .init(color: Color.black.opacity(isLightTheme ? 0.72 : 0.88), location: 1.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // 2. Voile de contraste adaptatif :
+            // En mode Clair, voile blanc givré lumineux en bas pour une lisibilité parfaite du titre et des boutons noirs.
+            // En mode Sombre, dégradé sombre profond pour faire ressortir la typographie blanche.
+            if isLightTheme {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(0.06), location: 0.0),
+                        .init(color: Color.white.opacity(0.18), location: 0.36),
+                        .init(color: Color(red: 0.96, green: 0.96, blue: 0.97).opacity(0.80), location: 0.68),
+                        .init(color: Color(red: 0.97, green: 0.97, blue: 0.98).opacity(0.96), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            } else {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.40), location: 0.0),
+                        .init(color: Color.black.opacity(0.24), location: 0.35),
+                        .init(color: Color.black.opacity(0.65), location: 0.70),
+                        .init(color: Color.black.opacity(0.88), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
 
-            // 3. Matériau ultra-fin pour un grain de verre moderne
+            // 3. Matériau ultra-fin pour un grain de verre moderne (adapté au thème clair/sombre)
             shape
-                .fill(.ultraThinMaterial.opacity(isLightTheme ? 0.20 : 0.35))
+                .fill(.ultraThinMaterial.opacity(isLightTheme ? 0.52 : 0.35))
         }
+        .environment(\.colorScheme, isLightTheme ? .light : .dark)
         .frame(width: width, height: height)
         .clipShape(shape)
         .overlay(
             shape.strokeBorder(
                 LinearGradient(
-                    colors: [
-                        Color.white.opacity(isLightTheme ? 0.30 : 0.22),
-                        Color.white.opacity(isLightTheme ? 0.08 : 0.06)
-                    ],
+                    colors: isLightTheme
+                        ? [Color.white.opacity(0.75), Color.black.opacity(0.10)]
+                        : [Color.white.opacity(0.22), Color.white.opacity(0.06)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),

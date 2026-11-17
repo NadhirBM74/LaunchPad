@@ -333,27 +333,27 @@ struct ReferenceMusicWidgetView: View {
     }
 
     private var cardTitleColor: Color {
-        isDarkMusic ? Color.white.opacity(0.96) : Color(white: 0.08)
+        isDarkMusic ? Color.white.opacity(0.96) : Color(white: 0.06)
     }
 
     private var cardSubtitleColor: Color {
-        isDarkMusic ? Color.white.opacity(0.68) : Color(white: 0.36)
+        isDarkMusic ? Color.white.opacity(0.70) : Color(white: 0.28)
     }
 
     private var cardTimestampColor: Color {
-        isDarkMusic ? Color.white.opacity(0.76) : Color(white: 0.20)
+        isDarkMusic ? Color.white.opacity(0.78) : Color(white: 0.16)
     }
 
     private var cardControlColor: Color {
-        isDarkMusic ? Color.white.opacity(0.95) : Color(white: 0.12)
+        isDarkMusic ? Color.white.opacity(0.95) : Color(white: 0.06)
     }
 
     private var cardSeekTrackColor: Color {
-        isDarkMusic ? Color.white.opacity(0.20) : Color.black.opacity(0.13)
+        isDarkMusic ? Color.white.opacity(0.20) : Color.black.opacity(0.16)
     }
 
     private var cardSeekFillColor: Color {
-        isDarkMusic ? Color.white.opacity(0.92) : Color(white: 0.12)
+        isDarkMusic ? Color.white.opacity(0.92) : Color(white: 0.08)
     }
 
     var body: some View {
@@ -393,20 +393,27 @@ struct ReferenceMusicWidgetView: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.65),
-                                Color.white.opacity(0.18),
-                                Color.white.opacity(0.32)
-                            ],
+                            colors: isDarkMusic
+                                ? [
+                                    Color.white.opacity(0.65),
+                                    Color.white.opacity(0.18),
+                                    Color.white.opacity(0.32)
+                                ]
+                                : [
+                                    Color.white.opacity(0.85),
+                                    Color.black.opacity(0.08),
+                                    Color.black.opacity(0.12)
+                                ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         lineWidth: 1.0
                     )
             )
-            .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 7)
+            .shadow(color: .black.opacity(isDarkMusic ? 0.28 : 0.16), radius: 14, x: 0, y: 7)
         }
         .frame(width: w, height: h)
+        .environment(\.colorScheme, isDarkMusic ? .dark : .light)
         .onAppear {
             if !isPreview {
                 musicManager.refreshNowPlaying()
@@ -896,9 +903,9 @@ struct ReferenceMusicWidgetView: View {
             } else {
                 LinearGradient(
                     colors: [
-                        Color(red: 0.90, green: 0.91, blue: 0.92).opacity(0.94),
-                        Color(red: 0.83, green: 0.84, blue: 0.86).opacity(0.92),
-                        Color(red: 0.92, green: 0.93, blue: 0.94).opacity(0.95)
+                        Color(red: 0.95, green: 0.96, blue: 0.98).opacity(0.96),
+                        Color(red: 0.89, green: 0.90, blue: 0.93).opacity(0.95),
+                        Color(red: 0.96, green: 0.97, blue: 0.99).opacity(0.97)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

@@ -2714,7 +2714,14 @@ struct ThemeCardButton: View {
     let isProUnlocked: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var hostColorScheme
     private static let clairSunColor = Color(.sRGB, red: 1.0, green: 0.62, blue: 0.0, opacity: 1.0)
+    private static let liquidGlassLightInk = Color(.sRGB, red: 0.13, green: 0.11, blue: 0.25, opacity: 0.94)
+    private static let liquidGlassLightAccent = Color(.sRGB, red: 0.48, green: 0.24, blue: 0.92, opacity: 1.0)
+
+    private var isHostLight: Bool {
+        hostColorScheme == .light
+    }
 
     var body: some View {
         Button(action: action) {
@@ -2726,18 +2733,24 @@ struct ThemeCardButton: View {
                         .overlay {
                             previewStroke
                         }
+                        .shadow(
+                            color: (theme == .liquidGlass && isHostLight)
+                                ? Color(red: 0.36, green: 0.28, blue: 0.85).opacity(0.14)
+                                : Color.clear,
+                            radius: 5,
+                            y: 2
+                        )
                         .overlay {
                             VStack(spacing: 5) {
                                 Image(systemName: theme.symbol)
                                     .font(.system(size: 20))
                                     .symbolRenderingMode(.monochrome)
-                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Self.clairSunColor : SettingsStyle.accent))
+                                    .foregroundStyle(cardSymbolColor)
                                     .drawingGroup()
                                 Text(theme.title)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Color(.sRGB, red: 0.10, green: 0.10, blue: 0.12, opacity: 0.88) : .primary))
+                                    .foregroundStyle(cardLabelColor)
                             }
-                            .environment(\.colorScheme, theme == .light ? .light : .dark)
                         }
 
                     if theme.isProOnly && !isProUnlocked {
@@ -2748,7 +2761,7 @@ struct ThemeCardButton: View {
 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(isSelected ? SettingsStyle.accent : Color.primary.opacity(0.16))
+                        .fill(isSelected ? SettingsStyle.accent : (isHostLight ? Color.black.opacity(0.18) : Color.primary.opacity(0.16)))
                         .frame(width: 14, height: 14)
                         .overlay(
                             Circle()
@@ -2776,6 +2789,28 @@ struct ThemeCardButton: View {
         .buttonStyle(.plain)
     }
 
+    private var cardSymbolColor: Color {
+        switch theme {
+        case .dark:
+            return Color.white.opacity(0.95)
+        case .light:
+            return Self.clairSunColor
+        case .liquidGlass:
+            return isHostLight ? Self.liquidGlassLightAccent : SettingsStyle.accent
+        }
+    }
+
+    private var cardLabelColor: Color {
+        switch theme {
+        case .dark:
+            return Color.white.opacity(0.95)
+        case .light:
+            return Color(.sRGB, red: 0.10, green: 0.10, blue: 0.12, opacity: 0.88)
+        case .liquidGlass:
+            return isHostLight ? Self.liquidGlassLightInk : Color.white.opacity(0.94)
+        }
+    }
+
     @ViewBuilder
     private var previewFill: some View {
         switch theme {
@@ -2792,16 +2827,39 @@ struct ThemeCardButton: View {
                 endPoint: .bottom
             )
         case .liquidGlass:
-            LinearGradient(
-                colors: [
-                    Color.primary.opacity(0.10),
-                    Color.purple.opacity(0.14),
-                    Color.blue.opacity(0.10),
-                    Color.primary.opacity(0.04)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            if isHostLight {
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.82, green: 0.78, blue: 0.97),
+                            Color(red: 0.72, green: 0.80, blue: 0.99),
+                            Color(red: 0.84, green: 0.88, blue: 0.99)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.white.opacity(0.50), location: 0.0),
+                            .init(color: Color.white.opacity(0.08), location: 0.45),
+                            .init(color: Color.white.opacity(0.28), location: 1.0)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+            } else {
+                LinearGradient(
+                    colors: [
+                        Color.primary.opacity(0.10),
+                        Color.purple.opacity(0.14),
+                        Color.blue.opacity(0.10),
+                        Color.primary.opacity(0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
         }
     }
 
@@ -2815,15 +2873,31 @@ struct ThemeCardButton: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
         case .liquidGlass:
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.55), Color.white.opacity(0.1), Color.white.opacity(0.3)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.2
-                )
+            if isHostLight {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.48, green: 0.34, blue: 0.92).opacity(0.42),
+                                Color.white.opacity(0.85),
+                                Color(red: 0.30, green: 0.50, blue: 0.96).opacity(0.38)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.3
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.55), Color.white.opacity(0.1), Color.white.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.2
+                    )
+            }
         }
     }
 }

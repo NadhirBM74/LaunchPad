@@ -94,19 +94,31 @@ struct IconAppearanceShowcaseView: View {
             .padding(10)
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Deux grandes cartes côte à côte exactement comme sur la Photo de Référence 1
-            HStack(spacing: 12) {
-                // Carte Gauche : SYSTEM ICON APPEARANCE (Dark | Light | Tinted)
-                systemAppearanceCard
+            if licenseManager.isPro {
+                // Titulaires d'une licence Pro : réglages système Apple + icônes transparentes / Liquid Glass
+                HStack(spacing: 12) {
+                    // Carte Gauche : SYSTEM ICON APPEARANCE (Dark | Light | Tinted)
+                    systemAppearanceCard
 
-                // Carte Droite : CLEAR COLORED ICONS (Glass & Colored Icons)
-                clearColoredIconsCard
-            }
+                    // Carte Droite : CLEAR COLORED ICONS (Glass & Colored Icons)
+                    clearColoredIconsCard
+                }
 
-            // Choix directs avec aperçu visuel d'icônes : Couleur de base macOS & Transparent Cristal
-            HStack(spacing: 10) {
+                // Choix directs avec aperçu visuel d'icônes : Couleur de base macOS & Transparent Cristal
+                HStack(spacing: 10) {
+                    baseMacOSCard
+                    transparentCrystalCard
+                }
+            } else {
+                // Utilisateurs sans licence Pro : uniquement l'apparence d'icônes des paramètres Apple (sans transparence)
+                HStack {
+                    Spacer(minLength: 0)
+                    systemAppearanceCard
+                        .frame(maxWidth: 380)
+                    Spacer(minLength: 0)
+                }
+
                 baseMacOSCard
-                transparentCrystalCard
             }
 
             // Palette de couleur directe lorsque le mode Teinté est actif

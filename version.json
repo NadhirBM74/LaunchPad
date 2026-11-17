@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.4",
-  "name": "LaunchPad v1.2.4",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.4",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.4\n\n- ⚡ **Défilement et Grille Ultra-Fluides** : Optimisation du rendu des tuiles et mise en cache mémoire pour un défilement constant sans saccades.\n- 🎨 **Moteur d'Icônes Haute Performance** : Traitement graphique parallélisé sur tous les cœurs CPU avec forte réduction de l'empreinte mémoire.\n- 🔋 **Consommation Minimale au Repos** : Mise en veille intelligente des minuteurs, capteurs et vérifications système lorsque le Launchpad est fermé.\n- 🛡️ **Réactivité & Stabilité Renforcées** : Déplacement des opérations lourdes hors du fil principal pour éliminer tout ralentissement de l'interface.\n- 🔄 **Mises à Jour & Lecteurs Fiabilisés** : Fiabilisation des téléchargements, des contrôles musicaux et de la gestion mémoire dans toute l'application.",
+  "tag_name": "v1.2.5",
+  "name": "LaunchPad v1.2.5",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.5",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.5\n\n- 🎵 **Widget Multimédia Lisible en Mode Clair** : Refonte du contraste, des titres et des contrôles de lecture pour une parfaite visibilité sur fond clair.\n- ✨ **Contours Automatiques & Transparence Sublimés** : Détourage de précision suivant la courbe continue Apple sans encoches ni halo, avec séparation nette des symboles sur verre liquide.\n- 💎 **Icônes Transparentes Réservées au Mode Pro** : L'apparence transparente est désormais exclusive aux détenteurs d'une licence Pro, avec les réglages système Apple accessibles pour tous.\n- 🫧 **Thème Liquid Glass Visible en Mode Clair** : Contraste renforcé et reflet irisé sur l'aperçu Liquid Glass dans les paramètres en thème clair.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.4.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.4/LaunchPad-v1.2.4.zip"
+      "name": "LaunchPad-v1.2.5.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.5/LaunchPad-v1.2.5.zip"
     },
     {
-      "name": "LaunchPad-v1.2.4.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.4/LaunchPad-v1.2.4.dmg"
+      "name": "LaunchPad-v1.2.5.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.5/LaunchPad-v1.2.5.dmg"
     }
   ]
 }
