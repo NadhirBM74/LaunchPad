@@ -526,14 +526,14 @@ nonisolated enum IconRenderer {
             normCtx.draw(sourceCG, in: CGRect(x: 0, y: 0, width: size, height: size))
         }
 
-        // 2. Application du filtre de style pixel par pixel en 512×512 (sans jamais créer de double boîte !)
+        // 2. Application du filtre de style pixel par pixel en 512×512 (avec matting doux sans bavures)
         if style != .original && style != .system && style != .classicApple {
             applyPixelStyleShader(&normPixels, size: size, style: style, tintRGB: tintRGB)
         }
 
         guard let styledCG = normCtx.makeImage() else { return sourceCG }
 
-        // 3. Composition finale avec ombre portée macOS douce et bordure spéculaire optionnelle
+        // 3. Composition finale : socle verre translucide + bordure spéculaire + ombre douce
         guard let finalCtx = CGContext(
             data: nil,
             width: size,
@@ -546,19 +546,194 @@ nonisolated enum IconRenderer {
         finalCtx.interpolationQuality = .high
 
         let fSize = CGFloat(size)
-        finalCtx.saveGState()
-        finalCtx.setShadow(
-            offset: CGSize(width: 0, height: -fSize * 0.012),
-            blur: fSize * 0.034,
-            color: CGColor(gray: 0, alpha: style == .light ? 0.22 : 0.32)
-        )
-        finalCtx.draw(styledCG, in: CGRect(x: 0, y: 0, width: fSize, height: fSize))
-        finalCtx.restoreGState()
+        let isGlassStyle = (style == .transparent || style == .clearLiquid || style == .clearDark || style == .frostedGlass)
+
+        if isGlassStyle {
+            // Pour les styles transparents/verre : on dessine d'abord une ombre douce sous le squircle,
+            // puis le fond verre translucide uniforme, puis l'icône détourée par-dessus, puis le biseau lumineux.
+            let bodyPath = CGPath(
+                roundedRect: targetBodyRect,
+                cornerWidth: standardCorner,
+                cornerHeight: standardCorner,
+                transform: nil
+            )
+
+            finalCtx.saveGState()
+            finalCtx.setShadow(
+                offset: CGSize(width: 0, height: -fSize * 0.012),
+                blur: fSize * 0.030,
+                color: CGColor(gray: 0, alpha: 0.24)
+            )
+            finalCtx.addPath(bodyPath)
+            let baseFill: CGColor
+            switch style {
+            case .transparent:
+                baseFill = CGColor(red: 0.92, green: 0.95, blue: 1.0, alpha: 0.14)
+            case .clearLiquid:
+                baseFill = CGColor(red: 0.85, green: 0.90, blue: 1.0, alpha: 0.22)
+            case .clearDark:
+                baseFill = CGColor(red: 0.09, green: 0.11, blue: 0.22, alpha: 0.62)
+            case .frostedGlass:
+                baseFill = CGColor(red: 0.88, green: 0.90, blue: 0.98, alpha: 0.56)
+            default:
+                baseFill = CGColor(red: 1, green: 1, blue: 1, alpha: 0.18)
+            }
+            finalCtx.setFillColor(baseFill)
+            finalCtx.fillPath()
+            finalCtx.restoreGState()
+
+            // Clip au squircle et dessin du contenu
+            finalCtx.saveGState()
+            finalCtx.addPath(bodyPath)
+            finalCtx.clip()
+
+            // Reflet diagonal subtil sur verre
+            let sheenColors = [
+                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.12 : 0.26),
+                CGColor(red: 1, green: 1, blue: 1, alpha: 0.02),
+                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.06 : 0.14)
+            ] as CFArray
+            if let sheenGrad = CGGradient(colorsSpace: cs, colors: sheenColors, locations: [0.0, 0.5, 1.0]) {
+                finalCtx.drawLinearGradient(
+                    sheenGrad,
+                    start: CGPoint(x: targetBodyRect.minX, y: targetBodyRect.maxY),
+                    end: CGPoint(x: targetBodyRect.maxX, y: targetBodyRect.minY),
+                    options: []
+                )
+            }
+
+            finalCtx.draw(styledCG, in: CGRect(x: 0, y: 0, width: fSize, height: fSize))
+
+            // Bordure spéculaire en verre nette (sans bruit ni pixels crénelés)
+            finalCtx.setLineWidth(max(2.0, fSize * 0.008))
+            finalCtx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.28 : 0.52))
+            finalCtx.addPath(bodyPath)
+            finalCtx.strokePath()
+            finalCtx.restoreGState()
+        } else {
+            finalCtx.saveGState()
+            finalCtx.setShadow(
+                offset: CGSize(width: 0, height: -fSize * 0.012),
+                blur: fSize * 0.034,
+                color: CGColor(gray: 0, alpha: style == .light ? 0.22 : 0.32)
+            )
+            finalCtx.draw(styledCG, in: CGRect(x: 0, y: 0, width: fSize, height: fSize))
+            finalCtx.restoreGState()
+        }
 
         return finalCtx.makeImage() ?? styledCG
     }
 
-    /// Shader 512×512 ultra-rapide adaptant les surfaces des icônes tierces sans les réduire dans une boîte
+    /// Calcule un masque de fond lissé (`0.0` = logo/premier plan, `1.0` = fond du squircle)
+    /// en échantillonnant le pourtour intérieur du squircle et en propageant de façon douce (zéro pixelisation).
+    private static func computeSmoothBackgroundMatte(px: [UInt8], size: Int) -> [Double] {
+        let total = size * size
+        // 1. Échantillonnage des couleurs le long du bord intérieur du squircle (~13% depuis les bords)
+        let ringMargin = Int(Double(size) * 0.14)
+        let maxRing = size - 1 - ringMargin
+        var samples: [(r: Double, g: Double, b: Double)] = []
+        let step = max(4, size / 48)
+
+        for t in stride(from: ringMargin, through: maxRing, by: step) {
+            for (x, y) in [(t, ringMargin), (t, maxRing), (ringMargin, t), (maxRing, t)] {
+                let off = (y * size + x) * 4
+                let a = Double(px[off + 3]) / 255.0
+                if a > 0.65 {
+                    samples.append((
+                        min(1.0, Double(px[off]) / (255.0 * a)),
+                        min(1.0, Double(px[off + 1]) / (255.0 * a)),
+                        min(1.0, Double(px[off + 2]) / (255.0 * a))
+                    ))
+                }
+            }
+        }
+
+        // Si on n'a pas assez d'échantillons (icône non-squircle ou déjà détourée), retourner 0
+        guard samples.count >= 8 else {
+            return [Double](repeating: 0.0, count: total)
+        }
+
+        // Calcul de la couleur médiane/moyenne du bord + 2e cluster (haut vs bas pour les dégradés verticaux)
+        let topSamples = samples.prefix(samples.count / 2)
+        let botSamples = samples.suffix(samples.count / 2)
+
+        func avgColor<S: Sequence>(_ seq: S) -> (r: Double, g: Double, b: Double) where S.Element == (r: Double, g: Double, b: Double) {
+            var sr = 0.0, sg = 0.0, sb = 0.0, c = 0.0
+            for s in seq { sr += s.r; sg += s.g; sb += s.b; c += 1.0 }
+            return c > 0 ? (sr / c, sg / c, sb / c) : (0, 0, 0)
+        }
+
+        let topAvg = avgColor(topSamples)
+        let botAvg = avgColor(botSamples)
+        let globalAvg = avgColor(samples)
+
+        // Vérifier que les bords sont raisonnablement cohérents (pas une photo complexe)
+        var consistentCount = 0
+        for s in samples {
+            let dTop = hypot(s.r - topAvg.r, hypot(s.g - topAvg.g, s.b - topAvg.b))
+            let dBot = hypot(s.r - botAvg.r, hypot(s.g - botAvg.g, s.b - botAvg.b))
+            if min(dTop, dBot) < 0.28 { consistentCount += 1 }
+        }
+        guard Double(consistentCount) / Double(samples.count) > 0.55 else {
+            return [Double](repeating: 0.0, count: total)
+        }
+
+        // 2. Distance couleur douce par rapport au dégradé de fond estimé
+        var rawMatte = [Double](repeating: 0.0, count: total)
+        let innerLow = 0.06
+        let innerHigh = 0.22
+
+        for y in 0..<size {
+            let vy = Double(y) / Double(max(1, size - 1))
+            let interpR = topAvg.r * (1.0 - vy) + botAvg.r * vy
+            let interpG = topAvg.g * (1.0 - vy) + botAvg.g * vy
+            let interpB = topAvg.b * (1.0 - vy) + botAvg.b * vy
+            let rowOffset = y * size
+
+            for x in 0..<size {
+                let idx = rowOffset + x
+                let off = idx * 4
+                let a = Double(px[off + 3]) / 255.0
+                if a < 0.03 {
+                    rawMatte[idx] = 1.0
+                    continue
+                }
+                let r = min(1.0, Double(px[off]) / (255.0 * a))
+                let g = min(1.0, Double(px[off + 1]) / (255.0 * a))
+                let b = min(1.0, Double(px[off + 2]) / (255.0 * a))
+
+                let dInterp = hypot(r - interpR, hypot(g - interpG, b - interpB))
+                let dGlobal = hypot(r - globalAvg.r, hypot(g - globalAvg.g, b - globalAvg.b))
+                let dist = min(dInterp, dGlobal)
+
+                // Smoothstep inversé : 1.0 si proche du fond, 0.0 si différent (logo)
+                let t = min(1.0, max(0.0, (dist - innerLow) / (innerHigh - innerLow)))
+                let smooth = t * t * (3.0 - 2.0 * t)
+                rawMatte[idx] = 1.0 - smooth
+            }
+        }
+
+        // 3. Lissage séparable 3×3 léger sur le matte pour éliminer tout grain/bavure sur les contours
+        var temp = rawMatte
+        for y in 1..<(size - 1) {
+            let row = y * size
+            for x in 1..<(size - 1) {
+                let idx = row + x
+                temp[idx] = (rawMatte[idx - 1] + 2.0 * rawMatte[idx] + rawMatte[idx + 1]) * 0.25
+            }
+        }
+        var smoothed = temp
+        for y in 1..<(size - 1) {
+            let row = y * size
+            for x in 1..<(size - 1) {
+                let idx = row + x
+                smoothed[idx] = (temp[idx - size] + 2.0 * temp[idx] + temp[idx + size]) * 0.25
+            }
+        }
+        return smoothed
+    }
+
+    /// Shader 512×512 ultra-rapide et lissé adaptant chaque icône sans bavures ni pixels crénelés
     private static func applyPixelStyleShader(
         _ px: inout [UInt8],
         size: Int,
@@ -566,6 +741,9 @@ nonisolated enum IconRenderer {
         tintRGB: (r: Double, g: Double, b: Double)
     ) {
         let total = size * size
+        let needsMatte = (style == .transparent || style == .clearLiquid || style == .clearDark || style == .frostedGlass || style == .dark || style == .light)
+        let bgMatte = needsMatte ? computeSmoothBackgroundMatte(px: px, size: size) : []
+
         for idx in 0..<total {
             let offset = idx * 4
             let a = Double(px[offset + 3]) / 255.0
@@ -582,32 +760,36 @@ nonisolated enum IconRenderer {
             let delta = maxC - minC
             let sat = maxC > 0.001 ? (delta / maxC) : 0.0
             let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            let bgW = bgMatte.isEmpty ? 0.0 : bgMatte[idx]
 
             switch style {
             case .dark:
-                // Convertit les fonds blancs/clairs neutres en obsidienne sombre (#16171E) tout en préservant à 100% les couleurs vives
-                if sat < 0.22 && lum > 0.62 {
-                    let t = min(1.0, max(0.0, (lum - 0.62) / 0.38)) * (1.0 - sat / 0.22)
-                    let darkR = 0.09 + (1.0 - lum) * 0.14
-                    let darkG = 0.095 + (1.0 - lum) * 0.14
-                    let darkB = 0.12 + (1.0 - lum) * 0.16
+                // Convertit en douceur les fonds clairs en obsidienne sombre (#16171E)
+                let lumT = min(1.0, max(0.0, (lum - 0.56) / 0.30))
+                let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
+                let t = max(bgW * lumT, lumT * satT)
+                if t > 0.001 {
+                    let darkR = 0.09 + (1.0 - lum) * 0.12
+                    let darkG = 0.095 + (1.0 - lum) * 0.12
+                    let darkB = 0.125 + (1.0 - lum) * 0.14
                     r = r * (1.0 - t) + darkR * t
                     g = g * (1.0 - t) + darkG * t
                     b = b * (1.0 - t) + darkB * t
                 }
 
             case .light:
-                // Éclaircit les fonds noirs neutres vers une surface nacrée claire tout en gardant les éléments colorés intacts
-                if sat < 0.20 && lum < 0.26 {
-                    let t = min(1.0, max(0.0, (0.26 - lum) / 0.26)) * (1.0 - sat / 0.20)
-                    let lightVal = 0.94 - lum * 0.25
+                // Éclaircit en douceur les fonds très sombres vers une surface nacrée claire
+                let lumT = min(1.0, max(0.0, (0.28 - lum) / 0.24))
+                let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
+                let t = max(bgW * lumT, lumT * satT)
+                if t > 0.001 {
+                    let lightVal = 0.94 - lum * 0.22
                     r = r * (1.0 - t) + lightVal * t
                     g = g * (1.0 - t) + lightVal * t
                     b = b * (1.0 - t) + (lightVal + 0.02) * t
                 }
 
             case .tinted:
-                // Applique un dégradé teinté profond basé sur la luminance réelle de l'icône
                 let baseDarkR = 0.04, baseDarkG = 0.06, baseDarkB = 0.10
                 let curve = pow(lum, 0.88)
                 r = baseDarkR + (tintRGB.r - baseDarkR) * curve
@@ -615,34 +797,23 @@ nonisolated enum IconRenderer {
                 b = baseDarkB + (tintRGB.b - baseDarkB) * curve
 
             case .monochrome:
-                // Monochrome argenté/graphite à contraste renforcé
                 let contrasted = min(1.0, max(0.0, (lum - 0.5) * 1.16 + 0.52))
                 r = contrasted * 0.96
                 g = contrasted * 0.97
                 b = contrasted * 1.00
 
-            case .transparent, .clearLiquid:
-                // Rend les fonds neutres translucides façon verre liquide tout en gardant le logo central opaque
-                if sat < 0.18 && (lum > 0.78 || lum < 0.18) {
-                    outA = a * (style == .transparent ? 0.26 : 0.44)
-                    r = r * 0.75 + 0.22
-                    g = g * 0.76 + 0.24
-                    b = b * 0.80 + 0.28
+            case .transparent, .clearLiquid, .clearDark, .frostedGlass:
+                // Grâce au masque lissé bgW, le fond du squircle s'efface proprement pour laisser
+                // apparaître le socle de verre translucide dessiné en étape 3 — sans aucun grain ni bavure !
+                if bgW > 0.01 {
+                    let fgWeight = 1.0 - bgW
+                    outA = a * fgWeight
                 }
-
-            case .clearDark:
-                if sat < 0.22 && lum > 0.65 {
-                    outA = a * 0.78
-                    r = 0.12
-                    g = 0.14
-                    b = 0.28
-                }
-
-            case .frostedGlass:
-                if sat < 0.20 {
-                    r = min(1.0, r * 0.85 + 0.14)
-                    g = min(1.0, g * 0.86 + 0.15)
-                    b = min(1.0, b * 0.90 + 0.18)
+                if style == .frostedGlass || style == .clearLiquid {
+                    // Légère brillance sur le premier plan pour s'harmoniser avec le verre
+                    r = min(1.0, r * 0.95 + 0.05)
+                    g = min(1.0, g * 0.95 + 0.05)
+                    b = min(1.0, b * 0.96 + 0.06)
                 }
 
             case .original, .classicApple, .system:

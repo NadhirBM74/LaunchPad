@@ -1488,7 +1488,7 @@ struct FavoritesDockView: View {
     }
 }
 
-// MARK: - Galerie Visuelle de Widgets & Sélecteur en Temps Réel (Grand Public & Intuitive)
+// MARK: - Galerie Visuelle de Widgets (Design Apple Sidebar + Grille de Cartes inspiré Photo 1)
 
 struct WidgetGalleryModal: View {
     @ObservedObject var vm: LaunchpadViewModel
@@ -1496,7 +1496,7 @@ struct WidgetGalleryModal: View {
     let rootSize: CGSize
 
     enum GalleryCategory: String, CaseIterable, Identifiable {
-        case all = "Tous"
+        case all = "Tous les widgets"
         case weather = "Météo"
         case music = "Musique"
         case clock = "Horloge"
@@ -1511,34 +1511,108 @@ struct WidgetGalleryModal: View {
             case .music: return "music.note"
             case .clock: return "clock.fill"
             case .calendar: return "calendar"
-            case .utilities: return "sparkles.rectangle.stack.fill"
-            }
-        }
-        var matchingKinds: [WidgetKind] {
-            switch self {
-            case .all: return WidgetKind.allCases
-            case .weather: return [.weather]
-            case .music: return [.vinylPlayer, .mediaWide]
-            case .clock: return [.clock]
-            case .calendar: return [.calendar]
-            case .utilities: return [.quickNote, .system]
+            case .utilities: return "note.text"
             }
         }
     }
 
+    struct GalleryCardItem: Identifiable, Equatable {
+        let id: String
+        let title: String
+        let subtitle: String
+        let category: GalleryCategory
+        let config: CustomWidgetConfig
+    }
+
     @ObservedObject private var licenseManager = LicenseManager.shared
     @State private var selectedCategory: GalleryCategory = .all
-    @State private var selectedKind: WidgetKind = .weather
+    @State private var searchText: String = ""
+    @State private var selectedCardID: String = "weather-darkPremium"
     @State private var selectedSize: WidgetSize = .medium
-    @State private var selectedMusicStyle: MusicWidgetStyle = .vinylSplatterWide
-    @State private var selectedWeatherTheme: WeatherWidgetTheme = .darkPremium
-    @State private var selectedCalendarStyle: CalendarWidgetStyle = .compactDate
-    @State private var selectedClockStyle: ClockWidgetStyle = .appleAnalog
+    @State private var hoveredCardID: String? = nil
+    @State private var isCollectionsExpanded: Bool = true
+
+    private var allCards: [GalleryCardItem] {
+        var list: [GalleryCardItem] = []
+
+        for theme in WeatherWidgetTheme.allCases {
+            list.append(GalleryCardItem(
+                id: "weather-\(theme.rawValue)",
+                title: theme.title,
+                subtitle: "Météo en direct",
+                category: .weather,
+                config: CustomWidgetConfig(kind: .weather, size: .medium, weatherTheme: theme)
+            ))
+        }
+
+        for style in MusicWidgetStyle.allCases {
+            let kind: WidgetKind = (style == .fullBleedPill || style == .framedEditorial) ? .mediaWide : .vinylPlayer
+            list.append(GalleryCardItem(
+                id: "music-\(style.rawValue)",
+                title: style.title,
+                subtitle: kind == .vinylPlayer ? "Vinyle Apple Music & Spotify" : "Lecteur Musique",
+                category: .music,
+                config: CustomWidgetConfig(kind: kind, size: .medium, musicStyle: style)
+            ))
+        }
+
+        for style in ClockWidgetStyle.allCases {
+            list.append(GalleryCardItem(
+                id: "clock-\(style.rawValue)",
+                title: style.title,
+                subtitle: "Horloge",
+                category: .clock,
+                config: CustomWidgetConfig(kind: .clock, size: .small, clockStyle: style)
+            ))
+        }
+
+        for style in CalendarWidgetStyle.allCases {
+            list.append(GalleryCardItem(
+                id: "calendar-\(style.rawValue)",
+                title: style.title,
+                subtitle: "Calendrier EventKit",
+                category: .calendar,
+                config: CustomWidgetConfig(kind: .calendar, size: .medium, calendarStyle: style)
+            ))
+        }
+
+        list.append(GalleryCardItem(
+            id: "util-quickNote",
+            title: "Note rapide",
+            subtitle: "Bloc-notes instantané",
+            category: .utilities,
+            config: CustomWidgetConfig(kind: .quickNote, size: .medium)
+        ))
+        list.append(GalleryCardItem(
+            id: "util-system",
+            title: "État du Mac",
+            subtitle: "Processeur, RAM & Batterie",
+            category: .utilities,
+            config: CustomWidgetConfig(kind: .system, size: .medium)
+        ))
+
+        return list
+    }
+
+    private var filteredCards: [GalleryCardItem] {
+        let byCategory = selectedCategory == .all ? allCards : allCards.filter { $0.category == selectedCategory }
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return byCategory }
+        return byCategory.filter {
+            $0.title.lowercased().contains(q)
+            || $0.subtitle.lowercased().contains(q)
+            || $0.category.rawValue.lowercased().contains(q)
+        }
+    }
+
+    private var activeCard: GalleryCardItem {
+        allCards.first(where: { $0.id == selectedCardID }) ?? filteredCards.first ?? allCards[0]
+    }
 
     var body: some View {
         ZStack {
             // Arrière-plan sombre avec flou
-            Color.black.opacity(0.60)
+            Color.black.opacity(0.58)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -1546,279 +1620,354 @@ struct WidgetGalleryModal: View {
                     }
                 }
 
-            VStack(spacing: 0) {
-                // En-tête clair avec barre de catégories visuelles
-                VStack(spacing: 14) {
-                    HStack(alignment: .center) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 8) {
-                                Text("Galerie de Widgets")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(.white)
-                                if !licenseManager.isPro {
-                                    Text("PRO")
-                                        .font(.system(size: 10, weight: .black))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.yellow.opacity(0.85))
-                                        .foregroundStyle(.black)
-                                        .clipShape(Capsule())
-                                }
-                            }
-                            Text("Cliquez sur un widget pour le personnaliser, puis ajoutez-le à votre écran en un clic.")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.white.opacity(0.72))
-                        }
-                        Spacer()
-                        Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                vm.showWidgetGallery = false
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundStyle(.white.opacity(0.65))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Fermer la galerie de widgets")
-                    }
+            HStack(spacing: 0) {
+                // 1. Barre latérale gauche (fidèle à la Photo de référence 1)
+                gallerySidebar
+                    .frame(width: 222)
+                    .background(Color.black.opacity(0.28))
 
-                    // Barre de catégories clairement identifiées
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(GalleryCategory.allCases) { cat in
-                                let isChosen = selectedCategory == cat
-                                Button {
-                                    withAnimation(AppleDesignSystem.Springs.snappy) {
-                                        selectedCategory = cat
-                                        if let first = cat.matchingKinds.first, !cat.matchingKinds.contains(selectedKind) {
-                                            selectWidgetKind(first)
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: cat.icon)
-                                            .font(.system(size: 12, weight: .semibold))
-                                        Text(cat.rawValue)
-                                            .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
-                                    }
-                                    .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 7)
-                                    .background(isChosen ? Color.white : Color.white.opacity(0.10), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 14)
+                // 2. Panneau principal à droite (En-tête + Recherche + Grille 4 colonnes + Barre d'ajout)
+                VStack(spacing: 0) {
+                    rightHeader
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                        .padding(.bottom, 12)
 
-                Divider().background(Color.white.opacity(0.12))
+                    gallerySearchBar
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 16)
 
-                // Corps : Colonne gauche = Cartes visuelles avec miniatures réelles ; Colonne droite = Aperçu 1:1 & Personnalisation simple
-                HStack(spacing: 0) {
-                    // Grille visuelle des widgets (mini-aperçus réels + titre + explication simple)
+                    // Grille visuelle de cartes (inspirée de la grille Albums/Playlists de la Photo 1)
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 10) {
-                            ForEach(selectedCategory.matchingKinds) { kind in
-                                visualWidgetCard(for: kind)
+                        if filteredCards.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.white.opacity(0.45))
+                                Text("Aucun widget trouvé pour « \(searchText) »")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.85))
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 60)
+                        } else {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 152, maximum: 185), spacing: 14)],
+                                spacing: 18
+                            ) {
+                                ForEach(filteredCards) { card in
+                                    galleryGridCard(card)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
+                            .padding(.bottom, 20)
                         }
-                        .padding(16)
                     }
-                    .frame(width: 340)
 
                     Divider().background(Color.white.opacity(0.12))
 
-                    // Zone de personnalisation et d'ajout en 3 étapes simples
-                    VStack(spacing: 14) {
-                        Spacer(minLength: 2)
-
-                        // Aperçu réel du widget mis à l'échelle
-                        let previewConfig = CustomWidgetConfig(
-                            kind: selectedKind,
-                            size: selectedSize,
-                            musicStyle: selectedMusicStyle,
-                            weatherTheme: selectedWeatherTheme,
-                            calendarStyle: selectedCalendarStyle,
-                            clockStyle: selectedClockStyle
-                        )
-                        let maxPreviewH: CGFloat = 195
-                        let maxPreviewW: CGFloat = 380
-                        let scale = min(1.0, min(maxPreviewH / previewConfig.size.height, maxPreviewW / previewConfig.size.width))
-
-                        VStack(spacing: 6) {
-                            ZStack {
-                                WidgetHostView(config: previewConfig)
-                                    .scaleEffect(scale)
-                                    .frame(width: previewConfig.size.width * scale, height: previewConfig.size.height * scale)
-                                    .shadow(color: .black.opacity(0.38), radius: 18 * scale, y: 8 * scale)
-                            }
-                            .frame(height: 200)
-
-                            Text("\(selectedKind.title) • \(friendlySizeLabel(selectedSize))")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.72))
-                        }
-
-                        // Étape 1 : Choisir le design / thème
-                        if selectedKind != .system && selectedKind != .quickNote {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("1. Choisissez un style visuel :")
-                                    .font(.system(size: 11.5, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.75))
-                                    .padding(.horizontal, 20)
-                                themePickerStrip
-                            }
-                        }
-
-                        // Étape 2 : Choisir la taille du widget
-                        if selectedKind.allowedSizes.count > 1 {
-                            VStack(spacing: 6) {
-                                Text("2. Choisissez la taille :")
-                                    .font(.system(size: 11.5, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.75))
-
-                                HStack(spacing: 8) {
-                                    ForEach(selectedKind.allowedSizes) { size in
-                                        let isChosen = selectedSize == size
-                                        Button {
-                                            withAnimation(AppleDesignSystem.Springs.snappy) {
-                                                selectedSize = size
-                                            }
-                                        } label: {
-                                            HStack(spacing: 5) {
-                                                Image(systemName: sizeSymbol(for: size))
-                                                    .font(.system(size: 11, weight: .semibold))
-                                                Text(friendlySizeLabel(size))
-                                                    .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
-                                            }
-                                            .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 7)
-                                            .background(isChosen ? Color.white : Color.white.opacity(0.12), in: Capsule())
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Étape 3 : Bouton d'ajout clair et visible
-                        Button {
-                            addSelectedWidget()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 16, weight: .bold))
-                                Text("Ajouter ce widget au Launchpad")
-                                    .font(.system(size: 14, weight: .bold))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 26)
-                            .padding(.vertical, 11)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(red: 0.10, green: 0.52, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.98)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                            .shadow(color: Color.blue.opacity(0.35), radius: 10, y: 4)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.bottom, 16)
-                        .accessibilityLabel("Ajouter le widget \(selectedKind.title) au Launchpad")
-                    }
-                    .frame(maxWidth: .infinity)
+                    // Barre d'action en bas : Taille + Bouton Ajouter
+                    bottomActionBar
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.black.opacity(0.22))
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(0.05))
             }
-            .frame(width: min(860, rootSize.width - 36), height: min(600, rootSize.height - 44))
+            .frame(width: min(920, rootSize.width - 36), height: min(630, rootSize.height - 44))
             .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
             .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
         }
     }
 
-    private func visualWidgetCard(for kind: WidgetKind) -> some View {
-        let isSelected = (selectedKind == kind)
-        let miniSize: WidgetSize = kind.allowedSizes.contains(.small) ? .small : kind.defaultSize
-        let miniConfig = CustomWidgetConfig(
-            kind: kind,
-            size: miniSize,
-            musicStyle: kind == .mediaWide ? .fullBleedPill : .vinylSplatterWide,
-            weatherTheme: .darkPremium,
-            calendarStyle: .compactDate,
-            clockStyle: .appleAnalog
-        )
-        let thumbScale: CGFloat = miniSize == .small ? 0.38 : 0.25
+    private var gallerySidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Widgets")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Tous les styles")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                Spacer()
+                if !licenseManager.isPro {
+                    Text("PRO")
+                        .font(.system(size: 9.5, weight: .black))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2.5)
+                        .background(Color.yellow.opacity(0.9))
+                        .foregroundStyle(.black)
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
 
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 3) {
+                    sidebarCategoryRow(.all)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isCollectionsExpanded.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Text("Catégories")
+                                .font(.system(size: 13.5, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Spacer()
+                            Image(systemName: isCollectionsExpanded ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 14)
+                        .padding(.bottom, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if isCollectionsExpanded {
+                        ForEach([GalleryCategory.weather, .music, .clock, .calendar, .utilities]) { cat in
+                            sidebarCategoryRow(cat)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private func sidebarCategoryRow(_ cat: GalleryCategory) -> some View {
+        let isSelected = selectedCategory == cat
         return Button {
-            withAnimation(AppleDesignSystem.Springs.snappy) {
-                selectWidgetKind(kind)
+            withAnimation(.easeOut(duration: 0.15)) {
+                selectedCategory = cat
+                if let first = filteredCards.first, !filteredCards.contains(where: { $0.id == selectedCardID }) {
+                    selectCard(first)
+                }
             }
         } label: {
-            HStack(spacing: 12) {
-                // Miniature visuelle réelle du widget
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.black.opacity(0.28))
-                    WidgetHostView(config: miniConfig)
-                        .scaleEffect(thumbScale)
-                        .frame(width: miniConfig.size.width * thumbScale, height: miniConfig.size.height * thumbScale)
-                        .allowsHitTesting(false)
-                }
-                .frame(width: 92, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
-                )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Image(systemName: kindIcon(for: kind))
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(isSelected ? Color.cyan : .white.opacity(0.8))
-                        Text(kind.title)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    Text(friendlyWidgetDescription(for: kind))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.cyan : .white.opacity(0.35))
+            HStack(spacing: 10) {
+                Image(systemName: cat.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.68))
+                    .frame(width: 20, height: 20)
+                Text(cat.rawValue)
+                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                    .lineLimit(1)
+                Spacer()
             }
-            .padding(10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8.5)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.05))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.18) : Color.clear)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(isSelected ? Color.white.opacity(0.55) : Color.white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.8)
-            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    private func selectWidgetKind(_ kind: WidgetKind) {
-        selectedKind = kind
-        selectedSize = kind.defaultSize
-        if kind == .mediaWide {
-            selectedMusicStyle = .fullBleedPill
-        } else if kind == .vinylPlayer {
-            selectedMusicStyle = .vinylSplatterWide
+    private var rightHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectedCategory.rawValue)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                Text("\(filteredCards.count) \(filteredCards.count > 1 ? "modèles disponibles" : "modèle disponible")")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.58))
+            }
+            Spacer()
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    vm.showWidgetGallery = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Fermer la galerie de widgets")
+        }
+    }
+
+    private var gallerySearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+            TextField("Rechercher dans les widgets (ex : météo, vinyle, néon, flip…)", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(.white)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        )
+    }
+
+    private func galleryGridCard(_ card: GalleryCardItem) -> some View {
+        let isSelected = (selectedCardID == card.id)
+        let isHovered = (hoveredCardID == card.id)
+        let previewW = card.config.size.width
+        let previewH = card.config.size.height
+        let boxSize: CGFloat = 148
+        let thumbScale = min(132 / previewW, 118 / previewH)
+
+        return Button {
+            withAnimation(AppleDesignSystem.Springs.snappy) {
+                selectCard(card)
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.black.opacity(0.28))
+
+                    WidgetHostView(config: card.config)
+                        .scaleEffect(thumbScale)
+                        .frame(width: previewW * thumbScale, height: previewH * thumbScale)
+                        .allowsHitTesting(false)
+                }
+                .frame(height: boxSize * 0.86)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(isSelected ? 0.65 : 0.14), lineWidth: isSelected ? 1.5 : 0.8)
+                )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(card.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(card.subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.60))
+                        .lineLimit(1)
+                }
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.20) : (isHovered ? Color.white.opacity(0.09) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(isSelected ? Color.white.opacity(0.32) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredCardID = hovering ? card.id : (hoveredCardID == card.id ? nil : hoveredCardID)
+        }
+    }
+
+    private var bottomActionBar: some View {
+        let card = activeCard
+        return HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.title)
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(card.subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+
+            Spacer()
+
+            if card.config.kind.allowedSizes.count > 1 {
+                HStack(spacing: 6) {
+                    ForEach(card.config.kind.allowedSizes) { size in
+                        let isChosen = selectedSize == size
+                        Button {
+                            withAnimation(AppleDesignSystem.Springs.snappy) {
+                                selectedSize = size
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: sizeSymbol(for: size))
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                Text(friendlySizeLabel(size))
+                                    .font(.system(size: 12, weight: isChosen ? .bold : .medium))
+                            }
+                            .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .background(isChosen ? Color.white : Color.white.opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Button {
+                addSelectedWidget()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Ajouter")
+                        .font(.system(size: 13.5, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(
+                    LinearGradient(
+                        colors: [Color(red: 0.10, green: 0.52, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.98)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    in: Capsule()
+                )
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+                .shadow(color: Color.blue.opacity(0.32), radius: 8, y: 3)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ajouter le widget \(card.title)")
+        }
+    }
+
+    private func selectCard(_ card: GalleryCardItem) {
+        selectedCardID = card.id
+        if card.config.kind.allowedSizes.contains(selectedSize) {
+            // Conserver la taille choisie si compatible
+        } else {
+            selectedSize = card.config.kind.defaultSize
         }
     }
 
@@ -1830,23 +1979,21 @@ struct WidgetGalleryModal: View {
             )
             return
         }
+        let card = activeCard
+        let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
+        var newConfig = card.config
+        newConfig.size = chosenSize
+
         let currentPage = vm.page
-        let newConfig = CustomWidgetConfig(
-            kind: selectedKind,
-            size: selectedSize,
-            musicStyle: selectedMusicStyle,
-            weatherTheme: selectedWeatherTheme,
-            calendarStyle: selectedCalendarStyle,
-            clockStyle: selectedClockStyle
-        )
-        WidgetManager.shared.updateMusicStyle(for: selectedKind, style: selectedMusicStyle)
-        if selectedKind == .weather {
-            WidgetManager.shared.updateWeatherTheme(selectedWeatherTheme)
-        } else if selectedKind == .calendar {
-            WidgetManager.shared.updateCalendarStyle(selectedCalendarStyle)
-        } else if selectedKind == .clock {
-            WidgetManager.shared.updateClockStyle(selectedClockStyle)
+        WidgetManager.shared.updateMusicStyle(for: newConfig.kind, style: newConfig.musicStyle)
+        if newConfig.kind == .weather {
+            WidgetManager.shared.updateWeatherTheme(newConfig.weatherTheme)
+        } else if newConfig.kind == .calendar {
+            WidgetManager.shared.updateCalendarStyle(newConfig.calendarStyle)
+        } else if newConfig.kind == .clock {
+            WidgetManager.shared.updateClockStyle(newConfig.clockStyle)
         }
+
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             let ok = store.addWidget(newConfig, onPage: currentPage, columns: vm.columns, rows: vm.rows)
             if ok {
@@ -1859,25 +2006,6 @@ struct WidgetGalleryModal: View {
             } else {
                 vm.showToast(loc("widget.resize_failed"))
             }
-        }
-    }
-
-    private func friendlyWidgetDescription(for kind: WidgetKind) -> String {
-        switch kind {
-        case .weather:
-            return "Météo en direct et prévisions sur 7 jours avec 18 thèmes au choix."
-        case .vinylPlayer:
-            return "Tourne-disque vinyle animé pour contrôler votre musique."
-        case .mediaWide:
-            return "Lecteur musical avec pochette d'album et barre de progression."
-        case .clock:
-            return "15 styles d'horloges : analogique, numérique, volets, néon et fuseaux."
-        case .calendar:
-            return "Date du jour, calendrier mensuel et prochains événements synchronisés."
-        case .quickNote:
-            return "Bloc-notes rapide toujours accessible pour noter vos idées."
-        case .system:
-            return "Suivi simple de la batterie, de la mémoire et du processeur."
         }
     }
 
@@ -1896,80 +2024,6 @@ struct WidgetGalleryModal: View {
         case .medium: return "rectangle"
         case .tall: return "rectangle.portrait"
         case .large: return "square.split.2x2"
-        }
-    }
-
-    @ViewBuilder
-    private var themePickerStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
-                switch selectedKind {
-                case .vinylPlayer, .mediaWide:
-                    ForEach(MusicWidgetStyle.allCases) { style in
-                        themePillButton(title: style.title, isSelected: selectedMusicStyle == style) {
-                            selectedMusicStyle = style
-                        }
-                    }
-                case .weather:
-                    ForEach(WeatherWidgetTheme.allCases) { theme in
-                        themePillButton(title: theme.title, isSelected: selectedWeatherTheme == theme) {
-                            selectedWeatherTheme = theme
-                        }
-                    }
-                case .calendar:
-                    ForEach(CalendarWidgetStyle.allCases) { style in
-                        themePillButton(title: style.title, isSelected: selectedCalendarStyle == style) {
-                            selectedCalendarStyle = style
-                        }
-                    }
-                case .clock:
-                    ForEach(ClockWidgetStyle.allCases) { style in
-                        themePillButton(title: style.title, isSelected: selectedClockStyle == style) {
-                            selectedClockStyle = style
-                        }
-                    }
-                case .system, .quickNote:
-                    EmptyView()
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 2)
-        }
-    }
-
-    private func themePillButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            withAnimation(AppleDesignSystem.Springs.snappy) {
-                action()
-            }
-        } label: {
-            Text(title)
-                .font(.system(size: 11.5, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.78))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    isSelected
-                        ? LinearGradient(colors: [Color(red: 0.35, green: 0.32, blue: 0.96), Color(red: 0.56, green: 0.34, blue: 0.96)], startPoint: .leading, endPoint: .trailing)
-                        : LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.10)], startPoint: .leading, endPoint: .trailing),
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().strokeBorder(isSelected ? Color.white.opacity(0.55) : Color.clear, lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func kindIcon(for kind: WidgetKind) -> String {
-        switch kind {
-        case .vinylPlayer: return "opticaldisc.fill"
-        case .weather: return "cloud.sun.fill"
-        case .mediaWide: return "music.note"
-        case .calendar: return "calendar"
-        case .clock: return "clock.fill"
-        case .system: return "gauge.with.needle"
-        case .quickNote: return "square.and.pencil"
         }
     }
 }

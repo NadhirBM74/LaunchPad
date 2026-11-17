@@ -13,7 +13,7 @@ enum SettingsStyle {
 }
 
 struct SettingsPanel: View {
-    static let size = CGSize(width: 640, height: 710)
+    static let size = CGSize(width: 880, height: 640)
     static var targetTab: SettingsTab? = nil
 
     static var initialTab: SettingsTab {
@@ -84,6 +84,8 @@ struct SettingsPanel: View {
     @State private var showAdvancedInGeneral = false
     @State private var showManageAppsInCustomization = false
     @State private var settingsToast: String? = nil
+    @State private var settingsSearchQuery: String = ""
+    @State private var isPlusSectionExpanded: Bool = true
     @AppStorage(PrefKey.autoCheckUpdates) private var autoCheckUpdates = true
     @AppStorage("LaunchpadEnableUsageTips") private var enableUsageTips = true
     @AppStorage("LaunchpadEnableSoundFeedback") private var enableSoundFeedback = true
@@ -92,8 +94,28 @@ struct SettingsPanel: View {
         case interface, apps, notifications, general, license, about, advanced
         var id: String { rawValue }
 
+        static var primaryTabs: [SettingsTab] {
+            [.interface, .apps, .notifications, .general]
+        }
+
+        static var secondaryTabs: [SettingsTab] {
+            [.advanced, .license, .about]
+        }
+
         static var visibleTabs: [SettingsTab] {
             [.interface, .apps, .notifications, .general, .license, .about]
+        }
+
+        var subtitle: String {
+            switch self {
+            case .interface: return "Thème visuel, mode d'affichage et transparence"
+            case .apps: return "Icônes HD, grille, barre de favoris et applications"
+            case .notifications: return "Mises à jour automatiques et alertes visuelles"
+            case .general: return "Ouverture, gestes trackpad, raccourcis et langue"
+            case .advanced: return "Tri, sauvegarde de disposition et réinitialisation"
+            case .license: return "Essai gratuit 7 jours et activation LaunchPad Pro"
+            case .about: return "Version installée, nouveautés et communauté"
+            }
         }
 
         var title: String {
@@ -135,27 +157,49 @@ struct SettingsPanel: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                tabBar
-                    .padding(.top, 28)
-                    .padding(.bottom, 10)
-                Rectangle().fill(SettingsStyle.separator).frame(height: 1)
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        switch selectedTab {
-                        case .interface: interfaceTab
-                        case .apps: customizationAndAppsTab
-                        case .notifications: notificationsTab
-                        case .general: generalTab
-                        case .advanced: advancedTab
-                        case .license: licenseTab
-                        case .about: aboutTab
+            HStack(spacing: 0) {
+                // Barre latérale gauche inspirée de l'interface Apple (Photo de référence 1)
+                appleSidebar
+                    .frame(width: 228)
+                    .background(Color.black.opacity(backgroundStyle == .light ? 0.05 : 0.22))
+
+                // Panneau de contenu principal à droite
+                VStack(spacing: 0) {
+                    rightPaneHeader
+                        .padding(.horizontal, 24)
+                        .padding(.top, 22)
+                        .padding(.bottom, 12)
+
+                    // Barre de recherche intégrée (comme "Search in Albums")
+                    settingsSearchBar
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 14)
+
+                    Divider().background(SettingsStyle.separator)
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            if !settingsSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                searchResultsSection
+                            } else {
+                                switch selectedTab {
+                                case .interface: interfaceTab
+                                case .apps: customizationAndAppsTab
+                                case .notifications: notificationsTab
+                                case .general: generalTab
+                                case .advanced: advancedTab
+                                case .license: licenseTab
+                                case .about: aboutTab
+                                }
+                            }
                         }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
+                        .padding(.bottom, 52)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 52)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(backgroundStyle == .light ? 0.22 : 0.045))
             }
 
             if let settingsToast {
@@ -273,48 +317,259 @@ struct SettingsPanel: View {
 
     // MARK: Onglets (icône au-dessus du titre, onglet actif en violet)
 
-    private var tabBar: some View {
-        HStack(spacing: 6) {
-            ForEach(SettingsTab.visibleTabs) { tab in
-                let selected = (selectedTab == tab) || (tab == .general && selectedTab == .advanced)
+    // MARK: Barre Latérale Apple & En-tête Panneau Droit (Inspiré Photo 1)
+
+    private var appleSidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // En-tête de la barre latérale
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Réglages")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text("LaunchPad")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
                 Button {
-                    withAnimation(.easeOut(duration: 0.15)) { selectedTab = tab }
+                    selectedTab = .about
                 } label: {
-                    VStack(spacing: 5) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 17, weight: selected ? .semibold : .regular))
-                            .frame(height: 20)
-                        HStack(spacing: 3) {
-                            Text(tab.title)
-                                .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                                .lineLimit(1)
-                            if tab == .license && licenseManager.isPro {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(Color.green)
-                            }
-                        }
-                    }
-                    .frame(width: 96, height: 60)
-                    .foregroundStyle(selected ? SettingsStyle.accent : Color.primary.opacity(0.78))
-                    .background {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(SettingsStyle.accent.opacity(0.18))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .strokeBorder(SettingsStyle.accent.opacity(0.35), lineWidth: 1)
-                                }
-                        }
-                    }
-                    .contentShape(Rectangle())
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Color.primary.opacity(0.08), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Onglet \(tab.title)")
+                .help("À propos de LaunchPad")
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
+            .padding(.bottom, 16)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(SettingsTab.primaryTabs) { tab in
+                        sidebarRow(for: tab)
+                    }
+
+                    // Groupe secondaire dépliable (comme "Playlists v")
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isPlusSectionExpanded.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Text("Plus")
+                                .font(.system(size: 13.5, weight: .bold))
+                                .foregroundStyle(.primary.opacity(0.9))
+                            Spacer()
+                            Image(systemName: isPlusSectionExpanded ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 16)
+                        .padding(.bottom, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if isPlusSectionExpanded {
+                        ForEach(SettingsTab.secondaryTabs) { tab in
+                            sidebarRow(for: tab)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 16)
             }
         }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity)
+    }
+
+    private func sidebarRow(for tab: SettingsTab) -> some View {
+        let selected = selectedTab == tab
+        return Button {
+            withAnimation(.easeOut(duration: 0.16)) {
+                settingsSearchQuery = ""
+                selectedTab = tab
+            }
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(selected ? .white : (tab == .license && licenseManager.isPro ? Color.yellow : Color.secondary))
+                    .frame(width: 20, height: 20)
+
+                Text(tab.title)
+                    .font(.system(size: 13.5, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected ? .white : .primary.opacity(0.88))
+                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                if tab == .license && licenseManager.isPro {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.green)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8.5)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(selected ? Color.primary.opacity(backgroundStyle == .light ? 0.14 : 0.16) : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Onglet \(tab.title)")
+    }
+
+    private var rightPaneHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(settingsSearchQuery.isEmpty ? selectedTab.title : "Résultats de recherche")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.primary)
+                Text(settingsSearchQuery.isEmpty ? selectedTab.subtitle : "Accédez directement au réglage souhaité")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                NotificationCenter.default.post(name: .closeSettings, object: nil)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(Color.primary.opacity(0.08), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Fermer les réglages")
+            .accessibilityLabel("Fermer les réglages")
+        }
+    }
+
+    private var settingsSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("Rechercher un réglage (ex : icônes, thème, gestes, notifications…)", text: $settingsSearchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+            if !settingsSearchQuery.isEmpty {
+                Button {
+                    settingsSearchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private struct SettingsSearchShortcut: Identifiable {
+        let id = UUID()
+        let title: String
+        let description: String
+        let icon: String
+        let tab: SettingsTab
+        let keywords: String
+    }
+
+    private var searchableShortcuts: [SettingsSearchShortcut] {
+        [
+            SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd"),
+            SettingsSearchShortcut(title: "Thème et transparence", description: "Liquid Glass, Verre, Sombre ou Clair et intensité du fond", icon: "paintpalette.fill", tab: .interface, keywords: "theme apparence liquid glass sombre clair transparence flou"),
+            SettingsSearchShortcut(title: "Taille des icônes & grille", description: "Colonnes, lignes, échelle des icônes et barre de favoris", icon: "square.grid.3x3.fill", tab: .apps, keywords: "grille taille colonnes lignes echelle favoris labels"),
+            SettingsSearchShortcut(title: "Gestes Trackpad & Raccourci clavier", description: "Pincement à 3/4 doigts, touche F4 et raccourci global", icon: "hand.pinch.fill", tab: .general, keywords: "geste trackpad pincer clavier raccourci f4 coin actif"),
+            SettingsSearchShortcut(title: "Notifications & Mises à jour auto", description: "Alertes de nouvelles versions et bannières visuelles", icon: "bell.badge.fill", tab: .notifications, keywords: "notification alerte mise a jour automatique banner"),
+            SettingsSearchShortcut(title: "Apple Music & Spotify", description: "Connecter vos services musicaux pour les widgets", icon: "music.note", tab: .apps, keywords: "musique spotify apple music widget"),
+            SettingsSearchShortcut(title: "Sauvegarde & Réinitialisation", description: "Exporter/importer votre disposition ou réinitialiser", icon: "externaldrive.fill", tab: .advanced, keywords: "sauvegarde export import reinitialiser tri launchos"),
+            SettingsSearchShortcut(title: "Licence LaunchPad Pro", description: "Essai gratuit 7 jours et activation de clé", icon: "crown.fill", tab: .license, keywords: "licence pro essai cle activation"),
+            SettingsSearchShortcut(title: "À propos & Version", description: "Vérifier les mises à jour et informations de version", icon: "info.circle.fill", tab: .about, keywords: "apropos version update github discord")
+        ]
+    }
+
+    @ViewBuilder
+    private var searchResultsSection: some View {
+        let q = settingsSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let matches = searchableShortcuts.filter {
+            $0.title.lowercased().contains(q) || $0.description.lowercased().contains(q) || $0.keywords.lowercased().contains(q)
+        }
+        if matches.isEmpty {
+            SettingsCardBox {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary)
+                    Text("Aucun réglage trouvé pour « \(settingsSearchQuery) »")
+                        .font(.system(size: 13.5, weight: .semibold))
+                    Text("Essayez « icônes », « thème », « notifications » ou « trackpad ».")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            }
+        } else {
+            SettingsCardBox {
+                ForEach(Array(matches.enumerated()), id: \.element.id) { idx, item in
+                    if idx > 0 { SettingsSeparator() }
+                    Button {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            selectedTab = item.tab
+                            settingsSearchQuery = ""
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 32, height: 32)
+                                .background(SettingsStyle.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                    .font(.system(size: 13.5, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                Text(item.description)
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(item.tab.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.primary.opacity(0.08), in: Capsule())
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     // MARK: Notifications (Gestion simple et claire des alertes)
