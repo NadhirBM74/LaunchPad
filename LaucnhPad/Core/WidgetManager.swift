@@ -48,8 +48,14 @@ final class WidgetManager: ObservableObject {
 
         // Widgets
         if let data = defaults.data(forKey: PrefKey.customWidgetsData),
-           let decoded = try? JSONDecoder().decode([CustomWidgetConfig].self, from: data),
+           var decoded = try? JSONDecoder().decode([CustomWidgetConfig].self, from: data),
            !decoded.isEmpty {
+            // S'assure que tous les types de widgets (dont Calendrier) existent dans la liste
+            for def in Self.defaultWidgets() where !decoded.contains(where: { $0.kind == def.kind }) {
+                var copy = def
+                copy.order = decoded.count
+                decoded.append(copy)
+            }
             self.widgets = decoded
         } else {
             self.widgets = Self.defaultWidgets()
@@ -143,6 +149,42 @@ final class WidgetManager: ObservableObject {
         saveWidgets()
     }
 
+    func updateMusicStyle(for kind: WidgetKind, style: MusicWidgetStyle) {
+        guard let idx = widgets.firstIndex(where: { $0.kind == kind }) else { return }
+        widgets[idx].musicStyle = style
+        saveWidgets()
+    }
+
+    func updateWeatherTheme(_ theme: WeatherWidgetTheme) {
+        guard let idx = widgets.firstIndex(where: { $0.kind == .weather }) else { return }
+        widgets[idx].weatherTheme = theme
+        saveWidgets()
+    }
+
+    func updateCalendarStyle(_ style: CalendarWidgetStyle) {
+        guard let idx = widgets.firstIndex(where: { $0.kind == .calendar }) else { return }
+        widgets[idx].calendarStyle = style
+        saveWidgets()
+    }
+
+    func updateClockStyle(
+        _ style: ClockWidgetStyle,
+        format24h: Bool? = nil,
+        showSeconds: Bool? = nil,
+        showDate: Bool? = nil,
+        fontDesign: String? = nil,
+        accentColor: String? = nil
+    ) {
+        guard let idx = widgets.firstIndex(where: { $0.kind == .clock }) else { return }
+        widgets[idx].clockStyle = style
+        if let format24h { widgets[idx].clockFormat24h = format24h }
+        if let showSeconds { widgets[idx].clockShowSeconds = showSeconds }
+        if let showDate { widgets[idx].clockShowDate = showDate }
+        if let fontDesign { widgets[idx].clockFontDesign = fontDesign }
+        if let accentColor { widgets[idx].clockAccentColor = accentColor }
+        saveWidgets()
+    }
+
     func updateWeather(city: String, unit: String, temp: Int, condition: String, feelsLike: Int) {
         guard let idx = widgets.firstIndex(where: { $0.kind == .weather }) else { return }
         widgets[idx].weatherCity = city
@@ -168,6 +210,17 @@ final class WidgetManager: ObservableObject {
         saveWidgets()
     }
 
+    func resetWidget(_ kind: WidgetKind) {
+        guard let def = Self.defaultWidgets().first(where: { $0.kind == kind }),
+              let idx = widgets.firstIndex(where: { $0.kind == kind }) else { return }
+        let wasEnabled = widgets[idx].isEnabled
+        let order = widgets[idx].order
+        widgets[idx] = def
+        widgets[idx].isEnabled = wasEnabled
+        widgets[idx].order = order
+        saveWidgets()
+    }
+
     func resetToDefaults() {
         self.position = .leftSide
         self.glowColor = .none
@@ -181,64 +234,76 @@ final class WidgetManager: ObservableObject {
 
     static func defaultWidgets() -> [CustomWidgetConfig] {
         return [
-            // 1. Lecteur Vinyle (Haut gauche)
+            // 1. Lecteur Vinyle Marbré Cyan (Photo de Référence 3)
             CustomWidgetConfig(
                 kind: .vinylPlayer,
                 isEnabled: true,
                 size: .medium,
                 order: 0,
-                musicTrack: "Supercut",
-                musicArtist: "Lorde",
-                musicAlbum: "Melodrama",
+                musicStyle: .vinylSplatterWide,
+                musicTrack: "Red Velvet",
+                musicArtist: "Past Alone",
+                musicAlbum: "Water (Deluxe)",
                 musicIsPlaying: true,
-                musicElapsedSeconds: 43,
-                musicTotalSeconds: 192
+                musicElapsedSeconds: 80,
+                musicTotalSeconds: 147
             ),
-            // 2. Météo Grand Format (Bas gauche)
+            // 2. Météo Grand Format (Photo de Référence 5)
             CustomWidgetConfig(
                 kind: .weather,
                 isEnabled: true,
                 size: .tall,
                 order: 1,
+                weatherTheme: .appleMinimal,
                 weatherCity: "New York",
                 weatherUnit: "F",
                 weatherTemp: 69,
-                weatherCondition: "Cloudy",
-                weatherFeelsLike: 68
+                weatherCondition: "Rainy",
+                weatherFeelsLike: 69
             ),
-            // 3. Lecteur Horizontal Complet
+            // 3. Lecteur Full Cover + Pilule (Photo de Référence 3)
             CustomWidgetConfig(
                 kind: .mediaWide,
                 isEnabled: true,
                 size: .medium,
                 order: 2,
+                musicStyle: .fullBleedPill,
                 musicTrack: "Red Velvet",
                 musicArtist: "Past Alone",
                 musicAlbum: "Water (Deluxe)",
                 musicIsPlaying: false,
-                musicElapsedSeconds: 6,
-                musicTotalSeconds: 257
+                musicElapsedSeconds: 80,
+                musicTotalSeconds: 147
             ),
-            // 4. Horloge Apple Style
+            // 4. Calendrier Date Compacte (Photo de Référence 6)
+            CustomWidgetConfig(
+                kind: .calendar,
+                isEnabled: false,
+                size: .small,
+                order: 3,
+                calendarStyle: .compactDate
+            ),
+            // 5. Horloge Apple Analogique Floutée (Photo de Référence 7)
             CustomWidgetConfig(
                 kind: .clock,
                 isEnabled: false,
                 size: .small,
-                order: 3
+                order: 4,
+                clockStyle: .appleAnalog
             ),
-            // 5. Moniteur Système
+            // 6. Moniteur Système
             CustomWidgetConfig(
                 kind: .system,
                 isEnabled: false,
                 size: .medium,
-                order: 4
+                order: 5
             ),
-            // 6. Note Rapide
+            // 7. Note Rapide
             CustomWidgetConfig(
                 kind: .quickNote,
                 isEnabled: false,
                 size: .small,
-                order: 5
+                order: 6
             ),
         ]
     }

@@ -1,0 +1,1047 @@
+import SwiftUI
+import AppKit
+import Combine
+
+// MARK: - Styles de Widgets de Musique (Fidèles à la Photo de Référence 3)
+
+public enum MusicWidgetStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    case fullBleedPill = "fullBleedPill"         // Pochette plein écran + pilule sombre en haut (Photo 3 Bas-Gauche, Bas-Milieu, Bas-Droite)
+    case vinylSplatterWide = "vinylSplatterWide" // Vinyle marbré/splatter + carte givrée claire (Photo 3 Haut-Gauche & Haut-Droite)
+    case vinylWhiteGrooved = "vinylWhiteGrooved" // Vinyle blanc microsillon + carte claire (Photo 3 Col 2 Haut)
+    case framedEditorial = "framedEditorial"     // Pochette encadrée sur carte claire givrée (Photo 3 Col 3 Haut & Bas, Bas-Droite-Bas)
+    case classicTurntable = "classicTurntable"   // Platine vinyle classique avec bras de lecture
+    case adaptiveGlass = "adaptiveGlass"         // Liquid Glass teinté par la pochette d'album
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .fullBleedPill: return "Full Cover + Pilule (Réf. Orange)"
+        case .vinylSplatterWide: return "Vinyle Marbré Cyan (Réf. Haut)"
+        case .vinylWhiteGrooved: return "Vinyle Blanc Studio (Réf. Tall)"
+        case .framedEditorial: return "Cadre Éditorial Clair (Réf. Centre)"
+        case .classicTurntable: return "Platine & Bras de Lecture"
+        case .adaptiveGlass: return "Liquid Glass Adaptatif"
+        }
+    }
+}
+
+// MARK: - Suivi Fluide de Rotation du Disque Vinyle
+
+@MainActor
+final class MusicVinylRotationTracker {
+    var angle: Double = 0
+    var lastDate: Date? = nil
+    let speedDegreesPerSecond: Double = 22.0
+
+    func advance(to date: Date, isSpinning: Bool) -> Double {
+        guard isSpinning else {
+            lastDate = nil
+            return angle
+        }
+        if let last = lastDate {
+            let dt = min(max(0, date.timeIntervalSince(last)), 0.1)
+            angle = (angle + dt * speedDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+        }
+        lastDate = date
+        return angle
+    }
+
+    func reset() {
+        lastDate = nil
+    }
+}
+
+// MARK: - Illustration "Red Velvet / Past Alone" Haute Fidélité (Fallback & Démo Photo 3)
+
+struct RedVelvetArtworkView: View {
+    var showParentalAndSignature: Bool = true
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            ZStack {
+                // Fond studio rouge-orangé intense fidèle à la pochette de la Photo 3
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.88, green: 0.20, blue: 0.03),
+                        Color(red: 0.76, green: 0.12, blue: 0.02),
+                        Color(red: 0.42, green: 0.06, blue: 0.01)
+                    ],
+                    startPoint: .topTrailing,
+                    endPoint: .bottomLeading
+                )
+
+                // Halo d'éclairage studio latéral chaud
+                RadialGradient(
+                    colors: [
+                        Color(red: 1.00, green: 0.34, blue: 0.06).opacity(0.85),
+                        Color.clear
+                    ],
+                    center: UnitPoint(x: 0.78, y: 0.35),
+                    startRadius: 4,
+                    endRadius: max(w, h) * 0.72
+                )
+
+                // Silhouette artistique stylisée en clair-obscur (portrait de profil pensé)
+                Canvas { context, size in
+                    let cw = size.width
+                    let ch = size.height
+
+                    // Épaules / veste texturée sombre à motifs ambrés
+                    var jacket = Path()
+                    jacket.move(to: CGPoint(x: 0, y: ch))
+                    jacket.addLine(to: CGPoint(x: 0, y: ch * 0.46))
+                    jacket.addQuadCurve(
+                        to: CGPoint(x: cw * 0.62, y: ch),
+                        control: CGPoint(x: cw * 0.38, y: ch * 0.56)
+                    )
+                    jacket.closeSubpath()
+                    context.fill(
+                        jacket,
+                        with: .linearGradient(
+                            Gradient(colors: [
+                                Color(red: 0.14, green: 0.08, blue: 0.04),
+                                Color(red: 0.06, green: 0.04, blue: 0.02)
+                            ]),
+                            startPoint: CGPoint(x: 0, y: ch * 0.5),
+                            endPoint: CGPoint(x: cw * 0.6, y: ch)
+                        )
+                    )
+
+                    // Portrait éclairé par la droite (tons ambre/cuivre chauds et ombres profondes)
+                    let headRect = CGRect(x: cw * 0.24, y: ch * 0.10, width: cw * 0.48, height: ch * 0.56)
+                    let headPath = Path(roundedRect: headRect, cornerRadius: cw * 0.22)
+                    context.fill(
+                        headPath,
+                        with: .linearGradient(
+                            Gradient(colors: [
+                                Color(red: 0.85, green: 0.45, blue: 0.18),
+                                Color(red: 0.38, green: 0.15, blue: 0.06),
+                                Color(red: 0.10, green: 0.05, blue: 0.03)
+                            ]),
+                            startPoint: CGPoint(x: cw * 0.72, y: ch * 0.28),
+                            endPoint: CGPoint(x: cw * 0.24, y: ch * 0.52)
+                        )
+                    )
+
+                    // Cheveux bouclés sombres au sommet
+                    for i in 0..<7 {
+                        let cx = cw * (0.28 + CGFloat(i) * 0.065)
+                        let cy = ch * (0.11 + CGFloat(i % 2) * 0.025)
+                        let r = cw * 0.09
+                        let curl = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 1.6))
+                        context.fill(curl, with: .color(Color(red: 0.09, green: 0.04, blue: 0.02)))
+                    }
+                }
+
+                // Signature néon vert "VEXLOR" en bas au centre comme sur la Photo 3
+                if showParentalAndSignature && min(w, h) > 95 {
+                    VStack {
+                        Spacer()
+                        Text("VEXLOR")
+                            .font(.system(size: min(w, h) * 0.065, weight: .black, design: .serif))
+                            .italic()
+                            .tracking(1.5)
+                            .foregroundStyle(Color(red: 0.18, green: 0.96, blue: 0.54))
+                            .shadow(color: Color.black.opacity(0.6), radius: 3, y: 1)
+                            .padding(.bottom, h * 0.05)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Disques Vinyles Haute Fidélité (Marbré Cyan Splatter & Blanc Microsillon)
+
+struct ReferenceVinylDiscView: View {
+    enum DiscVariant {
+        case cyanSplatter // Photo 3 Haut-Gauche & Haut-Droite : Vinyle marbré bleu/cyan/blanc
+        case whiteGrooved // Photo 3 Col 2 Haut : Vinyle blanc/argenté microsillon
+        case classicBlack // Vinyle noir classique
+    }
+
+    let size: CGFloat
+    let variant: DiscVariant
+    let artwork: NSImage?
+
+    var body: some View {
+        let labelSize = size * 0.36
+
+        ZStack {
+            switch variant {
+            case .cyanSplatter:
+                cyanSplatterDiscBase
+            case .whiteGrooved:
+                whiteGroovedDiscBase
+            case .classicBlack:
+                blackGroovedDiscBase
+            }
+
+            // Sillons concentriques subtils
+            ForEach([0.06, 0.12, 0.18, 0.24, 0.29], id: \.self) { ratio in
+                Circle()
+                    .strokeBorder(
+                        variant == .classicBlack
+                            ? Color.white.opacity(0.08)
+                            : Color.black.opacity(0.06),
+                        lineWidth: 0.65
+                    )
+                    .padding(size * CGFloat(ratio))
+            }
+
+            // Reflet spéculaire diagonal de rotation
+            Circle()
+                .fill(
+                    AngularGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .clear, location: 0.00),
+                            .init(color: .white.opacity(variant == .whiteGrooved ? 0.45 : 0.22), location: 0.12),
+                            .init(color: .clear, location: 0.25),
+                            .init(color: .black.opacity(0.08), location: 0.38),
+                            .init(color: .clear, location: 0.50),
+                            .init(color: .white.opacity(variant == .whiteGrooved ? 0.45 : 0.22), location: 0.62),
+                            .init(color: .clear, location: 0.75),
+                            .init(color: .black.opacity(0.08), location: 0.88),
+                            .init(color: .clear, location: 1.00)
+                        ]),
+                        center: .center,
+                        angle: .degrees(-35)
+                    )
+                )
+                .frame(width: size, height: size)
+
+            // Macaron central : Pochette de l'album (Red Velvet ou piste en cours)
+            ZStack {
+                if let artwork {
+                    Image(nsImage: artwork)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFill()
+                        .frame(width: labelSize, height: labelSize)
+                        .clipShape(Circle())
+                } else {
+                    RedVelvetArtworkView(showParentalAndSignature: false)
+                        .frame(width: labelSize, height: labelSize)
+                        .clipShape(Circle())
+                }
+            }
+            .overlay(
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.55), lineWidth: 1.0)
+            )
+            .shadow(color: .black.opacity(0.22), radius: 3)
+        }
+        .frame(width: size, height: size)
+        .overlay(
+            Circle()
+                .strokeBorder(
+                    variant == .classicBlack ? Color.white.opacity(0.20) : Color.white.opacity(0.65),
+                    lineWidth: 0.9
+                )
+        )
+        .drawingGroup()
+    }
+
+    private var cyanSplatterDiscBase: some View {
+        ZStack {
+            // Base blanche/glace translucide
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.25, green: 0.68, blue: 0.88),
+                            Color(red: 0.78, green: 0.88, blue: 0.95),
+                            Color(red: 0.92, green: 0.95, blue: 0.98)
+                        ],
+                        center: .center,
+                        startRadius: size * 0.14,
+                        endRadius: size * 0.50
+                    )
+                )
+
+            // Halo central turquoise marbré (comme sur la Photo 3 Haut-Droite)
+            Circle()
+                .fill(
+                    AngularGradient(
+                        colors: [
+                            Color(red: 0.22, green: 0.68, blue: 0.90).opacity(0.85),
+                            Color(red: 0.52, green: 0.82, blue: 0.96).opacity(0.65),
+                            Color(red: 0.18, green: 0.56, blue: 0.82).opacity(0.90),
+                            Color(red: 0.68, green: 0.88, blue: 0.96).opacity(0.70),
+                            Color(red: 0.22, green: 0.68, blue: 0.90).opacity(0.85)
+                        ],
+                        center: .center
+                    )
+                )
+                .frame(width: size * 0.72, height: size * 0.72)
+                .blur(radius: size * 0.03)
+
+            // Rayons splatter radiaux (éclaboussures bleues et anthracite sur vinyle)
+            ForEach(0..<24, id: \.self) { i in
+                let angle = Double(i) * 15.0 + Double((i % 3) * 4)
+                let len = size * (i % 2 == 0 ? 0.16 : 0.10)
+                let dist = size * (i % 3 == 0 ? 0.36 : 0.28)
+                Capsule()
+                    .fill(
+                        i % 4 == 0
+                            ? Color(red: 0.22, green: 0.24, blue: 0.32).opacity(0.55)
+                            : Color(red: 0.14, green: 0.58, blue: 0.86).opacity(0.65)
+                    )
+                    .frame(width: max(1.5, size * 0.016), height: len)
+                    .offset(y: -dist)
+                    .rotationEffect(.degrees(angle))
+            }
+        }
+    }
+
+    private var whiteGroovedDiscBase: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.93, green: 0.94, blue: 0.95),
+                            Color(red: 0.86, green: 0.87, blue: 0.89),
+                            Color(red: 0.95, green: 0.96, blue: 0.97)
+                        ],
+                        center: .center,
+                        startRadius: size * 0.15,
+                        endRadius: size * 0.50
+                    )
+                )
+        }
+    }
+
+    private var blackGroovedDiscBase: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color(white: 0.14),
+                        Color(white: 0.06),
+                        Color(white: 0.11),
+                        Color(white: 0.04)
+                    ],
+                    center: .center,
+                    startRadius: size * 0.15,
+                    endRadius: size * 0.50
+                )
+            )
+    }
+}
+
+// MARK: - Composant Principal Unifié des Widgets de Musique (Photo de Référence 3)
+
+struct ReferenceMusicWidgetView: View {
+    let config: CustomWidgetConfig
+    var targetSize: CGSize? = nil
+
+    @ObservedObject private var musicManager = MusicServiceManager.shared
+    @ObservedObject private var widgetManager = WidgetManager.shared
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
+
+    @State private var spinTracker = MusicVinylRotationTracker()
+    @State private var discBounceScale: CGFloat = 1.0
+    @State private var extraDiscRotation: Double = 0
+    @State private var isWindowVisible: Bool = LaunchpadViewModel.isLaunchpadVisible || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+
+    private var reduceMotion: Bool { userReduceMotion || systemReduceMotion }
+
+    private var track: NowPlayingTrack {
+        musicManager.currentTrack
+    }
+
+    /// Titre affiché (Morceau réel en cours, sinon "Red Velvet" comme sur la Photo de Référence 3)
+    private var displayTitle: String {
+        if track.hasTrack && !track.title.isEmpty {
+            return track.title
+        }
+        if !config.musicTrack.isEmpty && config.musicTrack != "Supercut" && config.musicTrack != "Past Alone" {
+            return config.musicTrack
+        }
+        return "Red Velvet"
+    }
+
+    /// Artiste affiché (Artiste réel en cours, sinon "Past Alone" comme sur la Photo de Référence 3)
+    private var displayArtist: String {
+        if track.hasTrack && !track.artist.isEmpty {
+            return track.artist
+        }
+        if !config.musicArtist.isEmpty && config.musicArtist != "Lorde" && config.musicArtist != "Red Velvet" {
+            return config.musicArtist
+        }
+        return "Past Alone"
+    }
+
+    /// Album affiché (Album réel en cours, sinon "Water (Deluxe)" comme sur la Photo de Référence 3)
+    private var displayAlbum: String {
+        if track.hasTrack && !track.album.isEmpty {
+            return track.album
+        }
+        if !config.musicAlbum.isEmpty && config.musicAlbum != "Melodrama" {
+            return config.musicAlbum
+        }
+        return "Water (Deluxe)"
+    }
+
+    private var isPlaying: Bool {
+        if track.hasTrack { return track.isPlaying }
+        if let live = widgetManager.widgets.first(where: { $0.id == config.id }) {
+            return live.musicIsPlaying
+        }
+        return config.musicIsPlaying
+    }
+
+    private var elapsedSeconds: Double {
+        if track.hasTrack { return track.elapsedSeconds }
+        return 80 // 1:20 comme sur la Photo 3
+    }
+
+    private var durationSeconds: Double {
+        if track.hasTrack && track.durationSeconds > 0 { return track.durationSeconds }
+        return 147 // 2:27 comme sur la Photo 3
+    }
+
+    private var isSpinning: Bool {
+        isPlaying && !reduceMotion && isWindowVisible
+    }
+
+    var body: some View {
+        let w = targetSize?.width ?? config.size.width
+        let h = targetSize?.height ?? config.size.height
+        let cornerRadius = widgetManager.cornerRadius
+
+        GeometryReader { geo in
+            let availW = geo.size.width
+            let availH = geo.size.height
+
+            ZStack {
+                switch config.musicStyle {
+                case .fullBleedPill:
+                    fullBleedPillLayout(width: availW, height: availH)
+
+                case .vinylSplatterWide:
+                    vinylSplatterLayout(width: availW, height: availH)
+
+                case .vinylWhiteGrooved:
+                    vinylWhiteGroovedLayout(width: availW, height: availH)
+
+                case .framedEditorial:
+                    framedEditorialLayout(width: availW, height: availH)
+
+                case .classicTurntable, .adaptiveGlass:
+                    vinylSplatterLayout(width: availW, height: availH)
+                }
+            }
+            .frame(width: availW, height: availH)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.65),
+                                Color.white.opacity(0.18),
+                                Color.white.opacity(0.32)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.0
+                    )
+            )
+            .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 7)
+        }
+        .frame(width: w, height: h)
+        .onAppear {
+            musicManager.refreshNowPlaying()
+            if LaunchpadViewModel.isLaunchpadVisible {
+                isWindowVisible = true
+            }
+        }
+        .onDisappear {
+            spinTracker.reset()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
+            let visible = (notif.object as? Bool) ?? false
+            isWindowVisible = visible
+            if !visible { spinTracker.reset() }
+        }
+    }
+
+    // MARK: - 1. Full-Bleed Artwork + Floating Header Pill (Photo 3 Bas-Gauche, Col 2 Bas, Bas-Droite)
+
+    @ViewBuilder
+    private func fullBleedPillLayout(width w: CGFloat, height h: CGFloat) -> some View {
+        let isCompact = (h < 165 || w < 165) && config.size == .small
+        let isTall = h > w * 1.15
+        let pad: CGFloat = isCompact ? 10 : 14
+
+        ZStack {
+            // 1. Pochette plein écran
+            artworkView(width: w, height: h, showSignature: !isCompact)
+
+            // 2. Dégradé subtil en bas pour rendre le titre blanc et la barre 100% lisibles
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(0.10), location: 0.0),
+                    .init(color: Color.clear, location: 0.40),
+                    .init(color: Color.black.opacity(0.38), location: 0.72),
+                    .init(color: Color.black.opacity(0.72), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            // 3. Contenu superposé : Pilule sombre en haut + Titre, Barre 1:20/2:27 et Contrôles en bas
+            VStack(alignment: .leading, spacing: 0) {
+                // Pilule supérieure sombre translucide ("Past Alone / Water (Deluxe)") exactement comme sur la Photo 3
+                HStack(spacing: isCompact ? 7 : 9) {
+                    artworkThumbnail(size: isCompact ? 22 : 28, cornerRadius: isCompact ? 5 : 7)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(displayArtist)
+                            .font(.system(size: isCompact ? 9.5 : 11.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Text(displayAlbum)
+                            .font(.system(size: isCompact ? 8.0 : 9.5, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.80))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if musicManager.isLaunchingRandomTrack {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                .padding(.horizontal, isCompact ? 7 : 9)
+                .padding(.vertical, isCompact ? 5 : 6)
+                .background(
+                    RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
+                        .fill(Color.black.opacity(0.56))
+                        .background(
+                            .ultraThinMaterial,
+                            in: RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
+                )
+
+                Spacer(minLength: 4)
+
+                // Bas : Titre "Red Velvet" aligné à gauche + Timestamps 1:20 / 2:27 + Barre blanche + Contrôles centrés
+                VStack(alignment: .leading, spacing: isCompact ? 3 : 5) {
+                    Text(displayTitle)
+                        .font(.system(size: isTall ? 20 : (isCompact ? 14 : 18), weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
+
+                    progressSection(
+                        textColor: .white.opacity(0.92),
+                        trackColor: .white.opacity(0.32),
+                        fillColor: .white,
+                        isCompact: isCompact
+                    )
+
+                    transportButtonsRow(
+                        color: .white,
+                        iconSize: isCompact ? 11.5 : 14,
+                        spacing: isCompact ? 20 : 28
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, isCompact ? 1 : 2)
+                }
+            }
+            .padding(pad)
+        }
+    }
+
+    // MARK: - 2. Vinyle Marbré Cyan (Photo 3 Haut-Gauche 1×1 Demi-Vinyle & Haut-Droite 2×1 Vinyle Complet)
+
+    @ViewBuilder
+    private func vinylSplatterLayout(width w: CGFloat, height h: CGFloat) -> some View {
+        let isWide = w > h * 1.25
+        let isTall = h > w * 1.18
+
+        ZStack {
+            // Fond de carte givrée gris-clair translucide fidèle à la Photo 3
+            frostedLightCardBackground
+
+            if isWide {
+                // Format Large Horizontal (Photo 3 Haut-Droite) :
+                // Vinyle marbré complet à gauche, Titre + Artiste + Boutons à droite, Barre de progression sur toute la largeur en bas !
+                let discSize = min(h * 0.68, w * 0.44)
+                VStack(spacing: 0) {
+                    HStack(alignment: .center, spacing: 12) {
+                        spinningDiscView(size: discSize, variant: .cyanSplatter)
+                            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+
+                        VStack(spacing: 4) {
+                            Text(displayTitle)
+                                .font(.system(size: min(16, h * 0.115), weight: .bold))
+                                .foregroundStyle(Color(white: 0.08))
+                                .lineLimit(1)
+
+                            Text(displayArtist)
+                                .font(.system(size: min(11.5, h * 0.08), weight: .medium))
+                                .foregroundStyle(Color(white: 0.35))
+                                .lineLimit(1)
+
+                            transportButtonsRow(
+                                color: Color(white: 0.12),
+                                iconSize: min(14, h * 0.095),
+                                spacing: 22
+                            )
+                            .padding(.top, 4)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxHeight: .infinity)
+
+                    progressSection(
+                        textColor: Color(white: 0.20),
+                        trackColor: Color.black.opacity(0.12),
+                        fillColor: Color(white: 0.12),
+                        isCompact: h < 135
+                    )
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            } else if isTall {
+                // Format Tall avec Vinyle Marbré
+                vinylTallInternal(width: w, height: h, variant: .cyanSplatter)
+            } else {
+                // Format Carré / Petit (Photo 3 Haut-Gauche) :
+                // Le disque vinyle marbré déborde du bord supérieur (coupé à mi-hauteur en haut !)
+                let discSize = w * 0.84
+                let isCompact = h < 145
+
+                ZStack(alignment: .bottom) {
+                    // Demi-disque vinyle en haut
+                    spinningDiscView(size: discSize, variant: .cyanSplatter)
+                        .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                        .position(x: w / 2, y: discSize * 0.04)
+
+                    // Infos & Contrôles dans la moitié inférieure
+                    VStack(spacing: isCompact ? 2.5 : 4) {
+                        VStack(spacing: 1) {
+                            Text(displayTitle)
+                                .font(.system(size: isCompact ? 12 : 14, weight: .bold))
+                                .foregroundStyle(Color(white: 0.08))
+                                .lineLimit(1)
+
+                            Text(displayArtist)
+                                .font(.system(size: isCompact ? 8.5 : 10, weight: .medium))
+                                .foregroundStyle(Color(white: 0.36))
+                                .lineLimit(1)
+                        }
+
+                        progressSection(
+                            textColor: Color(white: 0.18),
+                            trackColor: Color.black.opacity(0.14),
+                            fillColor: Color(white: 0.12),
+                            isCompact: true
+                        )
+
+                        transportButtonsRow(
+                            color: Color(white: 0.12),
+                            iconSize: isCompact ? 11 : 13,
+                            spacing: isCompact ? 20 : 26
+                        )
+                    }
+                    .padding(.horizontal, isCompact ? 10 : 14)
+                    .padding(.bottom, isCompact ? 8 : 11)
+                }
+            }
+        }
+    }
+
+    // MARK: - 3. Vinyle Blanc Studio (Photo 3 Col 2 Haut)
+
+    @ViewBuilder
+    private func vinylWhiteGroovedLayout(width w: CGFloat, height h: CGFloat) -> some View {
+        let isWide = w > h * 1.25
+        ZStack {
+            frostedLightCardBackground
+
+            if isWide {
+                let discSize = min(h * 0.68, w * 0.44)
+                VStack(spacing: 0) {
+                    HStack(alignment: .center, spacing: 12) {
+                        spinningDiscView(size: discSize, variant: .whiteGrooved)
+                            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+
+                        VStack(spacing: 4) {
+                            Text(displayTitle)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color(white: 0.08))
+                                .lineLimit(1)
+                            Text(displayArtist)
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(Color(white: 0.36))
+                                .lineLimit(1)
+                            transportButtonsRow(color: Color(white: 0.12), iconSize: 13.5, spacing: 22)
+                                .padding(.top, 4)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxHeight: .infinity)
+
+                    progressSection(
+                        textColor: Color(white: 0.18),
+                        trackColor: Color.black.opacity(0.14),
+                        fillColor: Color(white: 0.12),
+                        isCompact: h < 135
+                    )
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            } else {
+                vinylTallInternal(width: w, height: h, variant: .whiteGrooved)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func vinylTallInternal(width w: CGFloat, height h: CGFloat, variant: ReferenceVinylDiscView.DiscVariant) -> some View {
+        let isSmall = h < 200
+        let discSize = isSmall ? min(w * 0.52, h * 0.44) : min(w * 0.84, h * 0.54)
+
+        VStack(spacing: isSmall ? 4 : 10) {
+            Spacer(minLength: 2)
+
+            spinningDiscView(size: discSize, variant: variant)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+
+            Spacer(minLength: 2)
+
+            VStack(spacing: isSmall ? 1 : 2) {
+                Text(displayTitle)
+                    .font(.system(size: isSmall ? 12.5 : 16, weight: .bold))
+                    .foregroundStyle(Color(white: 0.08))
+                    .lineLimit(1)
+
+                Text(displayArtist)
+                    .font(.system(size: isSmall ? 9 : 11, weight: .medium))
+                    .foregroundStyle(Color(white: 0.36))
+                    .lineLimit(1)
+            }
+
+            progressSection(
+                textColor: Color(white: 0.18),
+                trackColor: Color.black.opacity(0.14),
+                fillColor: Color(white: 0.12),
+                isCompact: isSmall
+            )
+
+            transportButtonsRow(
+                color: Color(white: 0.12),
+                iconSize: isSmall ? 11.5 : 14,
+                spacing: isSmall ? 20 : 28
+            )
+            .padding(.bottom, isSmall ? 4 : 8)
+        }
+        .padding(.horizontal, isSmall ? 10 : 16)
+        .padding(.vertical, isSmall ? 6 : 10)
+    }
+
+    // MARK: - 4. Cadre Éditorial Clair (Photo 3 Col 3 Haut, Col 3 Bas & Bas-Droite-Bas)
+
+    @ViewBuilder
+    private func framedEditorialLayout(width w: CGFloat, height h: CGFloat) -> some View {
+        let isWide = w > h * 1.25
+        let isTall = h > w * 1.18
+        let isCompact = h < 155 && !isWide
+
+        ZStack {
+            frostedLightCardBackground
+
+            if isWide {
+                // Photo 3 Bas-Droite-Bas : Pochette encadrée à gauche + Titre, Artiste, Contrôles à droite
+                let coverSize = min(h - 20, w * 0.42)
+                HStack(spacing: 14) {
+                    artworkView(width: coverSize, height: coverSize, showSignature: false)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
+
+                    VStack(spacing: 6) {
+                        VStack(spacing: 1.5) {
+                            Text(displayTitle)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color(white: 0.08))
+                                .lineLimit(1)
+                            Text(displayArtist)
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(Color(white: 0.36))
+                                .lineLimit(1)
+                        }
+
+                        progressSection(
+                            textColor: Color(white: 0.18),
+                            trackColor: Color.black.opacity(0.14),
+                            fillColor: Color(white: 0.12),
+                            isCompact: true
+                        )
+
+                        transportButtonsRow(
+                            color: Color(white: 0.12),
+                            iconSize: 13,
+                            spacing: 22
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(10)
+            } else {
+                // Photo 3 Col 3 Haut (Carré) & Col 3 Bas (Vertical) :
+                // Pochette encadrée en haut + Infos & Contrôles centrés en bas
+                let pad: CGFloat = isCompact ? 8 : 11
+                let coverW = max(40, w - pad * 2)
+                let coverH = max(36, h * (isTall ? 0.62 : 0.48))
+
+                VStack(spacing: isCompact ? 3 : 6) {
+                    artworkView(width: coverW, height: coverH, showSignature: isTall)
+                        .clipShape(RoundedRectangle(cornerRadius: isCompact ? 10 : 14, style: .continuous))
+                        .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
+
+                    Spacer(minLength: 0)
+
+                    VStack(spacing: 1) {
+                        Text(displayTitle)
+                            .font(.system(size: isCompact ? 11.5 : (isTall ? 15.5 : 13.5), weight: .bold))
+                            .foregroundStyle(Color(white: 0.08))
+                            .lineLimit(1)
+
+                        Text(displayArtist)
+                            .font(.system(size: isCompact ? 8.5 : (isTall ? 10.5 : 9.5), weight: .medium))
+                            .foregroundStyle(Color(white: 0.36))
+                            .lineLimit(1)
+                    }
+
+                    progressSection(
+                        textColor: Color(white: 0.18),
+                        trackColor: Color.black.opacity(0.14),
+                        fillColor: Color(white: 0.12),
+                        isCompact: isCompact
+                    )
+
+                    transportButtonsRow(
+                        color: Color(white: 0.12),
+                        iconSize: isCompact ? 10.5 : 13,
+                        spacing: isCompact ? 18 : 26
+                    )
+                }
+                .padding(pad)
+            }
+        }
+    }
+
+    // MARK: - Sous-composants Partagés (Barre 1:20 / 2:27, Boutons, Pochette, Vinyle Animé)
+
+    private var frostedLightCardBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.90, green: 0.91, blue: 0.92).opacity(0.94),
+                    Color(red: 0.83, green: 0.84, blue: 0.86).opacity(0.92),
+                    Color(red: 0.92, green: 0.93, blue: 0.94).opacity(0.95)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            // Reflet de verre diagonal subtil comme sur la Photo 3
+            LinearGradient(
+                stops: [
+                    .init(color: Color.white.opacity(0.45), location: 0.0),
+                    .init(color: Color.clear, location: 0.45),
+                    .init(color: Color.white.opacity(0.35), location: 0.78),
+                    .init(color: Color.clear, location: 1.0)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func spinningDiscView(size: CGFloat, variant: ReferenceVinylDiscView.DiscVariant) -> some View {
+        TimelineView(.animation(paused: !isSpinning)) { timeline in
+            let angle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
+            ReferenceVinylDiscView(
+                size: size,
+                variant: variant,
+                artwork: track.displayImage
+            )
+            .scaleEffect(discBounceScale)
+            .rotationEffect(.degrees(angle + extraDiscRotation))
+        }
+    }
+
+    @ViewBuilder
+    private func artworkView(width: CGFloat, height: CGFloat, showSignature: Bool) -> some View {
+        if let art = track.artworkImage {
+            Image(nsImage: art)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFill()
+                .frame(width: width, height: height)
+                .clipped()
+        } else {
+            RedVelvetArtworkView(showParentalAndSignature: showSignature)
+                .frame(width: width, height: height)
+                .clipped()
+        }
+    }
+
+    @ViewBuilder
+    private func artworkThumbnail(size: CGFloat, cornerRadius: CGFloat) -> some View {
+        if let art = track.displayImage {
+            Image(nsImage: art)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            RedVelvetArtworkView(showParentalAndSignature: false)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private func progressSection(
+        textColor: Color,
+        trackColor: Color,
+        fillColor: Color,
+        isCompact: Bool
+    ) -> some View {
+        VStack(spacing: isCompact ? 1.5 : 2.5) {
+            HStack {
+                Text(formatTime(Int(elapsedSeconds)))
+                    .font(.system(size: isCompact ? 8.0 : 9.0, weight: .bold))
+                    .foregroundStyle(textColor)
+                    .monospacedDigit()
+                Spacer()
+                Text(formatTime(Int(durationSeconds)))
+                    .font(.system(size: isCompact ? 8.0 : 9.0, weight: .bold))
+                    .foregroundStyle(textColor)
+                    .monospacedDigit()
+            }
+
+            SeekBar(
+                elapsed: elapsedSeconds,
+                duration: max(1, durationSeconds),
+                trackColor: trackColor,
+                fillColor: fillColor,
+                barHeight: isCompact ? 2.5 : 3.2,
+                isEnabled: true
+            ) { fraction in
+                if track.hasTrack {
+                    musicManager.seek(toFraction: fraction)
+                }
+            }
+            .frame(height: isCompact ? 8 : 10)
+        }
+    }
+
+    @ViewBuilder
+    private func transportButtonsRow(color: Color, iconSize: CGFloat, spacing: CGFloat) -> some View {
+        HStack(spacing: spacing) {
+            Button {
+                animateSkip(direction: -1)
+                if track.hasTrack {
+                    musicManager.previousTrack()
+                } else {
+                    musicManager.previousSystemTrack()
+                }
+            } label: {
+                Image(systemName: "backward.end.fill")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundStyle(color)
+                    .frame(width: iconSize + 10, height: iconSize + 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(loc("music.control.previous"))
+
+            Button {
+                animatePlayPause()
+                if track.hasTrack {
+                    musicManager.togglePlayPause()
+                } else {
+                    widgetManager.toggleMusicPlayback(for: config.kind)
+                    musicManager.playRandomMusic()
+                }
+            } label: {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: iconSize * 1.08, weight: .bold))
+                    .foregroundStyle(color)
+                    .frame(width: iconSize + 12, height: iconSize + 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(loc(isPlaying ? "music.control.pause" : "music.control.play"))
+
+            Button {
+                animateSkip(direction: 1)
+                if track.hasTrack {
+                    musicManager.nextTrack()
+                } else {
+                    musicManager.nextSystemTrack()
+                }
+            } label: {
+                Image(systemName: "forward.end.fill")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundStyle(color)
+                    .frame(width: iconSize + 10, height: iconSize + 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(loc("music.control.next"))
+        }
+    }
+
+    private func animateSkip(direction: Int) {
+        guard !reduceMotion else { return }
+        withAnimation(AppleDesignSystem.Springs.bouncy) {
+            extraDiscRotation += Double(direction) * 180.0
+            discBounceScale = 0.94
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+            withAnimation(AppleDesignSystem.Springs.bouncy) {
+                discBounceScale = 1.0
+            }
+        }
+    }
+
+    private func animatePlayPause() {
+        guard !reduceMotion else { return }
+        withAnimation(AppleDesignSystem.Springs.snappy) {
+            discBounceScale = 0.95
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(AppleDesignSystem.Springs.bouncy) {
+                discBounceScale = 1.0
+            }
+        }
+    }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = max(0, seconds) / 60
+        let s = max(0, seconds) % 60
+        return String(format: "%d:%02d", m, s)
+    }
+}

@@ -493,14 +493,22 @@ struct SettingsPanel: View {
             })
             IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
             SettingsSeparator()
-            SettingsRow(loc("interface.icon_color"),
-                        subtitle: loc("interface.icon_color_subtitle")) {
-                Picker("", selection: $iconStyle) {
-                    Text(loc("interface.icon_color_system")).tag("system")
-                    Text(loc("interface.icon_color_original")).tag("original")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("interface.icon_color"))
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Dark, Light, Tinted & Clear Colored Glass (Inspiré des références Apple)")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
-                .labelsHidden().fixedSize()
+                IconAppearanceShowcaseView {
+                    store.reloadIcons()
+                }
             }
+            .padding(.vertical, 10)
         }
         SettingsCardBox {
             SettingsRow(loc("interface.hide_labels")) {
@@ -781,12 +789,36 @@ struct SettingsPanel: View {
                             if config.kind == .weather {
                                 SettingsSeparator()
                                 HStack {
+                                    Text("Thème météo (18 styles)").font(.system(size: 12, weight: .medium))
+                                    Spacer()
+                                    Picker("", selection: Binding(
+                                        get: { config.weatherTheme },
+                                        set: { newTheme in
+                                            widgetManager.updateWeatherTheme(newTheme)
+                                            if let updated = widgetManager.config(for: .weather) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    )) {
+                                        ForEach(WeatherWidgetTheme.allCases) { theme in
+                                            Text(theme.title).tag(theme)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 220)
+                                }
+
+                                SettingsSeparator()
+                                HStack {
                                     Text(loc("widget.weather.city")).font(.system(size: 12))
                                     Spacer()
                                     TextField("", text: Binding(
                                         get: { config.weatherCity },
                                         set: {
                                             widgetManager.updateWeather(city: $0, unit: config.weatherUnit, temp: config.weatherTemp, condition: config.weatherCondition, feelsLike: config.weatherFeelsLike)
+                                            if let updated = widgetManager.config(for: .weather) {
+                                                store.syncWidgetConfig(updated)
+                                            }
                                         }
                                     ))
                                     .textFieldStyle(.roundedBorder)
@@ -801,6 +833,9 @@ struct SettingsPanel: View {
                                         get: { config.weatherCondition },
                                         set: {
                                             widgetManager.updateWeather(city: config.weatherCity, unit: config.weatherUnit, temp: config.weatherTemp, condition: $0, feelsLike: config.weatherFeelsLike)
+                                            if let updated = widgetManager.config(for: .weather) {
+                                                store.syncWidgetConfig(updated)
+                                            }
                                         }
                                     )) {
                                         Text(loc("widget.weather.cond.cloudy")).tag("Cloudy")
@@ -813,11 +848,37 @@ struct SettingsPanel: View {
                             } else if config.kind == .vinylPlayer || config.kind == .mediaWide {
                                 SettingsSeparator()
                                 HStack {
+                                    Text("Design du lecteur").font(.system(size: 12, weight: .medium))
+                                    Spacer()
+                                    Picker("", selection: Binding(
+                                        get: { config.musicStyle },
+                                        set: { newStyle in
+                                            widgetManager.updateMusicStyle(for: config.kind, style: newStyle)
+                                            if let updated = widgetManager.config(for: config.kind) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    )) {
+                                        ForEach(MusicWidgetStyle.allCases) { style in
+                                            Text(style.title).tag(style)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 230)
+                                }
+
+                                SettingsSeparator()
+                                HStack {
                                     Text(loc("widget.music.artist")).font(.system(size: 12))
                                     Spacer()
                                     TextField("", text: Binding(
                                         get: { config.musicArtist },
-                                        set: { widgetManager.updateMusic(track: config.musicTrack, artist: $0, album: config.musicAlbum) }
+                                        set: {
+                                            widgetManager.updateMusic(track: config.musicTrack, artist: $0, album: config.musicAlbum)
+                                            if let updated = widgetManager.config(for: config.kind) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
                                     ))
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 140)
@@ -829,12 +890,126 @@ struct SettingsPanel: View {
                                     Spacer()
                                     TextField("", text: Binding(
                                         get: { config.musicTrack },
-                                        set: { widgetManager.updateMusic(track: $0, artist: config.musicArtist, album: config.musicAlbum) }
+                                        set: {
+                                            widgetManager.updateMusic(track: $0, artist: config.musicArtist, album: config.musicAlbum)
+                                            if let updated = widgetManager.config(for: config.kind) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
                                     ))
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 140)
                                 }
+                            } else if config.kind == .calendar {
+                                SettingsSeparator()
+                                HStack {
+                                    Text("Style de calendrier").font(.system(size: 12, weight: .medium))
+                                    Spacer()
+                                    Picker("", selection: Binding(
+                                        get: { config.calendarStyle },
+                                        set: { newStyle in
+                                            widgetManager.updateCalendarStyle(newStyle)
+                                            if let updated = widgetManager.config(for: .calendar) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    )) {
+                                        ForEach(CalendarWidgetStyle.allCases) { style in
+                                            Text(style.title).tag(style)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 230)
+                                }
+                            } else if config.kind == .clock {
+                                SettingsSeparator()
+                                HStack {
+                                    Text("Design d'horloge (15 styles)").font(.system(size: 12, weight: .medium))
+                                    Spacer()
+                                    Picker("", selection: Binding(
+                                        get: { config.clockStyle },
+                                        set: { newStyle in
+                                            widgetManager.updateClockStyle(newStyle)
+                                            if let updated = widgetManager.config(for: .clock) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    )) {
+                                        ForEach(ClockWidgetStyle.allCases) { style in
+                                            Text(style.title).tag(style)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 230)
+                                }
+
+                                SettingsSeparator()
+                                HStack {
+                                    Text("Format 24 heures").font(.system(size: 12))
+                                    Spacer()
+                                    SettingsSwitch(isOn: Binding(
+                                        get: { config.clockFormat24h },
+                                        set: {
+                                            widgetManager.updateClockStyle(config.clockStyle, format24h: $0)
+                                            if let updated = widgetManager.config(for: .clock) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    ))
+                                }
+
+                                SettingsSeparator()
+                                HStack {
+                                    Text("Afficher les secondes").font(.system(size: 12))
+                                    Spacer()
+                                    SettingsSwitch(isOn: Binding(
+                                        get: { config.clockShowSeconds },
+                                        set: {
+                                            widgetManager.updateClockStyle(config.clockStyle, showSeconds: $0)
+                                            if let updated = widgetManager.config(for: .clock) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    ))
+                                }
+
+                                SettingsSeparator()
+                                HStack {
+                                    Text("Couleur d'accent").font(.system(size: 12))
+                                    Spacer()
+                                    Picker("", selection: Binding(
+                                        get: { config.clockAccentColor },
+                                        set: {
+                                            widgetManager.updateClockStyle(config.clockStyle, accentColor: $0)
+                                            if let updated = widgetManager.config(for: .clock) {
+                                                store.syncWidgetConfig(updated)
+                                            }
+                                        }
+                                    )) {
+                                        Text("Rouge Apple").tag("red")
+                                        Text("Orange").tag("orange")
+                                        Text("Cyan").tag("cyan")
+                                        Text("Violet").tag("purple")
+                                        Text("Vert").tag("green")
+                                        Text("Or").tag("gold")
+                                        Text("Blanc").tag("white")
+                                    }
+                                    .labelsHidden().fixedSize()
+                                }
                             }
+
+                            SettingsSeparator()
+                            HStack {
+                                Spacer()
+                                Button("Réinitialiser ce widget") {
+                                    widgetManager.resetWidget(config.kind)
+                                    if let updated = widgetManager.config(for: config.kind) {
+                                        store.syncWidgetConfig(updated)
+                                    }
+                                }
+                                .controlSize(.small)
+                            }
+                            .padding(.top, 2)
                         }
                     }
                 }

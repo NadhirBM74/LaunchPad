@@ -3498,13 +3498,19 @@ struct WidgetHostView: View, Equatable {
     var body: some View {
         switch config.kind {
         case .vinylPlayer:
-            VinylPlayerWidgetView(config: config, targetSize: targetSize)
-        case .weather:
-            WeatherWidgetView(config: config, targetSize: targetSize)
+            if config.musicStyle == .classicTurntable {
+                VinylPlayerWidgetView(config: config, targetSize: targetSize)
+            } else {
+                ReferenceMusicWidgetView(config: config, targetSize: targetSize)
+            }
         case .mediaWide:
-            MediaWideWidgetView(config: config, targetSize: targetSize)
+            ReferenceMusicWidgetView(config: config, targetSize: targetSize)
+        case .weather:
+            PremiumWeatherWidgetView(config: config, targetSize: targetSize)
+        case .calendar:
+            PremiumCalendarWidgetView(config: config, targetSize: targetSize)
         case .clock:
-            ClockWidgetView(config: config, targetSize: targetSize)
+            PremiumClockWidgetView(config: config, targetSize: targetSize)
         case .system:
             SystemWidgetView(config: config, targetSize: targetSize)
         case .quickNote:

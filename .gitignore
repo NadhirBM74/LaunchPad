@@ -4,6 +4,8 @@
 .LSOverride
 Icon?
 "Icon\r"
+!LaucnhPad/Icons/
+!LaucnhPad/Icons/**
 
 # Xcode
 build/

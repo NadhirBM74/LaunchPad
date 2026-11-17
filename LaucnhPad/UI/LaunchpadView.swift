@@ -210,6 +210,11 @@ struct LaunchpadRootView: View {
     @ViewBuilder
     private var mainMenuItems: some View {
         Button(loc("menu.settings")) { vm.onOpenSettings() }
+        Button("Galerie de widgets…") { vm.showWidgetGallery = true }
+        Button("Nouveau dossier…") {
+            let folderID = store.createCustomFolder(name: "Nouveau dossier", style: .frostedGlass)
+            vm.openFolder(folderID)
+        }
         Button(loc("menu.reorganize")) { vm.requestReorganize() }
         Button(loc("menu.refresh")) { store.refresh() }
         Divider()
@@ -663,12 +668,22 @@ struct TileModel: Equatable {
     var title: String
     var icon: NSImage?
     var folderIcons: [NSImage]?
+    var folderStyle: FolderVisualStyle = .frostedGlass
+    var folderColorHex: String? = nil
+    var folderSymbol: String? = nil
     var isRunning: Bool
     var isLocked: Bool = false
     var tintColor: Color? = nil
 
     nonisolated static func == (lhs: TileModel, rhs: TileModel) -> Bool {
-        guard lhs.title == rhs.title, lhs.isRunning == rhs.isRunning, lhs.isLocked == rhs.isLocked, lhs.tintColor == rhs.tintColor, lhs.icon === rhs.icon else { return false }
+        guard lhs.title == rhs.title,
+              lhs.isRunning == rhs.isRunning,
+              lhs.isLocked == rhs.isLocked,
+              lhs.tintColor == rhs.tintColor,
+              lhs.folderStyle == rhs.folderStyle,
+              lhs.folderColorHex == rhs.folderColorHex,
+              lhs.folderSymbol == rhs.folderSymbol,
+              lhs.icon === rhs.icon else { return false }
         switch (lhs.folderIcons, rhs.folderIcons) {
         case (nil, nil): return true
         case let (a?, b?): return a.count == b.count && zip(a, b).allSatisfy { $0 === $1 }
@@ -683,8 +698,16 @@ struct TileModel: Equatable {
             let running = showRunning && (store.catalog[id].map(store.isRunning) ?? false)
             return TileModel(title: store.displayName(id), icon: IconCache.shared.icon(for: id), folderIcons: nil, isRunning: running, isLocked: false)
         case .folder(let folder):
-            return TileModel(title: folder.name, icon: nil,
-                             folderIcons: folder.apps.prefix(9).map { IconCache.shared.icon(for: $0) }, isRunning: false, isLocked: folder.isLocked)
+            return TileModel(
+                title: folder.name,
+                icon: nil,
+                folderIcons: folder.apps.prefix(9).map { IconCache.shared.icon(for: $0) },
+                folderStyle: folder.style,
+                folderColorHex: folder.colorHex,
+                folderSymbol: folder.iconSymbol,
+                isRunning: false,
+                isLocked: folder.isLocked
+            )
         case .widget(let config):
             return TileModel(title: config.kind.title, icon: nil, folderIcons: nil, isRunning: false, isLocked: false)
         }
@@ -872,13 +895,19 @@ struct IconImage: View {
 
     var body: some View {
         if let icons = model.folderIcons {
-            FolderIconView(icons: icons, size: size)
+            PremiumFolderIconView(
+                icons: icons,
+                size: size,
+                style: model.folderStyle,
+                customColorHex: model.folderColorHex,
+                customSymbol: model.folderSymbol
+            )
         } else if let icon = model.icon {
             let isTinted = model.tintColor != nil
             // L'ombre est déjà intégrée à l'image en cache (aucun calcul d'ombre à l'affichage).
             Image(nsImage: icon)
                 .resizable()
-                .interpolation(.medium)
+                .interpolation(.high)
                 .antialiased(true)
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
@@ -897,28 +926,7 @@ struct FolderIconView: View {
     let size: CGFloat
 
     var body: some View {
-        let gap = size * 0.05
-        let mini = (size * 0.8 - gap * 2) / 3
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
-                .fill(Color.white.opacity(0.24))
-                .overlay(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous).stroke(Color.white.opacity(0.28), lineWidth: 0.5))
-            VStack(spacing: gap) {
-                ForEach(0..<3, id: \.self) { row in
-                    HStack(spacing: gap) {
-                        ForEach(0..<3, id: \.self) { column in
-                            let index = row * 3 + column
-                            if index < icons.count {
-                                Image(nsImage: icons[index]).resizable().interpolation(.low).frame(width: mini, height: mini)
-                            } else {
-                                Color.clear.frame(width: mini, height: mini)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .frame(width: size, height: size)
+        PremiumFolderIconView(icons: icons, size: size)
     }
 }
 
@@ -1003,6 +1011,39 @@ struct ItemContextMenu: View {
             }
         case .folder(let folder):
             Button(loc("menu.open_folder")) { vm.openFolder(folder.id) }
+            Menu("Style du dossier") {
+                ForEach(FolderVisualStyle.allCases) { styleOpt in
+                    Button("\(folder.style == styleOpt ? "✓ " : "")\(styleOpt.title)") {
+                        store.updateFolderCustomization(
+                            folder.id,
+                            style: styleOpt,
+                            colorHex: folder.colorHex,
+                            iconSymbol: folder.iconSymbol
+                        )
+                    }
+                }
+            }
+            Menu("Couleur du dossier") {
+                ForEach([
+                    ("#E5B892", "Sable Doré"),
+                    ("#FF2442", "Rouge Carmin"),
+                    ("#D8DCE2", "Argent"),
+                    ("#141416", "Noir Onyx"),
+                    ("#0A84FF", "Bleu Apple"),
+                    ("#30D158", "Vert Émeraude"),
+                    ("#BF5AF2", "Violet"),
+                    ("#FF9F0A", "Ambre")
+                ], id: \.0) { hex, label in
+                    Button("\((folder.colorHex?.uppercased() == hex) ? "✓ " : "")\(label)") {
+                        store.updateFolderCustomization(
+                            folder.id,
+                            style: folder.style,
+                            colorHex: hex,
+                            iconSymbol: folder.iconSymbol
+                        )
+                    }
+                }
+            }
             Button(folder.isLocked ? loc("menu.unprotect_touchid") : "\(loc("menu.protect_touchid"))\(licenseManager.isPro ? "" : " (Pro)")") {
                 vm.toggleFolderLock(folder)
             }
@@ -1032,6 +1073,64 @@ struct ItemContextMenu: View {
                     }
                 }
             }
+
+            if config.kind == .vinylPlayer || config.kind == .mediaWide {
+                Menu("Style de lecteur musical") {
+                    ForEach(MusicWidgetStyle.allCases) { mStyle in
+                        Button("\(config.musicStyle == mStyle ? "✓ " : "")\(mStyle.title)") {
+                            var updated = config
+                            updated.musicStyle = mStyle
+                            WidgetManager.shared.updateMusicStyle(for: config.kind, style: mStyle)
+                            store.updateWidgetConfig(updated)
+                        }
+                    }
+                }
+            } else if config.kind == .weather {
+                Menu("Thème météo (18 thèmes)") {
+                    ForEach(WeatherWidgetTheme.allCases) { wTheme in
+                        Button("\(config.weatherTheme == wTheme ? "✓ " : "")\(wTheme.title)") {
+                            var updated = config
+                            updated.weatherTheme = wTheme
+                            WidgetManager.shared.updateWeatherTheme(wTheme)
+                            store.updateWidgetConfig(updated)
+                        }
+                    }
+                }
+            } else if config.kind == .calendar {
+                Menu("Style de calendrier") {
+                    ForEach(CalendarWidgetStyle.allCases) { cStyle in
+                        Button("\(config.calendarStyle == cStyle ? "✓ " : "")\(cStyle.title)") {
+                            var updated = config
+                            updated.calendarStyle = cStyle
+                            WidgetManager.shared.updateCalendarStyle(cStyle)
+                            store.updateWidgetConfig(updated)
+                        }
+                    }
+                }
+            } else if config.kind == .clock {
+                Menu("Design de l'horloge (15 styles)") {
+                    ForEach(ClockWidgetStyle.allCases) { clkStyle in
+                        Button("\(config.clockStyle == clkStyle ? "✓ " : "")\(clkStyle.title)") {
+                            var updated = config
+                            updated.clockStyle = clkStyle
+                            WidgetManager.shared.updateClockStyle(clkStyle)
+                            store.updateWidgetConfig(updated)
+                        }
+                    }
+                }
+            }
+
+            Button("Réinitialiser ce widget") {
+                WidgetManager.shared.resetWidget(config.kind)
+                if let def = WidgetManager.shared.config(for: config.kind) {
+                    var updated = def
+                    updated.id = config.id
+                    updated.size = config.size
+                    updated.isEnabled = true
+                    store.updateWidgetConfig(updated)
+                }
+            }
+
             Divider()
             Button(loc("widget.menu.remove"), role: .destructive) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
@@ -1042,7 +1141,7 @@ struct ItemContextMenu: View {
     }
 }
 
-// MARK: - Dossier ouvert
+// MARK: - Dossier ouvert (Inspiré de la Photo de Référence 4 + Personnalisation Complète)
 
 struct FolderOverlayView: View {
     @ObservedObject var vm: LaunchpadViewModel
@@ -1055,6 +1154,8 @@ struct FolderOverlayView: View {
     let reduceMotion: Bool
 
     @State private var title = ""
+    @State private var isShowingCustomizer = false
+    @State private var isShowingAppPicker = false
     @FocusState private var titleFocused: Bool
     @AppStorage(PrefKey.backgroundStyle) private var theme: BackgroundStyle = .liquidGlass
 
@@ -1068,52 +1169,145 @@ struct FolderOverlayView: View {
     }
 
     var body: some View {
-        let fm = FolderMetrics.make(rootSize: rootSize, grid: grid, count: max(folder.apps.count, 1))
+        let fm = FolderMetrics.make(rootSize: rootSize, grid: grid, count: max(folder.apps.count, 3))
         ZStack(alignment: .topLeading) {
-            Color.black.opacity(0.3)
+            Color.black.opacity(0.32)
                 .contentShape(Rectangle())
                 .onTapGesture { vm.closeFolder() }
 
             if theme == .liquidGlass {
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .liquidGlassCard(cornerRadius: 32, interactive: false, borderLineWidth: 1.2)
-                    .shadow(color: .black.opacity(0.40), radius: 32, x: 0, y: 16)
-                    .shadow(color: .black.opacity(0.18), radius: 6, x: 0, y: 3)
+                RoundedRectangle(cornerRadius: 36, style: .continuous)
+                    .liquidGlassCard(cornerRadius: 36, interactive: false, borderLineWidth: 1.2)
+                    .shadow(color: .black.opacity(0.45), radius: 36, x: 0, y: 18)
+                    .shadow(color: .black.opacity(0.20), radius: 6, x: 0, y: 3)
                     .frame(width: fm.panelRect.width, height: fm.panelRect.height)
                     .contentShape(Rectangle())
                     .onTapGesture { titleFocused = false }
                     .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
             } else {
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(theme == .dark ? Color.black.opacity(0.4) : Color.white.opacity(0.06))
-                    .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Color.white.opacity(0.18)))
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(theme == .dark ? Color.black.opacity(0.55) : Color.white.opacity(0.10))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 34, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).stroke(Color.white.opacity(0.22), lineWidth: 1.0))
                     .frame(width: fm.panelRect.width, height: fm.panelRect.height)
                     .contentShape(Rectangle())
                     .onTapGesture { titleFocused = false }
                     .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
             }
 
-            HStack(spacing: 8) {
-                if folder.isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .help("Dossier protégé par Touch ID")
+            // En-tête du dossier : Titre éditable + Boutons Personnaliser (pinceau) & Ajouter des apps (+)
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(AppleDesignSystem.Springs.snappy) {
+                        isShowingCustomizer.toggle()
+                        if isShowingCustomizer { isShowingAppPicker = false }
+                    }
+                } label: {
+                    Image(systemName: "paintbrush.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isShowingCustomizer ? .black : .white.opacity(0.85))
+                        .frame(width: 28, height: 28)
+                        .background(isShowingCustomizer ? Color.white : Color.white.opacity(0.12), in: Circle())
                 }
-                TextField("Nom du dossier", text: $title)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 22, weight: .semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
-                    .focused($titleFocused)
-                    .onSubmit { commitTitle() }
+                .buttonStyle(.plain)
+                .help("Personnaliser le style, la couleur et l'icône du dossier")
+
+                Spacer(minLength: 4)
+
+                HStack(spacing: 8) {
+                    if folder.isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .help("Dossier protégé par Touch ID")
+                    }
+                    TextField("Nom du dossier", text: $title)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 22, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white)
+                        .focused($titleFocused)
+                        .onSubmit { commitTitle() }
+                }
+
+                Spacer(minLength: 4)
+
+                Button {
+                    withAnimation(AppleDesignSystem.Springs.snappy) {
+                        isShowingAppPicker.toggle()
+                        if isShowingAppPicker { isShowingCustomizer = false }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(isShowingAppPicker ? .black : .white.opacity(0.85))
+                        .frame(width: 28, height: 28)
+                        .background(isShowingAppPicker ? Color.white : Color.white.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Ajouter ou retirer des applications de ce dossier")
             }
-            .frame(width: fm.panelRect.width - 60)
+            .padding(.horizontal, 24)
+            .frame(width: fm.panelRect.width)
             .position(x: fm.panelRect.midX, y: fm.panelRect.minY + FolderMetrics.header / 2)
 
-            tiles(fm)
+            if appsToRender.isEmpty {
+                VStack(spacing: 10) {
+                    PremiumFolderIconView(
+                        icons: [],
+                        size: 68,
+                        style: folder.style,
+                        customColorHex: folder.colorHex,
+                        customSymbol: folder.iconSymbol
+                    )
+                    Text("Ce dossier est vide")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Button {
+                        withAnimation(AppleDesignSystem.Springs.snappy) {
+                            isShowingAppPicker = true
+                        }
+                    } label: {
+                        Label("Ajouter des applications", systemImage: "plus.circle.fill")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(Color.white, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
                 .frame(width: fm.contentRect.width, height: fm.contentHeight)
                 .position(x: fm.contentRect.midX, y: fm.contentRect.midY)
+            } else {
+                tiles(fm)
+                    .frame(width: fm.contentRect.width, height: fm.contentHeight)
+                    .position(x: fm.contentRect.midX, y: fm.contentRect.midY)
+            }
+
+            if isShowingCustomizer {
+                FolderCustomizationBarView(
+                    folder: folder,
+                    store: store,
+                    isShowingCustomizer: $isShowingCustomizer,
+                    isShowingAppPicker: $isShowingAppPicker
+                )
+                .frame(width: min(fm.panelRect.width - 28, 560))
+                .position(x: fm.panelRect.midX, y: max(110, fm.panelRect.minY - 76))
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+
+            if isShowingAppPicker {
+                FolderAppPickerSheet(
+                    folder: folder,
+                    store: store,
+                    isPresented: $isShowingAppPicker
+                )
+                .frame(width: min(fm.panelRect.width - 24, 540))
+                .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(50)
+            }
         }
         .opacity(vm.folderFaded ? 0 : 1)
         .onAppear {
@@ -1230,7 +1424,7 @@ struct FavoritesDockView: View {
     }
 }
 
-// MARK: - Galerie de Widgets Façon iPhone / iPadOS
+// MARK: - Galerie de Widgets & Sélecteur de Thèmes en Temps Réel
 
 struct WidgetGalleryModal: View {
     @ObservedObject var vm: LaunchpadViewModel
@@ -1240,6 +1434,10 @@ struct WidgetGalleryModal: View {
     @ObservedObject private var licenseManager = LicenseManager.shared
     @State private var selectedKind: WidgetKind = .vinylPlayer
     @State private var selectedSize: WidgetSize = .medium
+    @State private var selectedMusicStyle: MusicWidgetStyle = .vinylSplatterWide
+    @State private var selectedWeatherTheme: WeatherWidgetTheme = .appleMinimal
+    @State private var selectedCalendarStyle: CalendarWidgetStyle = .compactDate
+    @State private var selectedClockStyle: ClockWidgetStyle = .appleAnalog
 
     var body: some View {
         ZStack {
@@ -1293,7 +1491,7 @@ struct WidgetGalleryModal: View {
 
                 Divider().background(Color.white.opacity(0.12))
 
-                // Corps de la galerie (Deux colonnes : Liste des widgets à gauche, Prévisualisation & Ajout à droite)
+                // Corps de la galerie (Deux colonnes : Liste des widgets à gauche, Prévisualisation & Thèmes à droite)
                 HStack(spacing: 0) {
                     // Liste des widgets disponibles
                     ScrollView(.vertical, showsIndicators: false) {
@@ -1303,6 +1501,11 @@ struct WidgetGalleryModal: View {
                                 Button {
                                     selectedKind = kind
                                     selectedSize = kind.defaultSize
+                                    if kind == .mediaWide {
+                                        selectedMusicStyle = .fullBleedPill
+                                    } else if kind == .vinylPlayer {
+                                        selectedMusicStyle = .vinylSplatterWide
+                                    }
                                 } label: {
                                     HStack(spacing: 12) {
                                         Image(systemName: kindIcon(for: kind))
@@ -1333,18 +1536,25 @@ struct WidgetGalleryModal: View {
                         }
                         .padding(16)
                     }
-                    .frame(width: 250)
+                    .frame(width: 245)
 
                     Divider().background(Color.white.opacity(0.12))
 
-                    // Zone de prévisualisation et configuration
-                    VStack(spacing: 16) {
-                        Spacer(minLength: 8)
+                    // Zone de prévisualisation en temps réel et choix du thème/format
+                    VStack(spacing: 12) {
+                        Spacer(minLength: 4)
 
-                        // Aperçu réel du widget mis à l'échelle pour ne jamais déborder
-                        let previewConfig = CustomWidgetConfig(kind: selectedKind, size: selectedSize)
-                        let maxPreviewH: CGFloat = 210
-                        let maxPreviewW: CGFloat = 360
+                        // Aperçu réel du widget mis à l'échelle
+                        let previewConfig = CustomWidgetConfig(
+                            kind: selectedKind,
+                            size: selectedSize,
+                            musicStyle: selectedMusicStyle,
+                            weatherTheme: selectedWeatherTheme,
+                            calendarStyle: selectedCalendarStyle,
+                            clockStyle: selectedClockStyle
+                        )
+                        let maxPreviewH: CGFloat = 205
+                        let maxPreviewW: CGFloat = 380
                         let scale = min(1.0, min(maxPreviewH / previewConfig.size.height, maxPreviewW / previewConfig.size.width))
 
                         ZStack {
@@ -1353,23 +1563,26 @@ struct WidgetGalleryModal: View {
                                 .frame(width: previewConfig.size.width * scale, height: previewConfig.size.height * scale)
                                 .shadow(color: .black.opacity(0.35), radius: 18 * scale, y: 8 * scale)
                         }
-                        .frame(height: 220)
+                        .frame(height: 215)
 
-                        Spacer(minLength: 8)
+                        // Sélecteur de Thème / Style en temps réel selon la catégorie
+                        themePickerStrip
 
-                        // Sélecteur de taille (si plusieurs tailles possibles)
+                        // Sélecteur de taille (Petit, Moyen, Vertical, Grand)
                         if selectedKind.allowedSizes.count > 1 {
                             HStack(spacing: 8) {
                                 ForEach(selectedKind.allowedSizes) { size in
                                     let isChosen = selectedSize == size
                                     Button {
-                                        selectedSize = size
+                                        withAnimation(AppleDesignSystem.Springs.snappy) {
+                                            selectedSize = size
+                                        }
                                     } label: {
                                         Text(size.title)
-                                            .font(.system(size: 13, weight: isChosen ? .semibold : .medium))
+                                            .font(.system(size: 12.5, weight: isChosen ? .semibold : .medium))
                                             .foregroundStyle(isChosen ? .black : .white.opacity(0.85))
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 7)
+                                            .padding(.horizontal, 13)
+                                            .padding(.vertical, 6)
                                             .background(isChosen ? Color.white : Color.white.opacity(0.12))
                                             .clipShape(Capsule())
                                     }
@@ -1388,7 +1601,22 @@ struct WidgetGalleryModal: View {
                                 return
                             }
                             let currentPage = vm.page
-                            let newConfig = CustomWidgetConfig(kind: selectedKind, size: selectedSize)
+                            let newConfig = CustomWidgetConfig(
+                                kind: selectedKind,
+                                size: selectedSize,
+                                musicStyle: selectedMusicStyle,
+                                weatherTheme: selectedWeatherTheme,
+                                calendarStyle: selectedCalendarStyle,
+                                clockStyle: selectedClockStyle
+                            )
+                            WidgetManager.shared.updateMusicStyle(for: selectedKind, style: selectedMusicStyle)
+                            if selectedKind == .weather {
+                                WidgetManager.shared.updateWeatherTheme(selectedWeatherTheme)
+                            } else if selectedKind == .calendar {
+                                WidgetManager.shared.updateCalendarStyle(selectedCalendarStyle)
+                            } else if selectedKind == .clock {
+                                WidgetManager.shared.updateClockStyle(selectedClockStyle)
+                            }
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 let ok = store.addWidget(newConfig, onPage: currentPage, columns: vm.columns, rows: vm.rows)
                                 if ok {
@@ -1412,21 +1640,83 @@ struct WidgetGalleryModal: View {
                             }
                             .foregroundStyle(.black)
                             .padding(.horizontal, 24)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 9)
                             .background(Color.white)
                             .clipShape(Capsule())
                             .shadow(color: .white.opacity(0.25), radius: 8, y: 2)
                         }
                         .buttonStyle(.plain)
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 16)
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .frame(width: min(720, rootSize.width - 40), height: min(520, rootSize.height - 60))
-            .liquidGlassCard(cornerRadius: 22, interactive: false, borderLineWidth: 1.2)
+            .frame(width: min(780, rootSize.width - 40), height: min(560, rootSize.height - 50))
+            .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
             .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
         }
+    }
+
+    @ViewBuilder
+    private var themePickerStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                switch selectedKind {
+                case .vinylPlayer, .mediaWide:
+                    ForEach(MusicWidgetStyle.allCases) { style in
+                        themePillButton(title: style.title, isSelected: selectedMusicStyle == style) {
+                            selectedMusicStyle = style
+                        }
+                    }
+                case .weather:
+                    ForEach(WeatherWidgetTheme.allCases) { theme in
+                        themePillButton(title: theme.title, isSelected: selectedWeatherTheme == theme) {
+                            selectedWeatherTheme = theme
+                        }
+                    }
+                case .calendar:
+                    ForEach(CalendarWidgetStyle.allCases) { style in
+                        themePillButton(title: style.title, isSelected: selectedCalendarStyle == style) {
+                            selectedCalendarStyle = style
+                        }
+                    }
+                case .clock:
+                    ForEach(ClockWidgetStyle.allCases) { style in
+                        themePillButton(title: style.title, isSelected: selectedClockStyle == style) {
+                            selectedClockStyle = style
+                        }
+                    }
+                case .system, .quickNote:
+                    EmptyView()
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func themePillButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(AppleDesignSystem.Springs.snappy) {
+                action()
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.75))
+                .padding(.horizontal, 11)
+                .padding(.vertical, 5)
+                .background(
+                    isSelected
+                        ? LinearGradient(colors: [Color(red: 0.35, green: 0.32, blue: 0.96), Color(red: 0.56, green: 0.34, blue: 0.96)], startPoint: .leading, endPoint: .trailing)
+                        : LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.10)], startPoint: .leading, endPoint: .trailing),
+                    in: Capsule()
+                )
+                .overlay(
+                    Capsule().strokeBorder(isSelected ? Color.white.opacity(0.55) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func kindIcon(for kind: WidgetKind) -> String {
@@ -1434,6 +1724,7 @@ struct WidgetGalleryModal: View {
         case .vinylPlayer: return "opticaldisc.fill"
         case .weather: return "cloud.sun.fill"
         case .mediaWide: return "music.note"
+        case .calendar: return "calendar"
         case .clock: return "clock.fill"
         case .system: return "gauge.with.needle"
         case .quickNote: return "square.and.pencil"

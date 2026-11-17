@@ -21,6 +21,8 @@ struct RuntimeConfig: Equatable {
     var interceptF4: Bool
     var sources: [String]
     var iconStyle: String
+    var tintedIcons: Bool
+    var tintedIconColor: String
     var appLogo: AppLogo
 
     @MainActor
@@ -29,7 +31,9 @@ struct RuntimeConfig: Equatable {
                                    hotKeyEnabled: Prefs.hotKeyEnabled, hotKeyCode: Prefs.hotKeyCode,
                                    hotKeyModifiers: Prefs.hotKeyModifiers, pinch: Prefs.pinchMode,
                                    hotCorner: Prefs.hotCorner, interceptF4: Prefs.interceptF4, sources: Prefs.allSources,
-                                   iconStyle: Prefs.defaults.string(forKey: PrefKey.iconStyle) ?? "system",
+                                   iconStyle: Prefs.defaults.string(forKey: PrefKey.iconStyle) ?? "dark",
+                                   tintedIcons: Prefs.tintedIcons,
+                                   tintedIconColor: Prefs.tintedIconColor,
                                    appLogo: Prefs.appLogo)
         // Garde-fou : on ne peut jamais se retrouver sans aucun moyen d'ouvrir l'app.
         if !config.showMenuBar, !config.showDock, !config.hotKeyEnabled, config.pinch == .off, config.hotCorner == .off, !config.interceptF4 {
@@ -458,7 +462,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if force || previous?.pinch != config.pinch || previous?.hotCorner != config.hotCorner || previous?.interceptF4 != config.interceptF4 {
             InputEventMonitor.shared.reconfigure()
         }
-        if let previous, previous.iconStyle != config.iconStyle {
+        if let previous, (previous.iconStyle != config.iconStyle || previous.tintedIcons != config.tintedIcons || previous.tintedIconColor != config.tintedIconColor) {
             store.reloadIcons()
         } else if let previous, previous.sources != config.sources {
             store.refresh()

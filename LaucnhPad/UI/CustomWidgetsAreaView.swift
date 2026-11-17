@@ -209,20 +209,7 @@ struct CustomWidgetsAreaView: View {
 
     @ViewBuilder
     func widgetView(for config: CustomWidgetConfig) -> some View {
-        switch config.kind {
-        case .vinylPlayer:
-            VinylPlayerWidgetView(config: config)
-        case .weather:
-            WeatherWidgetView(config: config)
-        case .mediaWide:
-            MediaWideWidgetView(config: config)
-        case .clock:
-            ClockWidgetView(config: config)
-        case .system:
-            SystemWidgetView(config: config)
-        case .quickNote:
-            QuickNoteWidgetView(config: config)
-        }
+        WidgetHostView(config: config)
     }
 
     // MARK: - Menu Contextuel Rapide par Widget

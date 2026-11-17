@@ -8,16 +8,33 @@ nonisolated struct FolderData: Codable, Hashable, Identifiable, Sendable {
     var name: String
     var apps: [String]
     var isLocked: Bool
+    var style: FolderVisualStyle
+    var colorHex: String?
+    var iconSymbol: String?
+    var keepWhenEmpty: Bool
 
-    init(id: String, name: String, apps: [String], isLocked: Bool = false) {
+    init(
+        id: String,
+        name: String,
+        apps: [String],
+        isLocked: Bool = false,
+        style: FolderVisualStyle = .frostedGlass,
+        colorHex: String? = nil,
+        iconSymbol: String? = nil,
+        keepWhenEmpty: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.apps = apps
         self.isLocked = isLocked
+        self.style = style
+        self.colorHex = colorHex
+        self.iconSymbol = iconSymbol
+        self.keepWhenEmpty = keepWhenEmpty
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, apps, isLocked
+        case id, name, apps, isLocked, style, colorHex, iconSymbol, keepWhenEmpty
     }
 
     init(from decoder: Decoder) throws {
@@ -26,6 +43,10 @@ nonisolated struct FolderData: Codable, Hashable, Identifiable, Sendable {
         name = try container.decode(String.self, forKey: .name)
         apps = try container.decode([String].self, forKey: .apps)
         isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        style = try container.decodeIfPresent(FolderVisualStyle.self, forKey: .style) ?? .frostedGlass
+        colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex)
+        iconSymbol = try container.decodeIfPresent(String.self, forKey: .iconSymbol)
+        keepWhenEmpty = try container.decodeIfPresent(Bool.self, forKey: .keepWhenEmpty) ?? false
     }
 
     static func newID() -> String { "folder:" + UUID().uuidString }
@@ -277,7 +298,7 @@ final class LaunchpadStore: ObservableObject {
                 return ids.contains(id) ? nil : item
             case .folder(var folder):
                 folder.apps.removeAll { ids.contains($0) }
-                return folder.apps.isEmpty ? nil : .folder(folder)
+                return (folder.apps.isEmpty && !folder.keepWhenEmpty) ? nil : .folder(folder)
             case .widget:
                 return item
             }
@@ -289,9 +310,11 @@ final class LaunchpadStore: ObservableObject {
             switch item {
             case .app(let id):
                 return isVisibleApp(id) ? item : nil
-            case .folder(let folder):
+            case .folder(var folder):
                 let apps = folder.apps.filter(isVisibleApp)
-                return apps.isEmpty ? nil : .folder(FolderData(id: folder.id, name: folder.name, apps: apps, isLocked: folder.isLocked))
+                guard !apps.isEmpty || folder.keepWhenEmpty else { return nil }
+                folder.apps = apps
+                return .folder(folder)
             case .widget(let config):
                 return config.isEnabled ? item : nil
             }
@@ -430,6 +453,111 @@ final class LaunchpadStore: ObservableObject {
         var copy = items
         copy[index] = .folder(folder)
         commit(copy)
+    }
+
+    func updateFolderCustomization(
+        _ folderID: String,
+        style: FolderVisualStyle,
+        colorHex: String?,
+        iconSymbol: String?
+    ) {
+        guard let index = items.firstIndex(where: { $0.id == folderID }),
+              case .folder(var folder) = items[index] else { return }
+        folder.style = style
+        folder.colorHex = colorHex
+        folder.iconSymbol = iconSymbol
+        var copy = items
+        copy[index] = .folder(folder)
+        commit(copy)
+    }
+
+    func toggleAppInFolder(_ appID: String, folderID: String) {
+        guard let folderIndex = items.firstIndex(where: { $0.id == folderID }),
+              case .folder(var folder) = items[folderIndex] else { return }
+        var copy = items
+
+        if folder.apps.contains(appID) {
+            folder.apps.removeAll { $0 == appID }
+            folder.keepWhenEmpty = true
+            copy[folderIndex] = .folder(folder)
+            copy.insert(.app(appID), at: min(folderIndex + 1, copy.count))
+        } else {
+            // Retire l'app de son emplacement actuel (grille ou autre dossier)
+            for idx in copy.indices.reversed() where idx != folderIndex {
+                switch copy[idx] {
+                case .app(let id) where id == appID:
+                    copy.remove(at: idx)
+                case .folder(var otherFolder) where otherFolder.apps.contains(appID):
+                    otherFolder.apps.removeAll { $0 == appID }
+                    if otherFolder.apps.isEmpty && !otherFolder.keepWhenEmpty {
+                        copy.remove(at: idx)
+                    } else {
+                        copy[idx] = .folder(otherFolder)
+                    }
+                default:
+                    break
+                }
+            }
+            if let newFolderIdx = copy.firstIndex(where: { $0.id == folderID }),
+               case .folder(var updatedFolder) = copy[newFolderIdx] {
+                if !updatedFolder.apps.contains(appID) {
+                    updatedFolder.apps.append(appID)
+                }
+                copy[newFolderIdx] = .folder(updatedFolder)
+            }
+        }
+        commit(copy)
+    }
+
+    @discardableResult
+    func createCustomFolder(
+        name: String = "Nouveau dossier",
+        style: FolderVisualStyle = .frostedGlass,
+        colorHex: String? = nil,
+        iconSymbol: String? = nil,
+        apps: [String] = []
+    ) -> String {
+        let folder = FolderData(
+            id: FolderData.newID(),
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Nouveau dossier" : name,
+            apps: apps,
+            isLocked: false,
+            style: style,
+            colorHex: colorHex,
+            iconSymbol: iconSymbol,
+            keepWhenEmpty: true
+        )
+        var copy = items
+        if !apps.isEmpty {
+            let set = Set(apps)
+            copy.removeAll { item in
+                if let id = item.appID { return set.contains(id) }
+                return false
+            }
+        }
+        copy.insert(.folder(folder), at: 0)
+        commit(copy)
+        return folder.id
+    }
+
+    func syncWidgetConfig(_ updatedConfig: CustomWidgetConfig) {
+        var copy = items
+        var changed = false
+        for idx in copy.indices {
+            if case .widget(let current) = copy[idx], current.kind == updatedConfig.kind {
+                var merged = updatedConfig
+                merged.id = current.id
+                merged.size = current.size
+                merged.isEnabled = true
+                if merged != current {
+                    copy[idx] = .widget(merged)
+                    changed = true
+                }
+            }
+        }
+        if changed {
+            commit(copy)
+        }
     }
 
     func ungroup(_ folderID: String) {

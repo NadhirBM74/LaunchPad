@@ -1,5 +1,6 @@
 import AppKit
 import CoreServices
+import SwiftUI
 
 // MARK: - Modèle d'application
 
@@ -196,8 +197,44 @@ final class IconCache {
     /// Style courant (lu une fois par accès : changer le réglage vide le cache).
     var useOriginalColors: Bool { UserDefaults.standard.string(forKey: PrefKey.iconStyle) == "original" }
 
+    var currentAppearanceStyle: IconAppearanceStyle {
+        if UserDefaults.standard.bool(forKey: PrefKey.tintedIcons) {
+            return .tinted
+        }
+        let raw = UserDefaults.standard.string(forKey: PrefKey.iconStyle) ?? "dark"
+        return IconAppearanceStyle(rawValue: raw) ?? .dark
+    }
+
+    private var activeTintColor: Color {
+        let key = UserDefaults.standard.string(forKey: PrefKey.tintedIconColor) ?? "blue"
+        switch key {
+        case "graphite": return Color(white: 0.78)
+        case "purple": return Color(red: 0.65, green: 0.42, blue: 1.0)
+        case "orange": return Color(red: 1.0, green: 0.56, blue: 0.14)
+        case "mint": return Color(red: 0.18, green: 0.85, blue: 0.68)
+        case "rose": return Color(red: 1.0, green: 0.32, blue: 0.56)
+        case "gold": return Color(red: 0.98, green: 0.78, blue: 0.22)
+        default: return Color(red: 0.08, green: 0.54, blue: 0.98)
+        }
+    }
+
     func icon(for path: String) -> NSImage {
         if let image = images[path] { return image }
+        let style = currentAppearanceStyle
+        if !path.hasPrefix("web:") && !path.hasPrefix("shortcut:") && style != .original && style != .system {
+            let appName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+            if let customImg = CustomAppIconRenderer.renderIcon(
+                for: path,
+                bundleID: nil,
+                name: appName,
+                style: style,
+                tintColor: activeTintColor,
+                pixelSize: 256
+            ) {
+                images[path] = customImg
+                return customImg
+            }
+        }
         let image = IconRenderer.sourceIcon(for: path, original: useOriginalColors)
         image.size = NSSize(width: 256, height: 256)
         images[path] = image
@@ -207,7 +244,9 @@ final class IconCache {
     func contains(_ path: String) -> Bool { images[path] != nil }
 
     func store(_ rendered: [String: CGImage]) {
-        for (path, cgImage) in rendered {
+        let style = currentAppearanceStyle
+        guard style == .system || style == .original else { return }
+        for (path, cgImage) in rendered where images[path] == nil {
             images[path] = NSImage(cgImage: cgImage, size: NSSize(width: 256, height: 256))
         }
     }

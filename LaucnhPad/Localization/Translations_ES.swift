@@ -460,6 +460,8 @@ nonisolated enum Translations_ES: Sendable {
 
         "widget.music.artist": "Artista",
         "widget.music.track": "Canción",
+        "widget.calendar.title": "Calendario",
+        "widget.calendar.desc": "Calendario compacto, mensual, semanal y próximos eventos sincronizados con EventKit.",
 
         "widget.weather.forecast": "Pronóstico por horas",
         "widget.weather.humidity": "Humedad",

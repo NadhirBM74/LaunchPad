@@ -5,35 +5,58 @@ import SwiftUI
 
 nonisolated enum WidgetKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case vinylPlayer      // Lecteur style Disque Vinyle (inspiré de la référence)
-    case weather          // Carte Météo grand format typographique
-    case mediaWide        // Lecteur Multimédia horizontal complet
-    case clock            // Horloge & Date Apple Style
+    case mediaWide        // Lecteur Multimédia Full Cover / Éditorial
+    case weather          // Bibliothèque Météo (18 thèmes)
+    case calendar         // Calendrier & Événements (Style Référence)
+    case clock            // Collection d'Horloges (15 styles)
     case system           // Moniteur Système CPU / RAM / Batterie
     case quickNote        // Note rapide / To-do list
 
     var id: String { rawValue }
 
     var title: String {
-        loc("widget.\(rawValue).title")
+        let key = "widget.\(rawValue).title"
+        let localized = loc(key)
+        if localized == key {
+            switch self {
+            case .calendar: return "Calendrier & Agenda"
+            default: return rawValue.capitalized
+            }
+        }
+        return localized
     }
 
     var subtitle: String {
-        loc("widget.\(rawValue).desc")
+        let key = "widget.\(rawValue).desc"
+        let localized = loc(key)
+        if localized == key {
+            switch self {
+            case .calendar: return "Date du jour, grille mensuelle et événements"
+            default: return ""
+            }
+        }
+        return localized
     }
 
     var defaultSize: WidgetSize {
         switch self {
         case .vinylPlayer: return .medium
-        default: return .small
+        case .mediaWide: return .medium
+        case .weather: return .small
+        case .calendar: return .small
+        case .clock: return .small
+        case .system: return .small
+        case .quickNote: return .small
         }
     }
 
     var allowedSizes: [WidgetSize] {
         switch self {
-        case .vinylPlayer: return [.small, .medium, .tall]
-        case .weather: return [.small, .medium, .tall]
+        case .vinylPlayer: return [.small, .medium, .tall, .large]
         case .mediaWide: return [.small, .medium, .tall, .large]
-        case .clock: return [.small, .medium]
+        case .weather: return [.small, .medium, .tall, .large]
+        case .calendar: return [.small, .medium, .tall, .large]
+        case .clock: return [.small, .medium, .tall, .large]
         case .system: return [.small, .medium]
         case .quickNote: return [.small, .medium]
         }
@@ -147,11 +170,17 @@ nonisolated enum WidgetGlowColor: String, Codable, CaseIterable, Identifiable, S
 // MARK: - Configuration Individuelle d'un Widget
 
 nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatable, Hashable {
-    var id: String // Correspond à widgetKind.rawValue
+    var id: String // Correspond à widgetKind.rawValue (ou identifiant unique)
     var kind: WidgetKind
     var isEnabled: Bool
     var size: WidgetSize
     var order: Int
+
+    // Thèmes & Styles Visuels par Catégorie
+    var musicStyle: MusicWidgetStyle
+    var weatherTheme: WeatherWidgetTheme
+    var calendarStyle: CalendarWidgetStyle
+    var clockStyle: ClockWidgetStyle
 
     // Options Météo
     var weatherCity: String
@@ -171,35 +200,54 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
     // Options Horloge
     var clockFormat24h: Bool
     var clockShowGreeting: Bool
+    var clockShowSeconds: Bool
+    var clockShowDate: Bool
+    var clockFontDesign: String
+    var clockAccentColor: String
+    var clockTimezones: [String]
 
     // Options Note Rapide
     var noteContent: String
 
     init(
+        id: String? = nil,
         kind: WidgetKind,
         isEnabled: Bool = true,
         size: WidgetSize? = nil,
         order: Int = 0,
+        musicStyle: MusicWidgetStyle? = nil,
+        weatherTheme: WeatherWidgetTheme = .appleMinimal,
+        calendarStyle: CalendarWidgetStyle = .compactDate,
+        clockStyle: ClockWidgetStyle = .appleAnalog,
         weatherCity: String = "New York",
         weatherUnit: String = "F",
         weatherTemp: Int = 69,
-        weatherCondition: String = "Cloudy",
-        weatherFeelsLike: Int = 68,
-        musicTrack: String = "Past Alone",
-        musicArtist: String = "Red Velvet",
+        weatherCondition: String = "Rainy",
+        weatherFeelsLike: Int = 69,
+        musicTrack: String = "Red Velvet",
+        musicArtist: String = "Past Alone",
         musicAlbum: String = "Water (Deluxe)",
         musicIsPlaying: Bool = true,
-        musicElapsedSeconds: Int = 43,
-        musicTotalSeconds: Int = 192,
+        musicElapsedSeconds: Int = 80,
+        musicTotalSeconds: Int = 147,
         clockFormat24h: Bool = true,
         clockShowGreeting: Bool = true,
+        clockShowSeconds: Bool = true,
+        clockShowDate: Bool = true,
+        clockFontDesign: String = "rounded",
+        clockAccentColor: String = "red",
+        clockTimezones: [String] = ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London"],
         noteContent: String = ""
     ) {
-        self.id = kind.rawValue
+        self.id = id ?? kind.rawValue
         self.kind = kind
         self.isEnabled = isEnabled
         self.size = size ?? kind.defaultSize
         self.order = order
+        self.musicStyle = musicStyle ?? (kind == .vinylPlayer ? .vinylSplatterWide : .fullBleedPill)
+        self.weatherTheme = weatherTheme
+        self.calendarStyle = calendarStyle
+        self.clockStyle = clockStyle
         self.weatherCity = weatherCity
         self.weatherUnit = weatherUnit
         self.weatherTemp = weatherTemp
@@ -213,50 +261,53 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
         self.musicTotalSeconds = musicTotalSeconds
         self.clockFormat24h = clockFormat24h
         self.clockShowGreeting = clockShowGreeting
+        self.clockShowSeconds = clockShowSeconds
+        self.clockShowDate = clockShowDate
+        self.clockFontDesign = clockFontDesign
+        self.clockAccentColor = clockAccentColor
+        self.clockTimezones = clockTimezones
         self.noteContent = noteContent
     }
 
-    nonisolated static func == (lhs: CustomWidgetConfig, rhs: CustomWidgetConfig) -> Bool {
-        lhs.id == rhs.id &&
-        lhs.kind == rhs.kind &&
-        lhs.isEnabled == rhs.isEnabled &&
-        lhs.size == rhs.size &&
-        lhs.order == rhs.order &&
-        lhs.weatherCity == rhs.weatherCity &&
-        lhs.weatherUnit == rhs.weatherUnit &&
-        lhs.weatherTemp == rhs.weatherTemp &&
-        lhs.weatherCondition == rhs.weatherCondition &&
-        lhs.weatherFeelsLike == rhs.weatherFeelsLike &&
-        lhs.musicTrack == rhs.musicTrack &&
-        lhs.musicArtist == rhs.musicArtist &&
-        lhs.musicAlbum == rhs.musicAlbum &&
-        lhs.musicIsPlaying == rhs.musicIsPlaying &&
-        lhs.musicElapsedSeconds == rhs.musicElapsedSeconds &&
-        lhs.musicTotalSeconds == rhs.musicTotalSeconds &&
-        lhs.clockFormat24h == rhs.clockFormat24h &&
-        lhs.clockShowGreeting == rhs.clockShowGreeting &&
-        lhs.noteContent == rhs.noteContent
+    enum CodingKeys: String, CodingKey {
+        case id, kind, isEnabled, size, order
+        case musicStyle, weatherTheme, calendarStyle, clockStyle
+        case weatherCity, weatherUnit, weatherTemp, weatherCondition, weatherFeelsLike
+        case musicTrack, musicArtist, musicAlbum, musicIsPlaying, musicElapsedSeconds, musicTotalSeconds
+        case clockFormat24h, clockShowGreeting, clockShowSeconds, clockShowDate, clockFontDesign, clockAccentColor, clockTimezones
+        case noteContent
     }
 
-    nonisolated func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-        hasher.combine(kind)
-        hasher.combine(isEnabled)
-        hasher.combine(size)
-        hasher.combine(order)
-        hasher.combine(weatherCity)
-        hasher.combine(weatherUnit)
-        hasher.combine(weatherTemp)
-        hasher.combine(weatherCondition)
-        hasher.combine(weatherFeelsLike)
-        hasher.combine(musicTrack)
-        hasher.combine(musicArtist)
-        hasher.combine(musicAlbum)
-        hasher.combine(musicIsPlaying)
-        hasher.combine(musicElapsedSeconds)
-        hasher.combine(musicTotalSeconds)
-        hasher.combine(clockFormat24h)
-        hasher.combine(clockShowGreeting)
-        hasher.combine(noteContent)
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedKind = try c.decode(WidgetKind.self, forKey: .kind)
+        self.id = try c.decodeIfPresent(String.self, forKey: .id) ?? decodedKind.rawValue
+        self.kind = decodedKind
+        self.isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        self.size = try c.decodeIfPresent(WidgetSize.self, forKey: .size) ?? decodedKind.defaultSize
+        self.order = try c.decodeIfPresent(Int.self, forKey: .order) ?? 0
+        self.musicStyle = try c.decodeIfPresent(MusicWidgetStyle.self, forKey: .musicStyle) ?? (decodedKind == .vinylPlayer ? .vinylSplatterWide : .fullBleedPill)
+        self.weatherTheme = try c.decodeIfPresent(WeatherWidgetTheme.self, forKey: .weatherTheme) ?? .appleMinimal
+        self.calendarStyle = try c.decodeIfPresent(CalendarWidgetStyle.self, forKey: .calendarStyle) ?? .compactDate
+        self.clockStyle = try c.decodeIfPresent(ClockWidgetStyle.self, forKey: .clockStyle) ?? .appleAnalog
+        self.weatherCity = try c.decodeIfPresent(String.self, forKey: .weatherCity) ?? "New York"
+        self.weatherUnit = try c.decodeIfPresent(String.self, forKey: .weatherUnit) ?? "F"
+        self.weatherTemp = try c.decodeIfPresent(Int.self, forKey: .weatherTemp) ?? 69
+        self.weatherCondition = try c.decodeIfPresent(String.self, forKey: .weatherCondition) ?? "Rainy"
+        self.weatherFeelsLike = try c.decodeIfPresent(Int.self, forKey: .weatherFeelsLike) ?? 69
+        self.musicTrack = try c.decodeIfPresent(String.self, forKey: .musicTrack) ?? "Red Velvet"
+        self.musicArtist = try c.decodeIfPresent(String.self, forKey: .musicArtist) ?? "Past Alone"
+        self.musicAlbum = try c.decodeIfPresent(String.self, forKey: .musicAlbum) ?? "Water (Deluxe)"
+        self.musicIsPlaying = try c.decodeIfPresent(Bool.self, forKey: .musicIsPlaying) ?? true
+        self.musicElapsedSeconds = try c.decodeIfPresent(Int.self, forKey: .musicElapsedSeconds) ?? 80
+        self.musicTotalSeconds = try c.decodeIfPresent(Int.self, forKey: .musicTotalSeconds) ?? 147
+        self.clockFormat24h = try c.decodeIfPresent(Bool.self, forKey: .clockFormat24h) ?? true
+        self.clockShowGreeting = try c.decodeIfPresent(Bool.self, forKey: .clockShowGreeting) ?? true
+        self.clockShowSeconds = try c.decodeIfPresent(Bool.self, forKey: .clockShowSeconds) ?? true
+        self.clockShowDate = try c.decodeIfPresent(Bool.self, forKey: .clockShowDate) ?? true
+        self.clockFontDesign = try c.decodeIfPresent(String.self, forKey: .clockFontDesign) ?? "rounded"
+        self.clockAccentColor = try c.decodeIfPresent(String.self, forKey: .clockAccentColor) ?? "red"
+        self.clockTimezones = try c.decodeIfPresent([String].self, forKey: .clockTimezones) ?? ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London"]
+        self.noteContent = try c.decodeIfPresent(String.self, forKey: .noteContent) ?? ""
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Carbon.HIToolbox
 
 // Préférences centralisées : UserDefaults reste léger et évite de recréer des tâches.
@@ -99,17 +100,48 @@ enum AppLogo: Int, CaseIterable, Identifiable {
 
     var assetName: String { "AppLogo\(rawValue)" }
 
+    @MainActor private static var renderedCache: [AppLogo: NSImage] = [:]
+
     @MainActor var image: NSImage? {
+        if let cached = Self.renderedCache[self] {
+            return cached
+        }
+        let style: IconAppearanceStyle
+        let kind: CustomAppIconKind
+        var tint: Color = Color(red: 0.08, green: 0.54, blue: 0.98)
+        switch self {
+        case .noir:
+            style = .dark
+            kind = .photos
+        case .liquidGlass:
+            style = .clearLiquid
+            kind = .photos
+        case .graphite:
+            style = .clearDark
+            kind = .keynote
+        case .blanc:
+            style = .light
+            kind = .freeform
+        case .orRoyal:
+            style = .dark
+            kind = .home
+        case .aurora:
+            style = .tinted
+            kind = .photos
+            tint = Color(red: 0.10, green: 0.58, blue: 1.0)
+        }
+        let view = CustomAppIconView(kind: kind, style: style, tintColor: tint, size: 256)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 1.0
+        if let img = renderer.nsImage {
+            img.size = NSSize(width: 256, height: 256)
+            Self.renderedCache[self] = img
+            return img
+        }
         if let img = NSImage(named: NSImage.Name(assetName)) {
             return img
         }
-        if let bundleImage = Bundle.main.image(forResource: NSImage.Name(assetName)) {
-            return bundleImage
-        }
-        if self == .noir {
-            return NSApp.applicationIconImage
-        }
-        return nil
+        return NSApp.applicationIconImage
     }
 }
 
@@ -263,7 +295,7 @@ enum Prefs {
             PrefKey.reorganizeRule: SortRule.nameAscending.rawValue,
             PrefKey.folderPlacement: FolderPlacement.before.rawValue,
             PrefKey.sortFolderContents: false,
-            PrefKey.iconStyle: "system",
+            PrefKey.iconStyle: "dark",
             PrefKey.displayMode: DisplayMode.fullScreen.rawValue,
             PrefKey.hideDock: true,
             PrefKey.appLogo: AppLogo.noir.rawValue,
