@@ -20,30 +20,58 @@ final class PermissionManager: ObservableObject {
     private var pollTimer: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
     private var lastTrustedState: Bool = false
+    private var isSettingsVisible: Bool = false
+    private var delayedDismissTask: Task<Void, Never>?
+    private var delayedLaunchPromptTask: Task<Void, Never>?
+
+    private var shouldPollInForeground: Bool {
+        !isAccessibilityGranted && (LaunchpadViewModel.isLaunchpadVisible || showPermissionCard || isSettingsVisible || NSApp.isActive)
+    }
 
     private init() {
         lastTrustedState = AXIsProcessTrusted()
         isAccessibilityGranted = lastTrustedState
-        if !lastTrustedState {
-            startMonitoring()
-        }
+        updatePollingState()
+
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in
                 self?.checkStatus()
             }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
+            .sink { [weak self] _ in
+                self?.updatePollingState()
+            }
+            .store(in: &cancellables)
         NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)
             .compactMap { $0.object as? Bool }
-            .filter { $0 }
-            .sink { [weak self] _ in
-                self?.checkStatus()
+            .sink { [weak self] visible in
+                guard let self else { return }
+                if visible { self.checkStatus() } else { self.updatePollingState() }
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .settingsVisibilityDidChange)
+            .compactMap { $0.object as? Bool }
+            .sink { [weak self] visible in
+                guard let self else { return }
+                self.isSettingsVisible = visible
+                if visible { self.checkStatus() } else { self.updatePollingState() }
             }
             .store(in: &cancellables)
     }
 
-    /// Démarre la surveillance en temps réel de l'état de l'accessibilité (uniquement tant qu'elle n'est pas accordée)
+    private func updatePollingState() {
+        if shouldPollInForeground {
+            startMonitoring()
+        } else {
+            pollTimer?.cancel()
+            pollTimer = nil
+        }
+    }
+
+    /// Démarre la surveillance uniquement lorsque l'utilisateur interagit avec l'application sans permission.
     func startMonitoring() {
-        guard !isAccessibilityGranted else {
+        guard shouldPollInForeground else {
             pollTimer?.cancel()
             pollTimer = nil
             return
@@ -71,7 +99,7 @@ final class PermissionManager: ObservableObject {
             onAccessibilityGranted()
         } else if !current {
             lastTrustedState = false
-            startMonitoring()
+            updatePollingState()
         }
     }
 
@@ -93,9 +121,12 @@ final class PermissionManager: ObservableObject {
         )
 
         // 4. Masque automatiquement les invites
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        delayedDismissTask?.cancel()
+        delayedDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let self, !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                self?.showPermissionCard = false
+                self.showPermissionCard = false
             }
         }
     }
@@ -133,8 +164,10 @@ final class PermissionManager: ObservableObject {
             Prefs.defaults.set(true, forKey: promptedKey)
             // Déclenche l'alerte native macOS pour inscrire directement LaunchPad dans Accessibilité
             promptSystemDialogIfNeeded()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-                guard let self, !self.isAccessibilityGranted else { return }
+            delayedLaunchPromptTask?.cancel()
+            delayedLaunchPromptTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(800))
+                guard let self, !Task.isCancelled, !self.isAccessibilityGranted else { return }
                 self.showPermissionCard = true
                 onShowLaunchpad?()
             }

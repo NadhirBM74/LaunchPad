@@ -173,6 +173,7 @@ struct RichWeatherData {
 struct PremiumWeatherWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -180,6 +181,9 @@ struct PremiumWeatherWidgetView: View {
     @State private var animateWeather = false
 
     private var reduceMotion: Bool { userReduceMotion || systemReduceMotion }
+    private var shouldAnimateWeather: Bool {
+        !reduceMotion && !isPreview && LaunchpadViewModel.isLaunchpadVisible && config.weatherTheme == .lightMinimal
+    }
     private var data: RichWeatherData { RichWeatherData.from(config: config) }
 
     var body: some View {
@@ -210,10 +214,34 @@ struct PremiumWeatherWidgetView: View {
         }
         .frame(width: w, height: h)
         .onAppear {
-            if !reduceMotion {
-                withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
-                    animateWeather = true
-                }
+            syncWeatherAnimation(visible: LaunchpadViewModel.isLaunchpadVisible)
+        }
+        .onDisappear {
+            animateWeather = false
+        }
+        .onChange(of: reduceMotion) { _, _ in
+            syncWeatherAnimation(visible: LaunchpadViewModel.isLaunchpadVisible)
+        }
+        .onChange(of: config.weatherTheme) { _, _ in
+            syncWeatherAnimation(visible: LaunchpadViewModel.isLaunchpadVisible)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
+            guard let visible = notif.object as? Bool else { return }
+            syncWeatherAnimation(visible: visible)
+        }
+    }
+
+    private func syncWeatherAnimation(visible: Bool) {
+        if !reduceMotion && !isPreview && visible && config.weatherTheme == .lightMinimal {
+            guard !animateWeather else { return }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+                animateWeather = true
+            }
+        } else if animateWeather {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                animateWeather = false
             }
         }
     }
@@ -1886,6 +1914,7 @@ struct PremiumWeatherWidgetView: View {
                     context.stroke(drop, with: .color(Color.white.opacity(0.14)), lineWidth: 1)
                 }
             }
+            .drawingGroup()
         }
     }
 }

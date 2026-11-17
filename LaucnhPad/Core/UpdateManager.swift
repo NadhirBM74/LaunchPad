@@ -59,9 +59,13 @@ public final class UpdateManager: NSObject, ObservableObject {
 
     private var activeDownloadTask: URLSessionDownloadTask?
     private var downloadObservation: NSKeyValueObservation?
+    private lazy var downloadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
     private var pendingApiAssetUrl: URL?
     private var pendingAssetExtension: String = "zip"
-    private var notificationDelegateProxy: NotificationDelegateProxy?
     private var stagedUpdateContext: (tempDir: URL, newAppURL: URL, targetAppPath: String)?
 
     override private init() {
@@ -86,19 +90,9 @@ public final class UpdateManager: NSObject, ObservableObject {
     // MARK: - Notifications macOS
 
     private func setupNotifications() {
-        let proxy = NotificationDelegateProxy { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.handleNotificationClick()
-            }
-        }
-        self.notificationDelegateProxy = proxy
-        let center = UNUserNotificationCenter.current()
-        center.delegate = proxy
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-    }
-
-    private func handleNotificationClick() {
-        NotificationCenter.default.post(name: .openSettingsTab, object: SettingsPanel.SettingsTab.about)
+        // Ne pas écraser UNUserNotificationCenter.current().delegate (géré par AppNotificationManager,
+        // qui redirige déjà .updateAvailable vers l'onglet À propos).
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
     // MARK: - Vérification des mises à jour
@@ -315,15 +309,22 @@ public final class UpdateManager: NSObject, ObservableObject {
         startDownloadTask(targetUrl: url, isApiFallback: false, ext: ext, version: version)
     }
 
+    private static func shellQuoted(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     private func startDownloadTask(targetUrl: URL, isApiFallback: Bool, ext: String, version: String) {
+        activeDownloadTask?.cancel()
+        downloadObservation?.invalidate()
+        downloadObservation = nil
+
         var request = URLRequest(url: targetUrl)
         request.setValue("LaunchPad-Updater/\(currentAppVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream, application/zip, */*", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 60
 
-        let session = URLSession(configuration: .default)
         let capturedFallbackApiUrl = self.pendingApiAssetUrl
-        let task = session.downloadTask(with: request) { [weak self] tempUrl, response, error in
+        let task = downloadSession.downloadTask(with: request) { [weak self] tempUrl, response, error in
             guard let self = self else { return }
 
             let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -337,6 +338,12 @@ public final class UpdateManager: NSObject, ObservableObject {
                 }
             }
 
+            Task { @MainActor [weak self] in
+                self?.downloadObservation?.invalidate()
+                self?.downloadObservation = nil
+                self?.activeDownloadTask = nil
+            }
+
             // Si le téléchargement échoue et qu'on a une URL API alternative directe non encore tentée
             if !validFile, !isApiFallback, let fallbackApiUrl = capturedFallbackApiUrl, fallbackApiUrl != targetUrl {
                 Task { @MainActor [weak self] in
@@ -347,6 +354,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
 
             if let error = error {
+                if (error as NSError).code == NSURLErrorCancelled { return }
                 Task { @MainActor [weak self] in
                     self?.state = .error(message: "Échec du téléchargement : \(error.localizedDescription)")
                 }
@@ -376,6 +384,7 @@ public final class UpdateManager: NSObject, ObservableObject {
                 try fileManager.createDirectory(at: workDir, withIntermediateDirectories: true)
                 try fileManager.moveItem(at: tempUrl, to: localArchive)
             } catch {
+                try? fileManager.removeItem(at: workDir)
                 Task { @MainActor [weak self] in
                     self?.state = .error(message: "Erreur de préparation : \(error.localizedDescription)")
                 }
@@ -388,9 +397,14 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
         }
 
+        var lastProgressUpdate = -1.0
         self.downloadObservation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            let fraction = progress.fractionCompleted
+            guard fraction >= 0.999 || (fraction - lastProgressUpdate) >= 0.015 else { return }
+            lastProgressUpdate = fraction
             Task { @MainActor [weak self] in
-                self?.state = .downloading(progress: progress.fractionCompleted)
+                guard let self, case .downloading = self.state else { return }
+                self.state = .downloading(progress: fraction)
             }
         }
 
@@ -402,53 +416,84 @@ public final class UpdateManager: NSObject, ObservableObject {
     private nonisolated func performInPlaceUpdate(archiveDest: URL, tempDir: URL, fileExtension: String, version: String) async {
         let fileManager = FileManager.default
         let extractedAppDir = tempDir.appendingPathComponent("Extracted")
+        var succeeded = false
+        defer {
+            if !succeeded {
+                try? fileManager.removeItem(at: tempDir)
+            }
+        }
 
         do {
             try fileManager.createDirectory(at: extractedAppDir, withIntermediateDirectories: true)
 
             if fileExtension == "zip" {
-                // Extraction via ditto pour préserver les permissions et signatures
                 let ditto = Process()
                 ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
                 ditto.arguments = ["-x", "-k", archiveDest.path, extractedAppDir.path]
+                ditto.standardOutput = FileHandle.nullDevice
+                ditto.standardError = FileHandle.nullDevice
                 try ditto.run()
                 ditto.waitUntilExit()
+                guard ditto.terminationStatus == 0 else {
+                    await MainActor.run {
+                        self.state = .error(message: "Échec de l'extraction de l'archive ZIP.")
+                    }
+                    return
+                }
             } else if fileExtension == "dmg" {
-                // Montage silencieux du DMG pour extraire le .app
                 let mountPoint = tempDir.appendingPathComponent("MountPoint")
                 try fileManager.createDirectory(at: mountPoint, withIntermediateDirectories: true)
 
                 let hdiutil = Process()
                 hdiutil.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
                 hdiutil.arguments = ["attach", archiveDest.path, "-mountpoint", mountPoint.path, "-nobrowse", "-readonly", "-quiet"]
+                hdiutil.standardOutput = FileHandle.nullDevice
+                hdiutil.standardError = FileHandle.nullDevice
                 try hdiutil.run()
                 hdiutil.waitUntilExit()
 
-                // Copie du LaunchPad.app monté
+                defer {
+                    let detach = Process()
+                    detach.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+                    detach.arguments = ["detach", mountPoint.path, "-quiet"]
+                    detach.standardOutput = FileHandle.nullDevice
+                    detach.standardError = FileHandle.nullDevice
+                    try? detach.run()
+                    detach.waitUntilExit()
+                }
+
+                guard hdiutil.terminationStatus == 0 else {
+                    await MainActor.run {
+                        self.state = .error(message: "Impossible de monter l'image disque DMG.")
+                    }
+                    return
+                }
+
                 let mountedApp = mountPoint.appendingPathComponent("LaunchPad.app")
                 if fileManager.fileExists(atPath: mountedApp.path) {
                     let destApp = extractedAppDir.appendingPathComponent("LaunchPad.app")
                     let ditto = Process()
                     ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
                     ditto.arguments = [mountedApp.path, destApp.path]
+                    ditto.standardOutput = FileHandle.nullDevice
+                    ditto.standardError = FileHandle.nullDevice
                     try ditto.run()
                     ditto.waitUntilExit()
                 }
-
-                // Démontage
-                let detach = Process()
-                detach.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-                detach.arguments = ["detach", mountPoint.path, "-quiet"]
-                try? detach.run()
-                detach.waitUntilExit()
             }
 
-            // Recherche récursive du .app extrait
+            // Recherche du .app extrait sans descendre dans les bundles
             var finalNewAppURL: URL? = nil
             if let enumerator = fileManager.enumerator(at: extractedAppDir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
                 while let itemURL = enumerator.nextObject() as? URL {
+                    let name = itemURL.lastPathComponent
+                    if name == "__MACOSX" {
+                        enumerator.skipDescendants()
+                        continue
+                    }
                     if itemURL.pathExtension == "app" {
                         finalNewAppURL = itemURL
+                        enumerator.skipDescendants()
                         break
                     }
                 }
@@ -461,15 +506,13 @@ public final class UpdateManager: NSObject, ObservableObject {
                 return
             }
 
-            // Détermine l'emplacement cible
             var targetAppPath = Bundle.main.bundleURL.path
-            // Si on exécute depuis un DMG (/Volumes/...), depuis Xcode/DerivedData ou un dossier temporaire, on installe dans /Applications/LaunchPad.app
             if targetAppPath.hasPrefix("/Volumes/") || targetAppPath.contains("DerivedData") || targetAppPath.contains("/var/folders/") || !fileManager.fileExists(atPath: targetAppPath) {
                 targetAppPath = "/Applications/LaunchPad.app"
             }
             let resolvedTargetAppPath = targetAppPath
 
-            // Mise à jour de l'état : l'application est bien téléchargée et prête à être redémarrée par l'utilisateur
+            succeeded = true
             await MainActor.run {
                 self.stagedUpdateContext = (tempDir, newAppURL, resolvedTargetAppPath)
                 self.state = .readyToRestart(version: version)
@@ -493,15 +536,20 @@ public final class UpdateManager: NSObject, ObservableObject {
 
         let currentPID = ProcessInfo.processInfo.processIdentifier
         let scriptURL = context.tempDir.appendingPathComponent("relaunch.sh")
+        let quotedNew = Self.shellQuoted(context.newAppURL.path)
+        let quotedTarget = Self.shellQuoted(context.targetAppPath)
+        let quotedTemp = Self.shellQuoted(context.tempDir.path)
+
         let scriptContent = """
         #!/bin/bash
         exec > /tmp/launchpad_updater.log 2>&1
         set -x
 
         PID=\(currentPID)
-        NEW_APP="\(context.newAppURL.path)"
-        TARGET_APP="\(context.targetAppPath)"
-        TEMP_DIR="\(context.tempDir.path)"
+        NEW_APP=\(quotedNew)
+        TARGET_APP=\(quotedTarget)
+        TEMP_DIR=\(quotedTemp)
+        BACKUP_APP="${TARGET_APP}.backup"
 
         # Attente polie max 3 secondes de la fermeture de l'ancien processus
         COUNT=0
@@ -515,17 +563,25 @@ public final class UpdateManager: NSObject, ObservableObject {
             fi
         done
 
-        # Retirer la quarantaine macOS sur la nouvelle app
         /usr/bin/xattr -r -d com.apple.quarantine "$NEW_APP" 2>/dev/null || true
 
-        # Remplacement atomique de l'application (suppression de l'ancienne version)
-        rm -rf "$TARGET_APP"
-        /usr/bin/ditto "$NEW_APP" "$TARGET_APP"
+        # Remplacement sécurisé par sauvegarde préalable
+        rm -rf "$BACKUP_APP"
+        if [ -e "$TARGET_APP" ]; then
+            mv "$TARGET_APP" "$BACKUP_APP" || exit 1
+        fi
+        if /usr/bin/ditto "$NEW_APP" "$TARGET_APP"; then
+            rm -rf "$BACKUP_APP"
+        else
+            rm -rf "$TARGET_APP"
+            if [ -e "$BACKUP_APP" ]; then
+                mv "$BACKUP_APP" "$TARGET_APP"
+            fi
+            exit 1
+        fi
 
-        # Retirer tous les attributs étendus (quarantaine, provenance) sur l'application installée finale
         /usr/bin/xattr -cr "$TARGET_APP" 2>/dev/null || true
 
-        # Re-signature avec exigence désignée stable me.LaucnhPad pour conserver les autorisations TCC (Accessibilité)
         DEV_ID=$(/usr/bin/security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F '"' '{print $2}')
         if [ -n "$DEV_ID" ]; then
             /usr/bin/codesign --force --deep --sign "$DEV_ID" -r='designated => identifier "me.LaucnhPad"' --identifier "me.LaucnhPad" "$TARGET_APP" 2>/dev/null || true
@@ -533,36 +589,22 @@ public final class UpdateManager: NSObject, ObservableObject {
             /usr/bin/codesign --force --deep --sign - -r='designated => identifier "me.LaucnhPad"' --identifier "me.LaucnhPad" "$TARGET_APP" 2>/dev/null || true
         fi
 
-        # Enregistrement LaunchServices
         /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f -R -trusted "$TARGET_APP" 2>/dev/null || true
 
-        # Petite pause pour s'assurer que macOS a libéré les verrous de fichiers
         sleep 0.5
-
-        # Relance de la nouvelle version
         /usr/bin/open "$TARGET_APP" || /usr/bin/open -n "$TARGET_APP"
-
-        # Nettoyage des fichiers temporaires téléchargés
         rm -rf "$TEMP_DIR"
         """
 
         do {
             try scriptContent.write(to: scriptURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
 
-            // Rendre le script exécutable
-            let chmod = Process()
-            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
-            chmod.arguments = ["+x", scriptURL.path]
-            try chmod.run()
-            chmod.waitUntilExit()
-
-            // Lancement du script de mise à jour totalement détaché en arrière-plan
             let relaunchProcess = Process()
             relaunchProcess.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
             relaunchProcess.arguments = ["/bin/bash", scriptURL.path]
             try relaunchProcess.run()
 
-            // Fermeture immédiate de l'application
             NSApp.terminate(nil)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 exit(0)
@@ -573,37 +615,10 @@ public final class UpdateManager: NSObject, ObservableObject {
     }
 
     public func cancelDownload() {
+        downloadObservation?.invalidate()
+        downloadObservation = nil
         activeDownloadTask?.cancel()
         activeDownloadTask = nil
-        downloadObservation = nil
         state = .idle
-    }
-}
-
-// MARK: - Proxy Notification Delegate
-
-private final class NotificationDelegateProxy: NSObject, UNUserNotificationCenterDelegate, Sendable {
-    private let onOpen: @Sendable () -> Void
-
-    init(onOpen: @escaping @Sendable () -> Void) {
-        self.onOpen = onOpen
-        super.init()
-    }
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
-        onOpen()
-        completionHandler()
-    }
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound, .badge])
     }
 }

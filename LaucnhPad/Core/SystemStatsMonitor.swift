@@ -24,41 +24,56 @@ final class SystemStatsMonitor: ObservableObject {
     nonisolated(unsafe) private var prevIdle: UInt32 = 0
     nonisolated(unsafe) private var prevNice: UInt32 = 0
     private var isMonitoring = false
-    private var isWidgetMounted = false
+    private var activeClients = 0
+    private var alwaysVisibleClients = 0
+    private var isWidgetMounted: Bool { activeClients > 0 || alwaysVisibleClients > 0 }
+    private var shouldRunTimer: Bool {
+        alwaysVisibleClients > 0 || (activeClients > 0 && LaunchpadViewModel.isLaunchpadVisible)
+    }
     private let statsQueue = DispatchQueue(label: "me.LaucnhPad.systemstats", qos: .utility)
 
     private init() {
         NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)
             .compactMap { $0.object as? Bool }
-            .sink { [weak self] isVisible in
+            .sink { [weak self] _ in
                 guard let self else { return }
-                if isVisible && self.isWidgetMounted {
+                if self.shouldRunTimer {
                     self.resumeTimer()
-                } else if !isVisible {
+                } else {
                     self.pauseTimer()
                 }
             }
             .store(in: &cancellables)
     }
 
-    func startMonitoring() {
-        isWidgetMounted = true
+    func startMonitoring(alwaysActive: Bool = false) {
+        if alwaysActive {
+            alwaysVisibleClients += 1
+        } else {
+            activeClients += 1
+        }
         resumeTimer()
     }
 
-    func stopMonitoring() {
-        isWidgetMounted = false
-        pauseTimer()
+    func stopMonitoring(alwaysActive: Bool = false) {
+        if alwaysActive {
+            alwaysVisibleClients = max(0, alwaysVisibleClients - 1)
+        } else {
+            activeClients = max(0, activeClients - 1)
+        }
+        if !shouldRunTimer {
+            pauseTimer()
+        }
     }
 
     private func resumeTimer() {
-        guard !isMonitoring, LaunchpadViewModel.isLaunchpadVisible else { return }
+        guard !isMonitoring, shouldRunTimer else { return }
         isMonitoring = true
         refresh()
         timer = Timer.publish(every: 6.0, tolerance: 1.5, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                guard let self, LaunchpadViewModel.isLaunchpadVisible, self.isWidgetMounted else { return }
+                guard let self, self.shouldRunTimer else { return }
                 self.refresh()
             }
     }

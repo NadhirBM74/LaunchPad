@@ -100,6 +100,7 @@ struct AnimatedVerifiedSealBadge: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
+    @State private var spinning = false
 
     private var reduceMotion: Bool {
         systemReduceMotion || userReduceMotion
@@ -140,25 +141,22 @@ struct AnimatedVerifiedSealBadge: View {
                 .frame(width: size * 1.15, height: size * 1.15)
                 .blur(radius: max(1.8, size * 0.12))
 
-            // Seule la rosace extérieure (les pics crénelés) tourne en continu
-            TimelineView(.animation(paused: reduceMotion)) { timeline in
-                let period: Double = 8.0
-                let angle: Double = reduceMotion
-                    ? 0.0
-                    : (timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period) * 360.0
-
-                Rectangle()
-                    .fill(badgeGradient)
-                    .frame(width: size * 1.12, height: size * 1.12)
-                    .mask(
-                        Image(systemName: "seal.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: size, height: size)
-                            .rotationEffect(.degrees(angle))
-                    )
-            }
-            .shadow(color: glowColor.opacity(0.45), radius: max(2.0, size * 0.15), y: 1.2)
+            // Seule la rosace extérieure tourne sur le GPU CoreAnimation sans réévaluer SwiftUI à 120 Hz
+            Rectangle()
+                .fill(badgeGradient)
+                .frame(width: size * 1.12, height: size * 1.12)
+                .mask(
+                    Image(systemName: "seal.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size, height: size)
+                        .rotationEffect(.degrees(spinning && !reduceMotion ? 360 : 0))
+                        .animation(
+                            reduceMotion ? nil : .linear(duration: 8.0).repeatForever(autoreverses: false),
+                            value: spinning
+                        )
+                )
+                .shadow(color: glowColor.opacity(0.45), radius: max(2.0, size * 0.15), y: 1.2)
 
             // Le "V" (coche blanche) au milieu reste strictement immobile
             Image(systemName: "checkmark")
@@ -167,5 +165,14 @@ struct AnimatedVerifiedSealBadge: View {
                 .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
         }
         .frame(width: size * 1.20, height: size * 1.20)
+        .onAppear {
+            if !reduceMotion { spinning = true }
+        }
+        .onDisappear {
+            spinning = false
+        }
+        .onChange(of: reduceMotion) { _, reduce in
+            spinning = !reduce
+        }
     }
 }

@@ -356,6 +356,7 @@ struct IconAppearanceShowcaseView: View {
                         )
                     )
                     .blur(radius: 4)
+                    .drawingGroup()
             }
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 

@@ -69,6 +69,7 @@ public enum ClockWidgetStyle: String, Codable, CaseIterable, Identifiable, Senda
 struct PremiumClockWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @State private var currentDate = Date()
@@ -130,14 +131,26 @@ struct PremiumClockWidgetView: View {
         .frame(width: w, height: h)
         .onAppear {
             currentDate = Date()
-            startTimer()
+            if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
+                startTimer()
+            }
         }
         .onDisappear {
             stopTimer()
         }
+        .onChange(of: config.clockStyle) { _, _ in
+            if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
+                startTimer()
+            }
+        }
+        .onChange(of: config.clockShowSeconds) { _, _ in
+            if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
+                startTimer()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
-            let visible = (notif.object as? Bool) ?? false
-            if visible {
+            guard let visible = notif.object as? Bool else { return }
+            if visible && !isPreview {
                 currentDate = Date()
                 startTimer()
             } else {
@@ -148,12 +161,25 @@ struct PremiumClockWidgetView: View {
 
     private func startTimer() {
         timer?.cancel()
+        guard !isPreview && LaunchpadViewModel.isLaunchpadVisible else {
+            timer = nil
+            return
+        }
         let needsEverySecond = config.clockShowSeconds || config.clockStyle == .appleAnalog || config.clockStyle == .darkPremium || config.clockStyle == .circularClock
         let interval: TimeInterval = needsEverySecond ? 1.0 : 10.0
-        timer = Timer.publish(every: interval, tolerance: 0.2, on: .main, in: .common)
+        timer = Timer.publish(every: interval, tolerance: needsEverySecond ? 0.2 : 2.0, on: .main, in: .common)
             .autoconnect()
             .sink { date in
-                self.currentDate = date
+                guard LaunchpadViewModel.isLaunchpadVisible && !isPreview else { return }
+                if needsEverySecond {
+                    self.currentDate = date
+                } else {
+                    let cal = Calendar.current
+                    if cal.component(.minute, from: date) != cal.component(.minute, from: self.currentDate) ||
+                       cal.component(.hour, from: date) != cal.component(.hour, from: self.currentDate) {
+                        self.currentDate = date
+                    }
+                }
             }
     }
 
@@ -1128,20 +1154,7 @@ struct PremiumClockWidgetView: View {
 
                     Spacer()
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        ForEach(CalendarEventService.shared.events.prefix(3)) { ev in
-                            HStack(spacing: 5) {
-                                Circle().fill(Color.green).frame(width: 5, height: 5)
-                                Text(ev.title)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.82))
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        }
-                    }
+                    ClockCalendarEventsList(maxCount: 3, compact: false)
                 } else {
                     Text(digitalTimeString)
                         .font(.system(size: isCompact ? 28 : 40, weight: .bold, design: fontDesign))
@@ -1150,15 +1163,7 @@ struct PremiumClockWidgetView: View {
                         .minimumScaleFactor(0.55)
                         .lineLimit(1)
 
-                    if let nextEvent = CalendarEventService.shared.events.first {
-                        HStack(spacing: 5) {
-                            Circle().fill(Color.green).frame(width: 5, height: 5)
-                            Text(nextEvent.title)
-                                .font(.system(size: isCompact ? 8.5 : 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.75))
-                                .lineLimit(1)
-                        }
-                    }
+                    ClockCalendarEventsList(maxCount: 1, compact: isCompact)
                 }
             }
             .padding(isCompact ? 10 : 15)
@@ -1239,8 +1244,24 @@ struct PremiumClockWidgetView: View {
         return f
     }()
 
+    private static let frLocale = Locale(identifier: "fr_FR")
+    private static let enLocale = Locale(identifier: "en_US")
+
+    private static let weekdayFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "EEE"; return f
+    }()
+    private static let monthFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM"; return f
+    }()
+    private static let tzFmt24: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
+    private static let tzFmt12: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f
+    }()
+
     private var activeAppLocale: Locale {
-        Locale(identifier: LocalizationManager.activeLanguageCode == "fr" ? "fr_FR" : "en_US")
+        LocalizationManager.activeLanguageCode == "fr" ? Self.frLocale : Self.enLocale
     }
 
     private var shortDigitalTimeString: String {
@@ -1255,12 +1276,14 @@ struct PremiumClockWidgetView: View {
     }
 
     private var referencePillDateString: String {
-        Self.pillDateFmt.locale = activeAppLocale
+        let loc = activeAppLocale
+        if Self.pillDateFmt.locale != loc { Self.pillDateFmt.locale = loc }
         return Self.pillDateFmt.string(from: currentDate).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private var fullDateString: String {
-        Self.fullDateFmt.locale = activeAppLocale
+        let loc = activeAppLocale
+        if Self.fullDateFmt.locale != loc { Self.fullDateFmt.locale = loc }
         return Self.fullDateFmt.string(from: currentDate).capitalized
     }
 
@@ -1272,26 +1295,23 @@ struct PremiumClockWidgetView: View {
     }
 
     private func shortWeekday(for date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = activeAppLocale
-        f.dateFormat = "EEE"
-        return f.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
+        let loc = activeAppLocale
+        if Self.weekdayFmt.locale != loc { Self.weekdayFmt.locale = loc }
+        return Self.weekdayFmt.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func shortMonth(for date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = activeAppLocale
-        f.dateFormat = "MMM"
-        return f.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
+        let loc = activeAppLocale
+        if Self.monthFmt.locale != loc { Self.monthFmt.locale = loc }
+        return Self.monthFmt.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func worldClockInfo(for tzID: String) -> (city: String, timeString: String, offsetLabel: String, isDaylight: Bool) {
         let tz = TimeZone(identifier: tzID) ?? .current
         let city = tzID.components(separatedBy: "/").last?.replacingOccurrences(of: "_", with: " ") ?? tzID
-        let f = DateFormatter()
-        f.timeZone = tz
-        f.dateFormat = config.clockFormat24h ? "HH:mm" : "h:mm a"
-        let timeStr = f.string(from: currentDate)
+        let fmt = config.clockFormat24h ? Self.tzFmt24 : Self.tzFmt12
+        if fmt.timeZone != tz { fmt.timeZone = tz }
+        let timeStr = fmt.string(from: currentDate)
 
         var cal = Calendar.current
         cal.timeZone = tz
@@ -1302,5 +1322,38 @@ struct PremiumClockWidgetView: View {
         let offsetLabel = diffHours == 0 ? "Local" : (diffHours > 0 ? "+\(diffHours)H" : "\(diffHours)H")
 
         return (city, timeStr, offsetLabel, isDay)
+    }
+}
+
+private struct ClockCalendarEventsList: View {
+    @ObservedObject private var calendarService = CalendarEventService.shared
+    let maxCount: Int
+    let compact: Bool
+
+    var body: some View {
+        if maxCount > 1 {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(calendarService.events.prefix(maxCount)) { ev in
+                    HStack(spacing: 5) {
+                        Circle().fill(Color.green).frame(width: 5, height: 5)
+                        Text(ev.title)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.82))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+            }
+        } else if let nextEvent = calendarService.events.first {
+            HStack(spacing: 5) {
+                Circle().fill(Color.green).frame(width: 5, height: 5)
+                Text(nextEvent.title)
+                    .font(.system(size: compact ? 8.5 : 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+            }
+        }
     }
 }

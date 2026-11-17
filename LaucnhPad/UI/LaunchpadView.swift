@@ -477,9 +477,7 @@ struct LaunchpadRootView: View {
     }
 
     private func tileModel(for item: LayoutItem) -> TileModel {
-        var model = TileModel.make(item, store: store, showRunning: showRunning)
-        model.tintColor = activeTintColor
-        return model
+        vm.cachedTileModel(for: item, showRunning: showRunning, tint: activeTintColor)
     }
 }
 
@@ -544,9 +542,7 @@ struct PagesLayer: View {
     }
 
     private func tileModel(for item: LayoutItem) -> TileModel {
-        var model = TileModel.make(item, store: store, showRunning: showRunning)
-        model.tintColor = tint
-        return model
+        vm.cachedTileModel(for: item, showRunning: showRunning, tint: tint)
     }
 
     @ViewBuilder
@@ -1033,6 +1029,7 @@ struct FloatingDragWidget: View {
 
     var body: some View {
         WidgetHostView(config: config, targetSize: targetSize)
+            .equatable()
             .scaleEffect(1.05)
             .shadow(color: .black.opacity(0.45), radius: 20, y: 12)
             .position(x: pointer.location.x - grabOffset.width, y: pointer.location.y - grabOffset.height)
@@ -1565,10 +1562,9 @@ struct WidgetGalleryModal: View {
     @State private var selectedCardID: String = "weather-darkPremium"
     @State private var selectedSize: WidgetSize = .medium
     @State private var selectedMusicAppearance: WidgetAppearanceMode = WidgetManager.shared.widgets.first(where: { $0.kind == .vinylPlayer })?.musicAppearance ?? .light
-    @State private var hoveredCardID: String? = nil
     @State private var isCollectionsExpanded: Bool = true
 
-    private var allCards: [GalleryCardItem] {
+    private static let allCards: [GalleryCardItem] = {
         var list: [GalleryCardItem] = []
 
         for theme in WeatherWidgetTheme.allCases {
@@ -1628,10 +1624,11 @@ struct WidgetGalleryModal: View {
         ))
 
         return list
-    }
+    }()
 
     private var filteredCards: [GalleryCardItem] {
-        let byCategory = selectedCategory == .all ? allCards : allCards.filter { $0.category == selectedCategory }
+        let cards = Self.allCards
+        let byCategory = selectedCategory == .all ? cards : cards.filter { $0.category == selectedCategory }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return byCategory }
         return byCategory.filter {
@@ -1642,7 +1639,7 @@ struct WidgetGalleryModal: View {
     }
 
     private var activeCard: GalleryCardItem {
-        allCards.first(where: { $0.id == selectedCardID }) ?? filteredCards.first ?? allCards[0]
+        Self.allCards.first(where: { $0.id == selectedCardID }) ?? filteredCards.first ?? Self.allCards[0]
     }
 
     var body: some View {
@@ -1881,7 +1878,6 @@ struct WidgetGalleryModal: View {
 
     private func galleryGridCard(_ card: GalleryCardItem) -> some View {
         let isSelected = (selectedCardID == card.id)
-        let isHovered = (hoveredCardID == card.id)
         let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
         let isActiveOnBoard: Bool = {
             guard let existing = existingInCategory else { return false }
@@ -1901,67 +1897,17 @@ struct WidgetGalleryModal: View {
         if card.category == .music {
             effectiveConfig.musicAppearance = selectedMusicAppearance
         }
-        let previewW = effectiveConfig.size.width
-        let previewH = effectiveConfig.size.height
-        let boxSize: CGFloat = 148
-        let thumbScale = min(132 / previewW, 118 / previewH)
-
-        return Button {
+        return WidgetGalleryCardButton(
+            card: card,
+            effectiveConfig: effectiveConfig,
+            isSelected: isSelected,
+            isActiveOnBoard: isActiveOnBoard
+        ) {
             withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) {
                 selectCard(card)
             }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    ZStack {
-                        WidgetHostView(config: effectiveConfig, isPreview: true)
-                            .scaleEffect(thumbScale)
-                            .frame(width: previewW * thumbScale, height: previewH * thumbScale)
-                            .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
-                            .allowsHitTesting(false)
-                            .animation(.spring(response: 0.38, dampingFraction: 0.76), value: effectiveConfig.size)
-                            .animation(.easeInOut(duration: 0.22), value: effectiveConfig.musicAppearance)
-                    }
-                    .frame(height: boxSize * 0.86)
-                    .frame(maxWidth: .infinity)
-
-                    if isActiveOnBoard {
-                        Text("Actif")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.green.opacity(0.85), in: Capsule())
-                            .padding(4)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(card.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Text(card.subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.60))
-                        .lineLimit(1)
-                }
-            }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.18) : (isHovered ? Color.white.opacity(0.08) : Color.clear))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(isSelected ? Color.white.opacity(0.30) : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            hoveredCardID = hovering ? card.id : (hoveredCardID == card.id ? nil : hoveredCardID)
-        }
+        .equatable()
     }
 
     @ViewBuilder
@@ -1984,6 +1930,7 @@ struct WidgetGalleryModal: View {
         HStack(spacing: 16) {
             ZStack {
                 WidgetHostView(config: previewConfig, isPreview: true)
+                    .equatable()
                     .scaleEffect(scale)
                     .frame(width: pw * scale, height: ph * scale)
                     .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
@@ -2210,6 +2157,84 @@ struct WidgetGalleryModal: View {
         case .medium: return "rectangle"
         case .tall: return "rectangle.portrait"
         case .large: return "square.split.2x2"
+        }
+    }
+}
+
+private struct WidgetGalleryCardButton: View, Equatable {
+    let card: WidgetGalleryModal.GalleryCardItem
+    let effectiveConfig: CustomWidgetConfig
+    let isSelected: Bool
+    let isActiveOnBoard: Bool
+    let onSelect: () -> Void
+
+    @State private var isHovered: Bool = false
+
+    static func == (lhs: WidgetGalleryCardButton, rhs: WidgetGalleryCardButton) -> Bool {
+        lhs.card == rhs.card &&
+        lhs.effectiveConfig == rhs.effectiveConfig &&
+        lhs.isSelected == rhs.isSelected &&
+        lhs.isActiveOnBoard == rhs.isActiveOnBoard
+    }
+
+    var body: some View {
+        let previewW = effectiveConfig.size.width
+        let previewH = effectiveConfig.size.height
+        let boxSize: CGFloat = 148
+        let thumbScale = min(132 / previewW, 118 / previewH)
+
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        WidgetHostView(config: effectiveConfig, isPreview: true)
+                            .equatable()
+                            .scaleEffect(thumbScale)
+                            .frame(width: previewW * thumbScale, height: previewH * thumbScale)
+                            .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
+                            .allowsHitTesting(false)
+                            .animation(.spring(response: 0.38, dampingFraction: 0.76), value: effectiveConfig.size)
+                            .animation(.easeInOut(duration: 0.22), value: effectiveConfig.musicAppearance)
+                    }
+                    .frame(height: boxSize * 0.86)
+                    .frame(maxWidth: .infinity)
+
+                    if isActiveOnBoard {
+                        Text("Actif")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.green.opacity(0.85), in: Capsule())
+                            .padding(4)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(card.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(card.subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.60))
+                        .lineLimit(1)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.18) : (isHovered ? Color.white.opacity(0.08) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(isSelected ? Color.white.opacity(0.30) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }

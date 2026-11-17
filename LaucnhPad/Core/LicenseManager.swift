@@ -64,6 +64,18 @@ enum KeychainTrialStorage {
     }
 }
 
+/// État isolé du décompte seconde par seconde de l'essai 7 jours.
+/// Évite d'invalider toute l'application quand seul le compteur change chaque seconde.
+@MainActor
+final class TrialCountdownState: ObservableObject {
+    @Published fileprivate(set) var timeRemainingString: String = ""
+    @Published fileprivate(set) var trialDaysRemaining: Int = 0
+    @Published fileprivate(set) var trialHoursRemaining: Int = 0
+    @Published fileprivate(set) var trialMinutesRemaining: Int = 0
+    @Published fileprivate(set) var trialSecondsRemaining: Int = 0
+    @Published fileprivate(set) var trialProgress: Double = 0.0
+}
+
 /// Gestionnaire de la licence et de l'état Freemium de l'application.
 ///
 /// Trois états sont pris en charge :
@@ -95,12 +107,14 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var trialEndDate: Date? = nil
     @Published private(set) var hasUsedTrial: Bool = false
 
-    @Published private(set) var timeRemainingString: String = ""
-    @Published private(set) var trialDaysRemaining: Int = 0
-    @Published private(set) var trialHoursRemaining: Int = 0
-    @Published private(set) var trialMinutesRemaining: Int = 0
-    @Published private(set) var trialSecondsRemaining: Int = 0
-    @Published private(set) var trialProgress: Double = 0.0
+    let countdown = TrialCountdownState()
+
+    var timeRemainingString: String { countdown.timeRemainingString }
+    var trialDaysRemaining: Int { countdown.trialDaysRemaining }
+    var trialHoursRemaining: Int { countdown.trialHoursRemaining }
+    var trialMinutesRemaining: Int { countdown.trialMinutesRemaining }
+    var trialSecondsRemaining: Int { countdown.trialSecondsRemaining }
+    var trialProgress: Double { countdown.trialProgress }
 
     // MARK: - Profil du Compte Apple / macOS (Photo & Prénom)
     @Published private(set) var appleAccountFirstName: String = ""
@@ -177,66 +191,78 @@ final class LicenseManager: ObservableObject {
         loadAppleAccountProfile()
     }
 
-    /// Extrait la photo de profil et le prénom du compte Apple / macOS local pour l'affichage dans la licence.
+    /// Extrait la photo de profil et le prénom du compte Apple / macOS local sans bloquer le thread principal au démarrage.
     func loadAppleAccountProfile() {
         let userName = NSUserName()
         let fallbackFull = NSFullUserName()
-
-        var extractedFirstName: String? = nil
-        var extractedAvatar: NSImage? = nil
-
-        if let identity = CBIdentity(name: userName, authority: .default()) {
-            if let img = identity.image {
-                extractedAvatar = img
-            }
-            if !identity.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                extractedFirstName = Self.extractFirstName(from: identity.fullName)
-            }
-        }
-
-        if extractedAvatar == nil || extractedFirstName == nil {
-            if let node = try? ODNode(session: .default(), type: ODNodeType(kODNodeTypeLocalNodes)),
-               let record = try? node.record(withRecordType: kODRecordTypeUsers, name: userName, attributes: nil),
-               let attrs = try? record.recordDetails(forAttributes: [
-                    kODAttributeTypeFirstName,
-                    kODAttributeTypeFullName,
-                    kODAttributeTypeJPEGPhoto,
-                    kODAttributeTypePicture
-               ]) {
-                if extractedFirstName == nil,
-                   let firstArr = attrs[kODAttributeTypeFirstName] as? [Any],
-                   let firstVal = firstArr.first as? String,
-                   !firstVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    extractedFirstName = firstVal.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                if extractedFirstName == nil,
-                   let fullArr = attrs[kODAttributeTypeFullName] as? [Any],
-                   let fullVal = fullArr.first as? String,
-                   !fullVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    extractedFirstName = Self.extractFirstName(from: fullVal)
-                }
-                if extractedAvatar == nil,
-                   let photoArr = attrs[kODAttributeTypeJPEGPhoto] as? [Any],
-                   let photoData = photoArr.first as? Data {
-                    extractedAvatar = NSImage(data: photoData)
-                }
-                if extractedAvatar == nil,
-                   let picArr = attrs[kODAttributeTypePicture] as? [Any],
-                   let picPath = picArr.first as? String {
-                    extractedAvatar = NSImage(contentsOfFile: picPath)
-                }
-            }
-        }
-
-        let finalName = extractedFirstName
-            ?? Self.extractFirstName(from: fallbackFull)
+        self.appleAccountFirstName = Self.extractFirstName(from: fallbackFull)
             ?? (userName.prefix(1).uppercased() + userName.dropFirst())
 
-        self.appleAccountFirstName = finalName
-        self.appleAccountAvatar = extractedAvatar
+        Task.detached(priority: .utility) { [weak self] in
+            var extractedFirstName: String? = nil
+            var extractedAvatarData: Data? = nil
+            var extractedPicPath: String? = nil
+
+            if let identity = CBIdentity(name: userName, authority: .default()) {
+                if let tiff = identity.image?.tiffRepresentation {
+                    extractedAvatarData = tiff
+                }
+                if !identity.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    extractedFirstName = Self.extractFirstName(from: identity.fullName)
+                }
+            }
+
+            if extractedAvatarData == nil || extractedFirstName == nil {
+                if let node = try? ODNode(session: .default(), type: ODNodeType(kODNodeTypeLocalNodes)),
+                   let record = try? node.record(withRecordType: kODRecordTypeUsers, name: userName, attributes: nil),
+                   let attrs = try? record.recordDetails(forAttributes: [
+                        kODAttributeTypeFirstName,
+                        kODAttributeTypeFullName,
+                        kODAttributeTypeJPEGPhoto,
+                        kODAttributeTypePicture
+                   ]) {
+                    if extractedFirstName == nil,
+                       let firstArr = attrs[kODAttributeTypeFirstName] as? [Any],
+                       let firstVal = firstArr.first as? String,
+                       !firstVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        extractedFirstName = firstVal.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    if extractedFirstName == nil,
+                       let fullArr = attrs[kODAttributeTypeFullName] as? [Any],
+                       let fullVal = fullArr.first as? String,
+                       !fullVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        extractedFirstName = Self.extractFirstName(from: fullVal)
+                    }
+                    if extractedAvatarData == nil,
+                       let photoArr = attrs[kODAttributeTypeJPEGPhoto] as? [Any],
+                       let photoData = photoArr.first as? Data {
+                        extractedAvatarData = photoData
+                    }
+                    if extractedAvatarData == nil,
+                       let picArr = attrs[kODAttributeTypePicture] as? [Any],
+                       let picPath = picArr.first as? String {
+                        extractedPicPath = picPath
+                    }
+                }
+            }
+
+            let resolvedFirstName = extractedFirstName
+            let resolvedAvatar = extractedAvatarData.flatMap { NSImage(data: $0) }
+                ?? extractedPicPath.flatMap { NSImage(contentsOfFile: $0) }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if let resolvedFirstName {
+                    self.appleAccountFirstName = resolvedFirstName
+                }
+                if let resolvedAvatar {
+                    self.appleAccountAvatar = resolvedAvatar
+                }
+            }
+        }
     }
 
-    private static func extractFirstName(from fullName: String) -> String? {
+    nonisolated private static func extractFirstName(from fullName: String) -> String? {
         let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let first = trimmed.components(separatedBy: .whitespacesAndNewlines).first(where: { !$0.isEmpty }) ?? trimmed
@@ -282,11 +308,13 @@ final class LicenseManager: ObservableObject {
     /// Démarre le minuteur qui rafraîchit le compte à rebours chaque seconde.
     private func startCountdownTicker() {
         countdownTimer?.invalidate()
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
                 self?.updateCountdownValues()
             }
         }
+        timer.tolerance = 0.25
+        countdownTimer = timer
     }
 
     /// Arrête le minuteur de compte à rebours.
@@ -311,7 +339,10 @@ final class LicenseManager: ObservableObject {
 
         let totalDuration = max(1.0, end.timeIntervalSince(start))
         let elapsed = now.timeIntervalSince(start)
-        self.trialProgress = min(1.0, max(0.0, elapsed / totalDuration))
+        let newProgress = min(1.0, max(0.0, elapsed / totalDuration))
+        if abs(countdown.trialProgress - newProgress) >= 0.0005 {
+            countdown.trialProgress = newProgress
+        }
 
         let totalSeconds = Int(remaining)
         let days = totalSeconds / 86400
@@ -319,15 +350,17 @@ final class LicenseManager: ObservableObject {
         let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60
 
-        self.trialDaysRemaining = days
-        self.trialHoursRemaining = hours
-        self.trialMinutesRemaining = minutes
-        self.trialSecondsRemaining = seconds
-
-        if days > 0 {
-            self.timeRemainingString = String(format: "%d j %02d h %02d m %02d s", days, hours, minutes, seconds)
-        } else {
-            self.timeRemainingString = String(format: "%02d h %02d m %02d s", hours, minutes, seconds)
+        // Ne déclenche pas d'invalidation SwiftUI si la seconde affichée n'a pas changé
+        if countdown.trialSecondsRemaining != seconds || countdown.trialMinutesRemaining != minutes || countdown.trialHoursRemaining != hours || countdown.trialDaysRemaining != days {
+            countdown.trialDaysRemaining = days
+            countdown.trialHoursRemaining = hours
+            countdown.trialMinutesRemaining = minutes
+            countdown.trialSecondsRemaining = seconds
+            if days > 0 {
+                countdown.timeRemainingString = String(format: "%d j %02d h %02d m %02d s", days, hours, minutes, seconds)
+            } else {
+                countdown.timeRemainingString = String(format: "%02d h %02d m %02d s", hours, minutes, seconds)
+            }
         }
     }
 
@@ -337,12 +370,12 @@ final class LicenseManager: ObservableObject {
 
         self.isTrialActive = false
         self.isPro = false
-        self.timeRemainingString = "Expiré"
-        self.trialDaysRemaining = 0
-        self.trialHoursRemaining = 0
-        self.trialMinutesRemaining = 0
-        self.trialSecondsRemaining = 0
-        self.trialProgress = 1.0
+        countdown.timeRemainingString = "Expiré"
+        countdown.trialDaysRemaining = 0
+        countdown.trialHoursRemaining = 0
+        countdown.trialMinutesRemaining = 0
+        countdown.trialSecondsRemaining = 0
+        countdown.trialProgress = 1.0
 
         Prefs.isTrialActive = false
         Prefs.isProUnlocked = false
@@ -351,7 +384,6 @@ final class LicenseManager: ObservableObject {
         Prefs.defaults.removeObject(forKey: PrefKey.isProUnlocked)
         Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
         Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
-        UserDefaults.standard.synchronize()
 
         // Maintien permanent de l'état "essai consommé" dans le trousseau Keychain
         KeychainTrialStorage.save(
@@ -395,7 +427,7 @@ final class LicenseManager: ObservableObject {
         self.isTrialActive = false
         self.isPro = true
         self.licenseKey = licenseKey
-        self.timeRemainingString = ""
+        countdown.timeRemainingString = ""
 
         Prefs.isProLifetime = true
         Prefs.isTrialActive = false
@@ -535,12 +567,12 @@ final class LicenseManager: ObservableObject {
         licenseInstanceId = ""
         trialStartDate = nil
         trialEndDate = nil
-        timeRemainingString = ""
-        trialDaysRemaining = 0
-        trialHoursRemaining = 0
-        trialMinutesRemaining = 0
-        trialSecondsRemaining = 0
-        trialProgress = 0.0
+        countdown.timeRemainingString = ""
+        countdown.trialDaysRemaining = 0
+        countdown.trialHoursRemaining = 0
+        countdown.trialMinutesRemaining = 0
+        countdown.trialSecondsRemaining = 0
+        countdown.trialProgress = 0.0
 
         Prefs.isProLifetime = false
         Prefs.isTrialActive = false
@@ -556,7 +588,6 @@ final class LicenseManager: ObservableObject {
         Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
         Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
         UserDefaults.standard.removeObject(forKey: instanceIdKey)
-        UserDefaults.standard.synchronize()
 
         resetProOnlyPreferencesToFreeDefaults()
 

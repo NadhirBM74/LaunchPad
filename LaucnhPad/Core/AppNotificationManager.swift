@@ -53,13 +53,15 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         }
     }
 
-    /// Prépare le logo actif de LaunchPad en PNG temporaire pour l'attacher aux notifications.
-    public static func prepareLogoAttachment() -> UNNotificationAttachment? {
-        let tempDir = FileManager.default.temporaryDirectory
-        let uniqueName = "LaunchPadNotificationLogo_\(UUID().uuidString).png"
-        let logoFile = tempDir.appendingPathComponent(uniqueName)
+    private static var cachedLogoPNGByRaw: [Int: Data] = [:]
 
+    /// Génère (et met en cache) les octets PNG 512×512 du logo actif via CoreGraphics sans utiliser `lockFocus`.
+    private static func cachedLogoPNGData() -> Data? {
         let logoRaw = Prefs.defaults.integer(forKey: PrefKey.appLogo)
+        if let cached = cachedLogoPNGByRaw[logoRaw] {
+            return cached
+        }
+
         let appLogo = AppLogo(rawValue: logoRaw) ?? .noir
         let sourceImage: NSImage
         if let img = appLogo.image {
@@ -74,21 +76,44 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
             return nil
         }
 
-        // Rendu net haute définition en 512x512
-        let targetSize = NSSize(width: 512, height: 512)
-        let finalImage = NSImage(size: targetSize)
-        finalImage.lockFocus()
-        sourceImage.draw(in: NSRect(origin: .zero, size: targetSize),
-                         from: NSRect(origin: .zero, size: sourceImage.size),
-                         operation: .sourceOver,
-                         fraction: 1.0)
-        finalImage.unlockFocus()
-
-        guard let tiffData = finalImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+        let pxSize = 512
+        var proposed = NSRect(origin: .zero, size: NSSize(width: pxSize, height: pxSize))
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                  data: nil,
+                  width: pxSize,
+                  height: pxSize,
+                  bitsPerComponent: 8,
+                  bytesPerRow: pxSize * 4,
+                  space: cs,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
             return nil
         }
+        ctx.interpolationQuality = .high
+        if let srcCG = sourceImage.cgImage(forProposedRect: &proposed, context: nil, hints: [.interpolation: NSImageInterpolation.high.rawValue]) {
+            ctx.draw(srcCG, in: CGRect(x: 0, y: 0, width: pxSize, height: pxSize))
+        } else {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            sourceImage.draw(in: NSRect(x: 0, y: 0, width: pxSize, height: pxSize), from: .zero, operation: .sourceOver, fraction: 1.0)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+
+        guard let outCG = ctx.makeImage(),
+              let pngData = NSBitmapImageRep(cgImage: outCG).representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        cachedLogoPNGByRaw[logoRaw] = pngData
+        return pngData
+    }
+
+    /// Prépare le logo actif de LaunchPad en PNG temporaire pour l'attacher aux notifications.
+    public static func prepareLogoAttachment() -> UNNotificationAttachment? {
+        guard let pngData = cachedLogoPNGData() else { return nil }
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let logoFile = tempDir.appendingPathComponent("LaunchPadNotificationLogo_\(UUID().uuidString).png")
 
         do {
             try pngData.write(to: logoFile, options: .atomic)
@@ -97,6 +122,7 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
             ]
             return try UNNotificationAttachment(identifier: "launchpad-app-logo", url: logoFile, options: options)
         } catch {
+            try? FileManager.default.removeItem(at: logoFile)
             print("[AppNotificationManager] Impossible de créer l'attachement du logo : \(error)")
             return nil
         }

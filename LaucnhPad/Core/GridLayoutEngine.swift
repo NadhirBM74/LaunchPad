@@ -62,34 +62,45 @@ struct GridLayoutEngine {
         let cols = max(1, columns)
         let rws = max(1, rows)
         let totalSlots = cols * rws
+        let maxPagesLimit = 200
         var placed: [PlacedItem] = []
         placed.reserveCapacity(items.count)
 
         var currentPage = 0
         // Matrice plate des cases occupées pour la page courante: pageOccupied[row * cols + col]
         var pageOccupied = [Bool](repeating: false, count: totalSlots)
+        var pageHasOccupied = false
+        var firstFreeSlot = 0
         var globalIndex = 0
         var startedPinnedFolderPage = false
 
         for item in items {
             if case .folder(let folder) = item, folder.pinToLastPage, !startedPinnedFolderPage {
                 startedPinnedFolderPage = true
-                if pageOccupied.contains(true) {
+                if pageHasOccupied {
                     currentPage += 1
                     pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                    pageHasOccupied = false
+                    firstFreeSlot = 0
                 }
             }
-            let (spanCols, spanRows) = item.span(columns: cols, rows: rws)
+            let (rawCols, rawRows) = item.span(columns: cols, rows: rws)
+            let spanCols = max(1, min(rawCols, cols))
+            let spanRows = max(1, min(rawRows, rws))
             var placedOnPage = false
 
-            while !placedOnPage {
-                if let pos = findSlot(colSpan: spanCols, rowSpan: spanRows, in: pageOccupied, columns: cols, rows: rws) {
+            while !placedOnPage, currentPage < maxPagesLimit {
+                if let pos = findSlot(colSpan: spanCols, rowSpan: spanRows, in: pageOccupied, columns: cols, rows: rws, startIndex: firstFreeSlot) {
                     // Réserve tous les emplacements de la grille couverts par cet élément
                     for r in pos.row..<(pos.row + spanRows) {
                         let rowOffset = r * cols + pos.col
                         for dc in 0..<spanCols {
                             pageOccupied[rowOffset + dc] = true
                         }
+                    }
+                    pageHasOccupied = true
+                    while firstFreeSlot < totalSlots && pageOccupied[firstFreeSlot] {
+                        firstFreeSlot += 1
                     }
 
                     // Calcul précis des coordonnées graphiques et du centre
@@ -130,6 +141,8 @@ struct GridLayoutEngine {
                     // L'élément ne rentre pas sur la page courante -> passage à la page suivante (réinitialisation sans allocation)
                     currentPage += 1
                     pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                    pageHasOccupied = false
+                    firstFreeSlot = 0
                 }
             }
         }
@@ -143,11 +156,24 @@ struct GridLayoutEngine {
         rowSpan: Int,
         in grid: [Bool],
         columns: Int,
-        rows: Int
+        rows: Int,
+        startIndex: Int = 0
     ) -> (col: Int, row: Int)? {
-        guard colSpan <= columns && rowSpan <= rows else { return nil }
+        guard colSpan > 0, rowSpan > 0, colSpan <= columns, rowSpan <= rows else { return nil }
+        if colSpan == 1 && rowSpan == 1 {
+            let total = columns * rows
+            var idx = max(0, startIndex)
+            while idx < total {
+                if !grid[idx] {
+                    return (idx % columns, idx / columns)
+                }
+                idx += 1
+            }
+            return nil
+        }
 
-        for r in 0...(rows - rowSpan) {
+        let startRow = min(rows - rowSpan, max(0, startIndex / columns))
+        for r in startRow...(rows - rowSpan) {
             for c in 0...(columns - colSpan) {
                 var canFit = true
                 for dr in 0..<rowSpan {
@@ -177,39 +203,50 @@ struct GridLayoutEngine {
         let cols = max(1, columns)
         let rws = max(1, rows)
         let totalSlots = cols * rws
+        let maxPagesLimit = 200
         var pages: [Int] = []
         pages.reserveCapacity(items.count)
 
         var currentPage = 0
         var pageOccupied = [Bool](repeating: false, count: totalSlots)
+        var pageHasOccupied = false
+        var firstFreeSlot = 0
         var startedPinnedFolderPage = false
 
         for item in items {
             if case .folder(let folder) = item, folder.pinToLastPage, !startedPinnedFolderPage {
                 startedPinnedFolderPage = true
-                if pageOccupied.contains(true) {
+                if pageHasOccupied {
                     currentPage += 1
                     pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                    pageHasOccupied = false
+                    firstFreeSlot = 0
                 }
             }
             let (spanCols, spanRows) = item.span(columns: cols, rows: rws)
-            let safeCols = min(spanCols, cols)
-            let safeRows = min(spanRows, rws)
+            let safeCols = max(1, min(spanCols, cols))
+            let safeRows = max(1, min(spanRows, rws))
             var placed = false
 
-            while !placed {
-                if let pos = findSlot(colSpan: safeCols, rowSpan: safeRows, in: pageOccupied, columns: cols, rows: rws) {
+            while !placed, currentPage < maxPagesLimit {
+                if let pos = findSlot(colSpan: safeCols, rowSpan: safeRows, in: pageOccupied, columns: cols, rows: rws, startIndex: firstFreeSlot) {
                     for r in pos.row..<(pos.row + safeRows) {
                         let rowOffset = r * cols + pos.col
                         for dc in 0..<safeCols {
                             pageOccupied[rowOffset + dc] = true
                         }
                     }
+                    pageHasOccupied = true
+                    while firstFreeSlot < totalSlots && pageOccupied[firstFreeSlot] {
+                        firstFreeSlot += 1
+                    }
                     pages.append(currentPage)
                     placed = true
                 } else {
                     currentPage += 1
                     pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                    pageHasOccupied = false
+                    firstFreeSlot = 0
                 }
             }
         }

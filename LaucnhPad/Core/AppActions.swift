@@ -11,8 +11,9 @@ enum AppActions {
             return
         }
         if app.id.hasPrefix("shortcut:") {
-            let shortcutName = CustomTileManager.shared.tile(for: app.id)?.target ?? String(app.id.dropFirst(9))
-            ProcessRunner.runDetached("/usr/bin/shortcuts", ["run", shortcutName])
+            if let shortcutName = CustomTileManager.shared.tile(for: app.id)?.target, !shortcutName.isEmpty {
+                ProcessRunner.runDetached("/usr/bin/shortcuts", ["run", shortcutName])
+            }
             return
         }
         let configuration = NSWorkspace.OpenConfiguration()
@@ -216,16 +217,21 @@ final class UninstallSession: ObservableObject, Identifiable {
     @Published var selected: Set<String> = []
     @Published private(set) var scanning = true
     @Published private(set) var working = false
+    private var scanTask: Task<Void, Never>?
 
     init(app: AppInfo) {
         self.app = app
-        Task { [weak self] in
+        self.scanTask = Task { [weak self] in
             let found = await Task.detached(priority: .userInitiated) { UninstallScanner.scan(app: app) }.value
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             self.files = found
             self.selected = Set(found.filter(\.selectedByDefault).map(\.id))
             self.scanning = false
         }
+    }
+
+    deinit {
+        scanTask?.cancel()
     }
 
     var isRunning: Bool { !AppActions.runningInstances(of: app).isEmpty }
@@ -238,7 +244,8 @@ final class UninstallSession: ObservableObject, Identifiable {
         let instances = AppActions.runningInstances(of: app)
         if !instances.isEmpty {
             instances.forEach { $0.terminate() }
-            for _ in 0..<30 where instances.contains(where: { !$0.isTerminated }) {
+            for _ in 0..<30 {
+                if !instances.contains(where: { !$0.isTerminated }) { break }
                 try? await Task.sleep(for: .milliseconds(100))
             }
             instances.filter { !$0.isTerminated }.forEach { $0.forceTerminate() }

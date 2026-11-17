@@ -87,7 +87,9 @@ struct VisualEffectBackground: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
+        if view.material != material {
+            view.material = material
+        }
     }
 }
 

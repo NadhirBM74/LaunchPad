@@ -73,8 +73,12 @@ final class AdminTestWindowController: NSObject, NSWindowDelegate {
         
         window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 4)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.contentViewController = NSHostingController(rootView: AdminTestCenterView(store: store))
-        window.center()
+        if let existing = window.contentViewController as? NSHostingController<AdminTestCenterView> {
+            existing.rootView = AdminTestCenterView(store: store)
+        } else {
+            window.contentViewController = NSHostingController(rootView: AdminTestCenterView(store: store))
+            window.center()
+        }
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -112,11 +116,6 @@ struct AdminTestCenterView: View {
 
     @ObservedObject private var admin = AdminManager.shared
     @ObservedObject private var license = LicenseManager.shared
-    @ObservedObject private var updates = UpdateManager.shared
-    @ObservedObject private var stats = SystemStatsMonitor.shared
-    @ObservedObject private var widgetMgr = WidgetManager.shared
-    @ObservedObject private var tileMgr = CustomTileManager.shared
-    @ObservedObject private var musicMgr = MusicServiceManager.shared
 
     @State private var selectedCategory: AdminTestCategory = .tutorial
     @State private var previewTutorial = false
@@ -602,22 +601,7 @@ struct AdminTestCenterView: View {
                         Text("État de l'essai :")
                             .font(.system(size: 13))
 
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(license.isTrialActive ? Color.orange : Color.secondary)
-                                .frame(width: 8, height: 8)
-                            Text(
-                                license.isTrialActive
-                                    ? "Actif — \(license.timeRemainingString)"
-                                    : (license.isProLifetime ? "Pro à vie activé" : "Inactif (Gratuit)")
-                            )
-                            .font(.system(size: 12.5, weight: .bold, design: .monospaced))
-                            .foregroundStyle(license.isTrialActive ? Color.orange : Color.secondary)
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background((license.isTrialActive ? Color.orange : Color.gray).opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        AdminTrialStatusBadge(license: license, countdown: license.countdown)
                     }
 
                     HStack(spacing: 8) {
@@ -696,7 +680,7 @@ struct AdminTestCenterView: View {
                     }
 
                     Button("Ajouter une Tuile Web de Démo (Apple)") {
-                        tileMgr.addTile(title: "Apple Démo", target: "https://apple.com", kind: .web, symbol: "apple.logo", colorHex: "FFFFFF")
+                        CustomTileManager.shared.addTile(title: "Apple Démo", target: "https://apple.com", kind: .web, symbol: "apple.logo", colorHex: "FFFFFF")
                         store?.refresh()
                         admin.log(category: "Catalogue", message: "Ajout d'un signet Web Apple de test")
                         triggerFeedback("Signet Web Apple ajouté au catalogue")
@@ -710,101 +694,18 @@ struct AdminTestCenterView: View {
     // MARK: - 4. Widgets & Tuiles
 
     private var widgetsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            testCard(title: "Bannière de Widgets Supérieure", subtitle: "Afficher, masquer ou replier la barre de widgets intégrée.") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("Afficher la bannière de widgets", isOn: $showWidgetBanner)
-                    Toggle("Bannière repliée", isOn: $widgetBannerCollapsed)
-                }
-            }
-
-            testCard(title: "Widgets Personnalisés", subtitle: "Ajoutez ou réinitialisez les widgets de test sur le bureau.") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Widgets actifs : **\(widgetMgr.widgets.count)**")
-
-                    HStack(spacing: 10) {
-                        Button("Ajouter Widget Vinyle") {
-                            let config = CustomWidgetConfig(kind: .vinylPlayer, size: .medium)
-                            widgetMgr.widgets.append(config)
-                            widgetMgr.saveSettings()
-                            store?.refresh()
-                            admin.log(category: "Widgets", message: "Ajout d'un widget Platine Vinyle")
-                            triggerFeedback("Widget Platine Vinyle ajouté")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button("Ajouter Widget Horloge") {
-                            let config = CustomWidgetConfig(kind: .clock, size: .small)
-                            widgetMgr.widgets.append(config)
-                            widgetMgr.saveSettings()
-                            store?.refresh()
-                            admin.log(category: "Widgets", message: "Ajout d'un widget Horloge")
-                            triggerFeedback("Widget Horloge ajouté")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button("Ajouter Widget Système") {
-                            let config = CustomWidgetConfig(kind: .system, size: .medium)
-                            widgetMgr.widgets.append(config)
-                            widgetMgr.saveSettings()
-                            store?.refresh()
-                            admin.log(category: "Widgets", message: "Ajout d'un widget Moniteur Système")
-                            triggerFeedback("Widget Moniteur Système ajouté")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    Button("Restaurer les widgets par défaut") {
-                        widgetMgr.widgets = WidgetManager.defaultWidgets()
-                        widgetMgr.saveSettings()
-                        store?.refresh()
-                        admin.log(category: "Widgets", message: "Restauration des widgets par défaut")
-                        triggerFeedback("Widgets restaurés par défaut")
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
+        AdminWidgetsSectionView(
+            store: store,
+            showWidgetBanner: $showWidgetBanner,
+            widgetBannerCollapsed: $widgetBannerCollapsed,
+            triggerFeedback: triggerFeedback
+        )
     }
 
     // MARK: - 5. Simulation Musique
 
     private var musicSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            testCard(title: "Simulateur de Piste en Cours (Now Playing)", subtitle: "Permet de tester l'affichage et l'animation du widget Vinyle sans lancer de lecteur.") {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Piste actuelle :")
-                        Text(musicMgr.currentTrack.title.isEmpty ? "Aucune lecture" : "\(musicMgr.currentTrack.title) — \(musicMgr.currentTrack.artist)")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack(spacing: 10) {
-                        Button("Daft Punk - One More Time") {
-                            admin.log(category: "Musique", message: "Simulation piste Daft Punk")
-                            musicMgr.alertMessage = "Simulation Daft Punk"
-                            triggerFeedback("Morceau simulé : Daft Punk - One More Time")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button("The Weeknd - Blinding Lights") {
-                            admin.log(category: "Musique", message: "Simulation piste The Weeknd")
-                            musicMgr.alertMessage = "Simulation The Weeknd"
-                            triggerFeedback("Morceau simulé : The Weeknd - Blinding Lights")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button("Ouvrir l'application Musique") {
-                            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Music.app"))
-                            admin.log(category: "Musique", message: "Ouverture de l'application Musique macOS")
-                            triggerFeedback("Application Musique macOS lancée")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
-            }
-        }
+        AdminMusicSectionView(triggerFeedback: triggerFeedback)
     }
 
     // MARK: - 6. Thèmes & Logos
@@ -1037,27 +938,231 @@ struct AdminTestCenterView: View {
     // MARK: - 9. Mises à jour
 
     private var updatesSection: some View {
+        AdminUpdatesSectionView(triggerFeedback: triggerFeedback)
+    }
+
+    // MARK: - 10. Diagnostics & Logs
+
+    private var diagnosticsSection: some View {
+        AdminDiagnosticsSectionView(triggerFeedback: triggerFeedback)
+    }
+
+    // MARK: - Feedback Toast Helper
+
+    private func triggerFeedback(_ text: String) {
+        feedbackTask?.cancel()
+        withAnimation(.easeOut(duration: 0.2)) {
+            feedbackBanner = text
+        }
+        feedbackTask = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.25)) {
+                feedbackBanner = nil
+            }
+        }
+    }
+
+    // MARK: - Composants Utilitaires
+
+    private func testCard<Content: View>(title: String, subtitle: String, @ViewBuilder content: @escaping () -> Content) -> some View {
+        AdminTestCard(title: title, subtitle: subtitle, content: content)
+    }
+}
+
+// MARK: - Sous-vues isolées (évitent l'invalidation globale de AdminTestCenterView)
+
+private struct AdminTestCard<Content: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            content()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.035))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+                )
+        )
+    }
+}
+
+private struct AdminTrialStatusBadge: View {
+    let license: LicenseManager
+    @ObservedObject var countdown: TrialCountdownState
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(license.isTrialActive ? Color.orange : Color.secondary)
+                .frame(width: 8, height: 8)
+            Text(
+                license.isTrialActive
+                    ? "Actif — \(countdown.timeRemainingString)"
+                    : (license.isProLifetime ? "Pro à vie activé" : "Inactif (Gratuit)")
+            )
+            .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+            .foregroundStyle(license.isTrialActive ? Color.orange : Color.secondary)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background((license.isTrialActive ? Color.orange : Color.gray).opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct AdminWidgetsSectionView: View {
+    var store: LaunchpadStore?
+    @Binding var showWidgetBanner: Bool
+    @Binding var widgetBannerCollapsed: Bool
+    let triggerFeedback: (String) -> Void
+
+    @ObservedObject private var widgetMgr = WidgetManager.shared
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            testCard(title: "Simulateur d'États de Mise à Jour", subtitle: "Forcez l'UpdateManager dans un état particulier pour tester l'interface utilisateur.") {
+            AdminTestCard(title: "Bannière de Widgets Supérieure", subtitle: "Afficher, masquer ou replier la barre de widgets intégrée.") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("Afficher la bannière de widgets", isOn: $showWidgetBanner)
+                    Toggle("Bannière repliée", isOn: $widgetBannerCollapsed)
+                }
+            }
+
+            AdminTestCard(title: "Widgets Personnalisés", subtitle: "Ajoutez ou réinitialisez les widgets de test sur le bureau.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Widgets actifs : **\(widgetMgr.widgets.count)**")
+
+                    HStack(spacing: 10) {
+                        Button("Ajouter Widget Vinyle") {
+                            let config = CustomWidgetConfig(kind: .vinylPlayer, size: .medium)
+                            widgetMgr.widgets.append(config)
+                            widgetMgr.saveSettings()
+                            store?.refresh()
+                            AdminManager.shared.log(category: "Widgets", message: "Ajout d'un widget Platine Vinyle")
+                            triggerFeedback("Widget Platine Vinyle ajouté")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Ajouter Widget Horloge") {
+                            let config = CustomWidgetConfig(kind: .clock, size: .small)
+                            widgetMgr.widgets.append(config)
+                            widgetMgr.saveSettings()
+                            store?.refresh()
+                            AdminManager.shared.log(category: "Widgets", message: "Ajout d'un widget Horloge")
+                            triggerFeedback("Widget Horloge ajouté")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Ajouter Widget Système") {
+                            let config = CustomWidgetConfig(kind: .system, size: .medium)
+                            widgetMgr.widgets.append(config)
+                            widgetMgr.saveSettings()
+                            store?.refresh()
+                            AdminManager.shared.log(category: "Widgets", message: "Ajout d'un widget Moniteur Système")
+                            triggerFeedback("Widget Moniteur Système ajouté")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Button("Restaurer les widgets par défaut") {
+                        widgetMgr.widgets = WidgetManager.defaultWidgets()
+                        widgetMgr.saveSettings()
+                        store?.refresh()
+                        AdminManager.shared.log(category: "Widgets", message: "Restauration des widgets par défaut")
+                        triggerFeedback("Widgets restaurés par défaut")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+}
+
+private struct AdminMusicSectionView: View {
+    let triggerFeedback: (String) -> Void
+    @ObservedObject private var musicMgr = MusicServiceManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AdminTestCard(title: "Simulateur de Piste en Cours (Now Playing)", subtitle: "Permet de tester l'affichage et l'animation du widget Vinyle sans lancer de lecteur.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Piste actuelle :")
+                        Text(musicMgr.currentTrack.title.isEmpty ? "Aucune lecture" : "\(musicMgr.currentTrack.title) — \(musicMgr.currentTrack.artist)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button("Daft Punk - One More Time") {
+                            AdminManager.shared.log(category: "Musique", message: "Simulation piste Daft Punk")
+                            musicMgr.alertMessage = "Simulation Daft Punk"
+                            triggerFeedback("Morceau simulé : Daft Punk - One More Time")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("The Weeknd - Blinding Lights") {
+                            AdminManager.shared.log(category: "Musique", message: "Simulation piste The Weeknd")
+                            musicMgr.alertMessage = "Simulation The Weeknd"
+                            triggerFeedback("Morceau simulé : The Weeknd - Blinding Lights")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Ouvrir l'application Musique") {
+                            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Music.app"))
+                            AdminManager.shared.log(category: "Musique", message: "Ouverture de l'application Musique macOS")
+                            triggerFeedback("Application Musique macOS lancée")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct AdminUpdatesSectionView: View {
+    let triggerFeedback: (String) -> Void
+    @ObservedObject private var updates = UpdateManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AdminTestCard(title: "Simulateur d'États de Mise à Jour", subtitle: "Forcez l'UpdateManager dans un état particulier pour tester l'interface utilisateur.") {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         Button("Normal (Idle)") {
                             updates.setDebugState(.idle)
-                            admin.log(category: "Update", message: "État défini sur .idle")
+                            AdminManager.shared.log(category: "Update", message: "État défini sur .idle")
                             triggerFeedback("État UpdateManager : .idle")
                         }
                         .buttonStyle(.bordered)
 
                         Button("Recherche en cours...") {
                             updates.setDebugState(.checking)
-                            admin.log(category: "Update", message: "État défini sur .checking")
+                            AdminManager.shared.log(category: "Update", message: "État défini sur .checking")
                             triggerFeedback("État UpdateManager : .checking")
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.3)") {
-                            updates.setDebugState(.upToDate(version: "1.2.3"))
-                            admin.log(category: "Update", message: "État défini sur .upToDate")
+                        Button("À jour (v1.2.4)") {
+                            updates.setDebugState(.upToDate(version: "1.2.4"))
+                            AdminManager.shared.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }
                         .buttonStyle(.bordered)
@@ -1066,21 +1171,21 @@ struct AdminTestCenterView: View {
                     HStack(spacing: 8) {
                         Button("Mise à jour dispo (v2.0.0)") {
                             updates.setDebugState(.updateAvailable(version: "2.0.0", notes: "### 🚀 Nouveautés v2.0.0\n- Mode Administrateur complet\n- Nouveau tutoriel interactif\n- Améliorations de fluidité", downloadUrl: nil))
-                            admin.log(category: "Update", message: "État défini sur .updateAvailable (v2.0.0)")
+                            AdminManager.shared.log(category: "Update", message: "État défini sur .updateAvailable (v2.0.0)")
                             triggerFeedback("État UpdateManager : .updateAvailable (v2.0.0)")
                         }
                         .buttonStyle(.bordered)
 
                         Button("Téléchargement (65%)") {
                             updates.setDebugState(.downloading(progress: 0.65))
-                            admin.log(category: "Update", message: "État défini sur .downloading (65%)")
+                            AdminManager.shared.log(category: "Update", message: "État défini sur .downloading (65%)")
                             triggerFeedback("État UpdateManager : .downloading (65%)")
                         }
                         .buttonStyle(.bordered)
 
                         Button("Prêt à redémarrer") {
                             updates.setDebugState(.readyToRestart(version: "2.0.0"))
-                            admin.log(category: "Update", message: "État défini sur .readyToRestart")
+                            AdminManager.shared.log(category: "Update", message: "État défini sur .readyToRestart")
                             triggerFeedback("État UpdateManager : .readyToRestart")
                         }
                         .buttonStyle(.bordered)
@@ -1089,12 +1194,16 @@ struct AdminTestCenterView: View {
             }
         }
     }
+}
 
-    // MARK: - 10. Diagnostics & Logs
+private struct AdminDiagnosticsSectionView: View {
+    let triggerFeedback: (String) -> Void
+    @ObservedObject private var stats = SystemStatsMonitor.shared
+    @ObservedObject private var admin = AdminManager.shared
 
-    private var diagnosticsSection: some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            testCard(title: "Performances & Système en Direct", subtitle: "Lecture instantanée des ressources matérielles.") {
+            AdminTestCard(title: "Performances & Système en Direct", subtitle: "Lecture instantanée des ressources matérielles.") {
                 HStack(spacing: 20) {
                     statBox(title: "CPU", value: "\(stats.cpuPercent)%", icon: "cpu")
                     statBox(title: "RAM Utilisée", value: "\(stats.ramPercent)%", icon: "memorychip")
@@ -1103,7 +1212,7 @@ struct AdminTestCenterView: View {
                 }
             }
 
-            testCard(title: "Informations Système", subtitle: "Détails techniques de l'environnement.") {
+            AdminTestCard(title: "Informations Système", subtitle: "Détails techniques de l'environnement.") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("• Version macOS : **\(ProcessInfo.processInfo.operatingSystemVersionString)**")
                     Text("• Nombre de cœurs CPU : **\(ProcessInfo.processInfo.processorCount)**")
@@ -1114,7 +1223,7 @@ struct AdminTestCenterView: View {
                 .font(.system(size: 12))
             }
 
-            testCard(title: "Journal des Événements & Tests (\(admin.testLogs.count))", subtitle: "Historique en temps réel des actions de test exécutées.") {
+            AdminTestCard(title: "Journal des Événements & Tests (\(admin.testLogs.count))", subtitle: "Historique en temps réel des actions de test exécutées.") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Spacer()
@@ -1127,7 +1236,7 @@ struct AdminTestCenterView: View {
                     }
 
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
+                        LazyVStack(alignment: .leading, spacing: 4) {
                             ForEach(admin.testLogs) { log in
                                 HStack(spacing: 8) {
                                     Text(log.timestamp.formatted(date: .omitted, time: .standard))
@@ -1151,49 +1260,12 @@ struct AdminTestCenterView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Feedback Toast Helper
-
-    private func triggerFeedback(_ text: String) {
-        feedbackTask?.cancel()
-        withAnimation(.easeOut(duration: 0.2)) {
-            feedbackBanner = text
+        .onAppear {
+            stats.startMonitoring(alwaysActive: true)
         }
-        feedbackTask = Task {
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: 0.25)) {
-                feedbackBanner = nil
-            }
+        .onDisappear {
+            stats.stopMonitoring(alwaysActive: true)
         }
-    }
-
-    // MARK: - Composants Utilitaires
-
-    private func testCard<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider()
-
-            content()
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.035))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.primary.opacity(0.07), lineWidth: 1)
-                )
-        )
     }
 
     private func statBox(title: String, value: String, icon: String) -> some View {

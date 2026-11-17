@@ -153,6 +153,33 @@ final class LaunchpadViewModel: ObservableObject {
     let pageScroll = PageScroll()
     let settingsChrome = SettingsChrome()
 
+    private var cachedTileModels: [String: TileModel] = [:]
+    private var cachedTileState: (rev: Int, icons: Int, running: Int, showRun: Bool, lang: String, tint: Color?)?
+
+    /// Cache O(1) des modèles de tuiles pour éviter de reconstruire titres, états et aperçus de dossiers à 120 Hz.
+    func cachedTileModel(for item: LayoutItem, showRunning: Bool, tint: Color?) -> TileModel {
+        let lang = LocalizationManager.activeLanguageCode
+        let runRev = showRunning ? store.runningRevision : -1
+        let state = (rev: store.revision, icons: store.iconsVersion, running: runRev, showRun: showRunning, lang: lang, tint: tint)
+        if let prev = cachedTileState {
+            if prev.rev != state.rev || prev.icons != state.icons || prev.running != state.running ||
+                prev.showRun != state.showRun || prev.lang != state.lang || prev.tint != state.tint {
+                cachedTileModels.removeAll(keepingCapacity: true)
+                cachedTileState = state
+            }
+        } else {
+            cachedTileState = state
+        }
+
+        if let existing = cachedTileModels[item.id] {
+            return existing
+        }
+        var built = TileModel.make(item, store: store, showRunning: showRunning)
+        built.tintColor = tint
+        cachedTileModels[item.id] = built
+        return built
+    }
+
     @Published var query = "" { didSet { if query != oldValue { queryChanged(from: oldValue) } } }
     @Published private(set) var page = 0
     @Published private(set) var lastPage = 0

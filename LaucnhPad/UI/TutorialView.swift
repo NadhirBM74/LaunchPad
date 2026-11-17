@@ -30,7 +30,7 @@ struct TutorialCardView: View {
         self._currentStepIndex = State(initialValue: initialStepIndex)
     }
 
-    private let steps: [TutorialStep] = [
+    private static let steps: [TutorialStep] = [
         TutorialStep(
             id: 0,
             badge: "OUVERTURE RAPIDE",
@@ -94,7 +94,7 @@ struct TutorialCardView: View {
     ]
 
     var body: some View {
-        let currentStep = steps[currentStepIndex]
+        let currentStep = Self.steps[currentStepIndex]
 
         VStack(spacing: 0) {
             // Barre supérieure : Badge étape, Titre & Bouton Fermer
@@ -114,7 +114,7 @@ struct TutorialCardView: View {
                     .background(currentStep.iconColor.opacity(0.16))
                     .clipShape(Capsule())
 
-                    Text("Étape \(currentStepIndex + 1) sur \(steps.count)")
+                    Text("Étape \(currentStepIndex + 1) sur \(Self.steps.count)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -273,7 +273,7 @@ struct TutorialCardView: View {
 
                 // Indicateur de points d'étapes (Apple style discret)
                 HStack(spacing: 6) {
-                    ForEach(0..<steps.count, id: \.self) { idx in
+                    ForEach(0..<Self.steps.count, id: \.self) { idx in
                         Capsule()
                             .fill(idx == currentStepIndex ? currentStep.iconColor : Color.white.opacity(0.25))
                             .frame(width: idx == currentStepIndex ? 18 : 6, height: 6)
@@ -283,7 +283,7 @@ struct TutorialCardView: View {
 
                 Spacer()
 
-                if currentStepIndex < steps.count - 1 {
+                if currentStepIndex < Self.steps.count - 1 {
                     Button {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             currentStepIndex += 1
@@ -380,7 +380,7 @@ private struct AnimStep0OpenClose: View {
     @State private var launchpadOpacity: Double = 0.0
     @State private var launchpadScale: CGFloat = 0.85
     @State private var statusMessage = "1. Pincez ou pressez ⌃ Espace"
-    @State private var timer: Timer? = nil
+    @State private var loopTask: Task<Void, Never>? = nil
 
     var body: some View {
         HStack(spacing: 26) {
@@ -643,14 +643,17 @@ private struct AnimStep0OpenClose: View {
             }
         }
         .onAppear {
-            runAnimationCycle()
-            timer = Timer.scheduledTimer(withTimeInterval: 6.2, repeats: true) { _ in
-                runAnimationCycle()
+            loopTask?.cancel()
+            loopTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    await runAnimationCycle()
+                    try? await Task.sleep(for: .seconds(1.4))
+                }
             }
         }
         .onDisappear {
-            timer?.invalidate()
-            timer = nil
+            loopTask?.cancel()
+            loopTask = nil
         }
     }
 
@@ -685,7 +688,8 @@ private struct AnimStep0OpenClose: View {
         }
     }
 
-    private func runAnimationCycle() {
+    @MainActor
+    private func runAnimationCycle() async {
         // 0. ÉTAT INITIAL AU REPOS (Bureau macOS)
         withAnimation(.easeOut(duration: 0.3)) {
             launchpadOpacity = 0.0
@@ -696,48 +700,48 @@ private struct AnimStep0OpenClose: View {
         }
 
         // 1. GESTE D'OUVERTURE : Doigts pincent + touches s'enfoncent -> LaunchPad zoome et s'affiche SIMULTANÉMENT !
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                pinchProgress = 1.0
-                isKeyPressed = true
-                launchpadOpacity = 1.0
-                launchpadScale = 1.0
-                statusMessage = "✦ Le geste ouvre LaunchPad !"
-            }
+        try? await Task.sleep(for: .seconds(1.0))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            pinchProgress = 1.0
+            isKeyPressed = true
+            launchpadOpacity = 1.0
+            launchpadScale = 1.0
+            statusMessage = "✦ Le geste ouvre LaunchPad !"
         }
 
         // 2. Relâchement des doigts : LaunchPad reste grand ouvert et stable
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
-            withAnimation(.easeOut(duration: 0.3)) {
-                pinchProgress = 0.0
-                isKeyPressed = false
-                statusMessage = "✦ LaunchPad est ouvert et prêt"
-            }
+        try? await Task.sleep(for: .seconds(0.7))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.3)) {
+            pinchProgress = 0.0
+            isKeyPressed = false
+            statusMessage = "✦ LaunchPad est ouvert et prêt"
         }
 
         // 3. ANNONCE DE LA FERMETURE (l'utilisateur lit ce qui va se passer)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
-            statusMessage = "2. Pincez à nouveau pour fermer..."
-        }
+        try? await Task.sleep(for: .seconds(1.7))
+        guard !Task.isCancelled else { return }
+        statusMessage = "2. Pincez à nouveau pour fermer..."
 
         // 4. GESTE DE FERMETURE EN DIRECT : Doigts pincent + touches s'enfoncent -> LaunchPad se referme SIMULTANÉMENT !
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.1) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                pinchProgress = 1.0
-                isKeyPressed = true
-                launchpadOpacity = 0.0
-                launchpadScale = 0.85
-                statusMessage = "✦ Le geste referme LaunchPad !"
-            }
+        try? await Task.sleep(for: .seconds(0.7))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            pinchProgress = 1.0
+            isKeyPressed = true
+            launchpadOpacity = 0.0
+            launchpadScale = 0.85
+            statusMessage = "✦ Le geste referme LaunchPad !"
         }
 
         // 5. Relâchement des doigts sur le bureau : état final au repos
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.8) {
-            withAnimation(.easeOut(duration: 0.3)) {
-                pinchProgress = 0.0
-                isKeyPressed = false
-                statusMessage = "✦ Retour au bureau macOS"
-            }
+        try? await Task.sleep(for: .seconds(0.7))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.3)) {
+            pinchProgress = 0.0
+            isKeyPressed = false
+            statusMessage = "✦ Retour au bureau macOS"
         }
     }
 }
@@ -749,6 +753,7 @@ private struct AnimStep1SearchLaunch: View {
 
     @State private var typed = ""
     @State private var isLaunched = false
+    @State private var loopTask: Task<Void, Never>? = nil
 
     var body: some View {
         VStack(spacing: 14) {
@@ -809,6 +814,10 @@ private struct AnimStep1SearchLaunch: View {
         .onAppear {
             startLoop()
         }
+        .onDisappear {
+            loopTask?.cancel()
+            loopTask = nil
+        }
     }
 
     private func appTile(name: String, icon: String, color: Color, isMatch: Bool, isTarget: Bool = false) -> some View {
@@ -841,20 +850,26 @@ private struct AnimStep1SearchLaunch: View {
     }
 
     private func startLoop() {
-        Timer.scheduledTimer(withTimeInterval: 3.4, repeats: true) { _ in
-            typed = ""
-            isLaunched = false
+        loopTask?.cancel()
+        loopTask = Task { @MainActor in
+            while !Task.isCancelled {
+                typed = ""
+                isLaunched = false
 
-            for (idx, char) in "Safari".enumerated() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(idx) * 0.16 + 0.2) {
+                try? await Task.sleep(for: .seconds(0.2))
+                for char in "Safari" {
+                    guard !Task.isCancelled else { return }
                     typed.append(char)
+                    try? await Task.sleep(for: .seconds(0.16))
                 }
-            }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                try? await Task.sleep(for: .seconds(0.4))
+                guard !Task.isCancelled else { return }
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     isLaunched = true
                 }
+
+                try? await Task.sleep(for: .seconds(2.0))
             }
         }
     }
@@ -867,7 +882,7 @@ private struct AnimStep2DragAndPage: View {
 
     @State private var phase: Int = 0 // 0: repos, 1: levé, 2: bord droit, 3: flip page, 4: dépose, 5: succès
     @State private var activePage: Int = 0
-    @State private var timer: Timer? = nil
+    @State private var loopTask: Task<Void, Never>? = nil
 
     // Coordonnées de Safari
     private var safariX: CGFloat {
@@ -1089,14 +1104,17 @@ private struct AnimStep2DragAndPage: View {
             }
         }
         .onAppear {
-            runCycle()
-            timer = Timer.scheduledTimer(withTimeInterval: 4.8, repeats: true) { _ in
-                runCycle()
+            loopTask?.cancel()
+            loopTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    await runCycle()
+                    try? await Task.sleep(for: .seconds(1.6))
+                }
             }
         }
         .onDisappear {
-            timer?.invalidate()
-            timer = nil
+            loopTask?.cancel()
+            loopTask = nil
         }
     }
 
@@ -1113,36 +1131,37 @@ private struct AnimStep2DragAndPage: View {
         }
     }
 
-    private func runCycle() {
+    @MainActor
+    private func runCycle() async {
         // Étape 0 : Début au repos sur Page 1
         phase = 0
         activePage = 0
 
         // Étape 1 : Le curseur attrape et soulève Safari
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            phase = 1
-        }
+        try? await Task.sleep(for: .seconds(0.5))
+        guard !Task.isCancelled else { return }
+        phase = 1
 
         // Étape 2 : Déplacement vers le bord droit de l'écran
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            phase = 2
-        }
+        try? await Task.sleep(for: .seconds(0.7))
+        guard !Task.isCancelled else { return }
+        phase = 2
 
         // Étape 3 : Déclenchement de la Page 2
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            phase = 3
-            activePage = 1
-        }
+        try? await Task.sleep(for: .seconds(0.8))
+        guard !Task.isCancelled else { return }
+        phase = 3
+        activePage = 1
 
         // Étape 4 : Dépose de Safari sur la Page 2
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.7) {
-            phase = 4
-        }
+        try? await Task.sleep(for: .seconds(0.7))
+        guard !Task.isCancelled else { return }
+        phase = 4
 
         // Étape 5 : Curseur s'éloigne, état final validé
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
-            phase = 5
-        }
+        try? await Task.sleep(for: .seconds(0.5))
+        guard !Task.isCancelled else { return }
+        phase = 5
     }
 }
 
@@ -1155,6 +1174,7 @@ private struct AnimStep3CreateFolder: View {
     @State private var musicX: CGFloat = -55.0
     @State private var isLifted = false
     @State private var isFolderOpen = false
+    @State private var loopTask: Task<Void, Never>? = nil
 
     var body: some View {
         VStack(spacing: 16) {
@@ -1262,40 +1282,49 @@ private struct AnimStep3CreateFolder: View {
         .onAppear {
             startLoop()
         }
+        .onDisappear {
+            loopTask?.cancel()
+            loopTask = nil
+        }
     }
 
     private func startLoop() {
-        Timer.scheduledTimer(withTimeInterval: 3.8, repeats: true) { _ in
-            dragX = 55
-            musicX = -55
-            isFolderOpen = false
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                isLifted = true
-            }
+        loopTask?.cancel()
+        loopTask = Task { @MainActor in
+            while !Task.isCancelled {
+                dragX = 55
+                musicX = -55
+                isFolderOpen = false
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isLifted = true
+                }
 
-            // Déplacement des deux icônes vers le centre (0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                // Déplacement des deux icônes vers le centre (0)
+                try? await Task.sleep(for: .seconds(0.35))
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeInOut(duration: 0.9)) {
                     dragX = 0
                     musicX = 0
                 }
-            }
 
-            // Fusion au centre
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
+                // Fusion au centre
+                try? await Task.sleep(for: .seconds(1.0))
+                guard !Task.isCancelled else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
                     isFolderOpen = true
                     isLifted = false
                 }
-            }
 
-            // Réinitialisation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.9) {
+                // Réinitialisation
+                try? await Task.sleep(for: .seconds(1.55))
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeInOut(duration: 0.5)) {
                     dragX = 55
                     musicX = -55
                     isFolderOpen = false
                 }
+
+                try? await Task.sleep(for: .seconds(0.9))
             }
         }
     }
@@ -1473,35 +1502,13 @@ private struct AnimStep5ProTrial: View {
                     }
 
                     if licenseManager.isTrialActive {
-                        // Compte à rebours dynamique en grand
+                        // Compte à rebours dynamique en grand (isolé sur countdown)
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Décompte en temps réel :")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.75))
 
-                            HStack(spacing: 4) {
-                                countdownBox(val: String(format: "%02d", licenseManager.trialDaysRemaining), unit: "Jours")
-                                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                                countdownBox(val: String(format: "%02d", licenseManager.trialHoursRemaining), unit: "Heures")
-                                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                                countdownBox(val: String(format: "%02d", licenseManager.trialMinutesRemaining), unit: "Min")
-                                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                                countdownBox(val: String(format: "%02d", licenseManager.trialSecondsRemaining), unit: "Sec")
-                            }
-
-                            // Jauge de progression
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(Color.white.opacity(0.12))
-                                        .frame(height: 4)
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(LinearGradient(colors: [Color.orange, Color.yellow], startPoint: .leading, endPoint: .trailing))
-                                        .frame(width: max(6, geo.size.width * CGFloat(1.0 - licenseManager.trialProgress)), height: 4)
-                                }
-                            }
-                            .frame(height: 4)
-                            .padding(.top, 2)
+                            TrialCountdownBoxesView(countdown: licenseManager.countdown)
 
                             HStack {
                                 Text("Retour automatique en gratuit.")
@@ -1722,6 +1729,51 @@ private struct AnimStep5ProTrial: View {
         }
     }
 
+    private func validateKey() {
+        let res = licenseManager.validate(code: enteredKey)
+        if res.success {
+            feedbackText = "Licence activée !"
+            feedbackIsError = false
+            showingKeyInput = false
+            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
+        } else {
+            feedbackText = res.message
+            feedbackIsError = true
+        }
+    }
+}
+
+private struct TrialCountdownBoxesView: View {
+    @ObservedObject var countdown: TrialCountdownState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                countdownBox(val: String(format: "%02d", countdown.trialDaysRemaining), unit: "Jours")
+                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                countdownBox(val: String(format: "%02d", countdown.trialHoursRemaining), unit: "Heures")
+                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                countdownBox(val: String(format: "%02d", countdown.trialMinutesRemaining), unit: "Min")
+                Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
+                countdownBox(val: String(format: "%02d", countdown.trialSecondsRemaining), unit: "Sec")
+            }
+
+            // Jauge de progression
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 4)
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(LinearGradient(colors: [Color.orange, Color.yellow], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(6, geo.size.width * CGFloat(1.0 - countdown.trialProgress)), height: 4)
+                }
+            }
+            .frame(height: 4)
+            .padding(.top, 2)
+        }
+    }
+
     private func countdownBox(val: String, unit: String) -> some View {
         VStack(spacing: 1.5) {
             Text(val)
@@ -1735,19 +1787,6 @@ private struct AnimStep5ProTrial: View {
             Text(unit)
                 .font(.system(size: 7.5, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
-        }
-    }
-
-    private func validateKey() {
-        let res = licenseManager.validate(code: enteredKey)
-        if res.success {
-            feedbackText = "Licence activée !"
-            feedbackIsError = false
-            showingKeyInput = false
-            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        } else {
-            feedbackText = res.message
-            feedbackIsError = true
         }
     }
 }

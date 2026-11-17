@@ -112,6 +112,7 @@ final class LaunchpadStore: ObservableObject {
     @Published private(set) var hidden: Set<String> = []
     @Published private(set) var customNames: [String: String] = [:]
     @Published private(set) var runningBundleIDs: Set<String> = []
+    private(set) var runningRevision = 0
     @Published private(set) var isLoading = true
     @Published private(set) var iconsVersion = 0
     /// Incrémenté à chaque modification du catalogue ou de la visibilité (cache de recherche).
@@ -120,11 +121,17 @@ final class LaunchpadStore: ObservableObject {
     private var hasLayoutFile = false
     private var started = false
     private var scanTask: Task<Void, Never>?
+    private var iconPreloadTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var missingSince: [String: Date] = [:]
     private(set) var lastScan = Date.distantPast
     private let watcher = FolderWatcher()
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
 
     // MARK: Démarrage
 
@@ -146,6 +153,7 @@ final class LaunchpadStore: ObservableObject {
 
     @objc private func iconStyleNotificationReceived() {
         iconsVersion &+= 1
+        prewarmIcons(Array(catalog.keys))
     }
 
     @objc private func runningAppsChanged() { updateRunningApps() }
@@ -153,7 +161,10 @@ final class LaunchpadStore: ObservableObject {
 
     private func updateRunningApps() {
         let ids = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-        if ids != runningBundleIDs { runningBundleIDs = ids }
+        if ids != runningBundleIDs {
+            runningRevision &+= 1
+            runningBundleIDs = ids
+        }
     }
 
     func isRunning(_ app: AppInfo) -> Bool {
@@ -176,11 +187,52 @@ final class LaunchpadStore: ObservableObject {
         }
     }
 
-    /// Vide le cache d'icônes et les régénère (changement de style d'icône).
+    /// Vide le cache d'icônes et les régénère en arrière-plan (changement de style d'icône).
     func reloadIcons() {
         IconCache.shared.removeAll()
         iconsVersion &+= 1
+        prewarmIcons(Array(catalog.keys))
         refresh()
+    }
+
+    /// Pré-rend en parallèle et hors thread principal toutes les icônes manquantes dans le style actif.
+    private func prewarmIcons(_ candidateIDs: [String]) {
+        let missingIcons = candidateIDs.filter { !IconCache.shared.contains($0) && !CustomIconManager.shared.hasOverride(for: $0) }
+        guard !missingIcons.isEmpty else { return }
+
+        // Prioriser les éléments visibles en tête de grille pour un affichage instantané
+        var orderedSet = Set<String>()
+        var prioritized: [String] = []
+        prioritized.reserveCapacity(missingIcons.count)
+        let missingLookup = Set(missingIcons)
+        for item in visibleItems {
+            switch item {
+            case .app(let id) where missingLookup.contains(id):
+                if orderedSet.insert(id).inserted { prioritized.append(id) }
+            case .folder(let folder):
+                for id in folder.apps.prefix(9) where missingLookup.contains(id) {
+                    if orderedSet.insert(id).inserted { prioritized.append(id) }
+                }
+            default: break
+            }
+        }
+        for id in missingIcons where orderedSet.insert(id).inserted {
+            prioritized.append(id)
+        }
+
+        let style = IconCache.shared.currentAppearanceStyle
+        let tintRGB = IconCache.shared.activeTintRGB
+        let tintKey = IconCache.shared.activeTintKey
+
+        iconPreloadTask?.cancel()
+        iconPreloadTask = Task { [weak self] in
+            let rendered = await Task.detached(priority: .utility) {
+                IconRenderer.render(prioritized, style: style, tintRGB: tintRGB)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            IconCache.shared.store(rendered, forStyle: style, tintKey: tintKey)
+            self.iconsVersion &+= 1
+        }
     }
 
     func refresh() {
@@ -192,14 +244,7 @@ final class LaunchpadStore: ObservableObject {
             self.apply(scanned)
             self.lastScan = Date()
             self.watcher.watch(sources.map(AppScanner.expand).filter { FileManager.default.fileExists(atPath: $0) })
-
-            let missingIcons = scanned.map(\.id).filter { !IconCache.shared.contains($0) }
-            guard !missingIcons.isEmpty else { return }
-            let original = IconCache.shared.useOriginalColors
-            let rendered = await Task.detached(priority: .utility) { IconRenderer.render(missingIcons, original: original) }.value
-            guard !Task.isCancelled else { return }
-            IconCache.shared.store(rendered)
-            self.iconsVersion &+= 1
+            self.prewarmIcons(scanned.map(\.id))
         }
     }
 
@@ -207,6 +252,7 @@ final class LaunchpadStore: ObservableObject {
         defer { if isLoading { isLoading = false } }
         // Sécurité : une analyse vide (volume indisponible…) ne doit jamais effacer la disposition.
         guard !scanned.isEmpty else { return }
+        AppleAppLocalizer.clearCache()
 
         let customApps = CustomTileManager.shared.tiles.map { CustomTileManager.shared.asAppInfo(tile: $0) }
         let allScanned = scanned + customApps
@@ -1236,6 +1282,9 @@ final class LaunchpadStore: ObservableObject {
     func removeWidget(_ id: String) {
         var copy = items
         copy.removeAll { $0.id == id }
+        if let kind = WidgetKind(rawValue: id), WidgetManager.shared.isEnabled(kind) {
+            WidgetManager.shared.toggleWidget(kind)
+        }
         commit(copy)
     }
 

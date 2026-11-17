@@ -54,9 +54,11 @@ final class CustomTileManager: ObservableObject {
         } else {
             self.tiles = []
         }
+        CustomTileRenderer.updateSnapshot(tiles)
     }
 
     private func saveTiles() {
+        CustomTileRenderer.updateSnapshot(tiles)
         if let data = try? JSONEncoder().encode(tiles) {
             UserDefaults.standard.set(data, forKey: PrefKey.customTiles)
         }
@@ -82,11 +84,14 @@ final class CustomTileManager: ObservableObject {
     func asAppInfo(tile: CustomTile) -> AppInfo {
         let url: URL
         if tile.kind == .web {
-            let sanitized = tile.target.contains("://") ? tile.target : "https://\(tile.target)"
-            url = URL(string: sanitized) ?? URL(fileURLWithPath: "/")
+            let trimmed = tile.target.trimmingCharacters(in: .whitespacesAndNewlines)
+            let sanitized = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+            url = URL(string: sanitized)
+                ?? trimmed.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed).flatMap { URL(string: $0.contains("://") ? $0 : "https://\($0)") }
+                ?? URL(string: "about:blank")!
         } else {
             let encoded = tile.target.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? tile.target
-            url = URL(string: "shortcuts://run-shortcut?name=\(encoded)") ?? URL(fileURLWithPath: "/")
+            url = URL(string: "shortcuts://run-shortcut?name=\(encoded)") ?? URL(string: "shortcuts://")!
         }
 
         return AppInfo(
@@ -96,7 +101,7 @@ final class CustomTileManager: ObservableObject {
             name: tile.title,
             bundleID: tile.kind == .web ? "com.apple.Safari" : "com.apple.shortcuts",
             category: "public.app-category.productivity",
-            dateAdded: Date(),
+            dateAdded: nil,
             lastUsed: nil
         )
     }
@@ -108,14 +113,51 @@ nonisolated enum CustomTileRenderer {
     static let defaultWebColors = ["#0A84FF", "#30D158", "#BF5AF2", "#FF9F0A", "#FF375F", "#64D2FF"]
     static let defaultShortcutColors = ["#5E5CE6", "#BF5AF2", "#FF453A", "#FF9F0A", "#30D158", "#63E6E2"]
 
+    private static let tilesLock = NSLock()
+    nonisolated(unsafe) private static var snapshotByID: [String: CustomTile]? = nil
+    nonisolated(unsafe) private static let imageCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 96
+        return cache
+    }()
+
+    static func updateSnapshot(_ tiles: [CustomTile]) {
+        var map: [String: CustomTile] = [:]
+        map.reserveCapacity(tiles.count)
+        for tile in tiles { map[tile.id] = tile }
+        tilesLock.lock()
+        snapshotByID = map
+        tilesLock.unlock()
+    }
+
+    private static func cachedTile(forID id: String) -> CustomTile? {
+        tilesLock.lock()
+        if let existing = snapshotByID {
+            let found = existing[id]
+            tilesLock.unlock()
+            return found
+        }
+        tilesLock.unlock()
+
+        var loadedMap: [String: CustomTile] = [:]
+        if let data = UserDefaults.standard.data(forKey: PrefKey.customTiles),
+           let decoded = try? JSONDecoder().decode([CustomTile].self, from: data) {
+            for tile in decoded { loadedMap[tile.id] = tile }
+        }
+        tilesLock.lock()
+        if snapshotByID == nil {
+            snapshotByID = loadedMap
+        }
+        let found = snapshotByID?[id]
+        tilesLock.unlock()
+        return found
+    }
+
     static func icon(forID id: String, size: CGFloat = 256) -> NSImage {
-        // En arrière-plan non-isolé, on lit le cache ou les données UserDefaults
         var symbol = "globe"
         var colorHex = "#0A84FF"
 
-        if let data = UserDefaults.standard.data(forKey: PrefKey.customTiles),
-           let tiles = try? JSONDecoder().decode([CustomTile].self, from: data),
-           let tile = tiles.first(where: { $0.id == id }) {
+        if let tile = cachedTile(forID: id) {
             symbol = tile.symbol
             colorHex = tile.colorHex
         } else if id.hasPrefix("shortcut:") {
@@ -127,27 +169,59 @@ nonisolated enum CustomTileRenderer {
     }
 
     static func renderImage(symbol: String, colorHex: String, size: CGFloat = 256) -> NSImage {
-        let image = NSImage(size: NSSize(width: size, height: size))
-        image.lockFocus()
+        let pxKey = "\(symbol)|\(colorHex)|\(Int(size.rounded()))" as NSString
+        if let cached = imageCache.object(forKey: pxKey) {
+            return cached
+        }
 
-        let baseColor = NSColor(hexString: colorHex) ?? NSColor.systemBlue
-        let rect = NSRect(x: size * 0.08, y: size * 0.08, width: size * 0.84, height: size * 0.84)
-        let path = NSBezierPath(roundedRect: rect, xRadius: size * 0.19, yRadius: size * 0.19)
+        let pxDim = max(64, Int((size * 2.0).rounded()))
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                  data: nil,
+                  width: pxDim,
+                  height: pxDim,
+                  bitsPerComponent: 8,
+                  bytesPerRow: pxDim * 4,
+                  space: cs,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            return NSImage(size: NSSize(width: size, height: size))
+        }
+        ctx.interpolationQuality = .high
+        ctx.scaleBy(x: CGFloat(pxDim) / size, y: CGFloat(pxDim) / size)
+
+        let baseColor = (NSColor(hexString: colorHex) ?? NSColor.systemBlue).usingColorSpace(.sRGB) ?? NSColor.systemBlue
+        let rect = CGRect(x: size * 0.08, y: size * 0.08, width: size * 0.84, height: size * 0.84)
+        let corner = size * 0.19
+        let path = CGPath(roundedRect: rect, cornerWidth: corner, cornerHeight: corner, transform: nil)
 
         // Fond dégradé subtil
-        let topColor = baseColor.blended(withFraction: 0.18, of: .white) ?? baseColor
-        let bottomColor = baseColor.blended(withFraction: 0.22, of: .black) ?? baseColor
-        let gradient = NSGradient(starting: topColor, ending: bottomColor)
-        gradient?.draw(in: path, angle: -45)
+        let topColor = (baseColor.blended(withFraction: 0.18, of: .white) ?? baseColor).cgColor
+        let bottomColor = (baseColor.blended(withFraction: 0.22, of: .black) ?? baseColor).cgColor
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        if let grad = CGGradient(colorsSpace: cs, colors: [topColor, bottomColor] as CFArray, locations: [0.0, 1.0]) {
+            ctx.drawLinearGradient(
+                grad,
+                start: CGPoint(x: rect.minX, y: rect.maxY),
+                end: CGPoint(x: rect.maxX, y: rect.minY),
+                options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            )
+        }
+        ctx.restoreGState()
 
         // Liseré brillant supérieur
-        let strokeColor = NSColor.white.withAlphaComponent(0.25)
-        strokeColor.setStroke()
-        path.lineWidth = size * 0.012
-        path.stroke()
+        ctx.saveGState()
+        ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.25))
+        ctx.setLineWidth(size * 0.012)
+        ctx.addPath(path)
+        ctx.strokePath()
+        ctx.restoreGState()
 
-        // Symbole SF Symbol centré
+        // Symbole SF Symbol centré (rendu thread-safe sans lockFocus)
         let config = NSImage.SymbolConfiguration(pointSize: size * 0.40, weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
         let symbolImg = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
             ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
 
@@ -159,13 +233,24 @@ nonisolated enum CustomTileRenderer {
                 width: symbolSize.width,
                 height: symbolSize.height
             )
-            // Dessin du symbole en blanc
-            NSColor.white.set()
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
             configured.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            NSGraphicsContext.restoreGraphicsState()
         }
 
-        image.unlockFocus()
-        return image
+        let resultImage: NSImage
+        if let cg = ctx.makeImage() {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            rep.size = NSSize(width: size, height: size)
+            let img = NSImage(size: NSSize(width: size, height: size))
+            img.addRepresentation(rep)
+            resultImage = img
+        } else {
+            resultImage = NSImage(size: NSSize(width: size, height: size))
+        }
+        imageCache.setObject(resultImage, forKey: pxKey)
+        return resultImage
     }
 }
 

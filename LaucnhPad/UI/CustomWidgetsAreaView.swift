@@ -210,6 +210,7 @@ struct CustomWidgetsAreaView: View {
     @ViewBuilder
     func widgetView(for config: CustomWidgetConfig) -> some View {
         WidgetHostView(config: config)
+            .equatable()
     }
 
     // MARK: - Menu Contextuel Rapide par Widget

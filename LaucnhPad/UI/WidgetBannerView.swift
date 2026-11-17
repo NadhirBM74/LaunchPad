@@ -26,8 +26,8 @@ struct WidgetBannerView: View {
             }
         }
         .onAppear {
-            stats.startMonitoring()
             if LaunchpadViewModel.isLaunchpadVisible {
+                stats.startMonitoring()
                 currentDate = Date()
                 startClockTimer()
             }
@@ -38,7 +38,7 @@ struct WidgetBannerView: View {
             timer = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
-            let isVisible = (notif.object as? Bool) ?? false
+            guard let isVisible = notif.object as? Bool else { return }
             if isVisible {
                 currentDate = Date()
                 stats.startMonitoring()

@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.3",
-  "name": "LaunchPad v1.2.3",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.3",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.3\n\n- ✨ **Barre Latérale Épurée** : Suppression du badge violet redondant sur la ligne Licence de la barre latérale tout en le conservant sur votre profil.\n- 💜 **Icône Licence Violette dans À Propos** : Remplacement du badge PRO textuel par l'icône vérifiée animée violette (ou jaune pendant l'essai) lorsque la licence est active.",
+  "tag_name": "v1.2.4",
+  "name": "LaunchPad v1.2.4",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.4",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.4\n\n- ⚡ **Défilement et Grille Ultra-Fluides** : Optimisation du rendu des tuiles et mise en cache mémoire pour un défilement constant sans saccades.\n- 🎨 **Moteur d'Icônes Haute Performance** : Traitement graphique parallélisé sur tous les cœurs CPU avec forte réduction de l'empreinte mémoire.\n- 🔋 **Consommation Minimale au Repos** : Mise en veille intelligente des minuteurs, capteurs et vérifications système lorsque le Launchpad est fermé.\n- 🛡️ **Réactivité & Stabilité Renforcées** : Déplacement des opérations lourdes hors du fil principal pour éliminer tout ralentissement de l'interface.\n- 🔄 **Mises à Jour & Lecteurs Fiabilisés** : Fiabilisation des téléchargements, des contrôles musicaux et de la gestion mémoire dans toute l'application.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.3.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.3/LaunchPad-v1.2.3.zip"
+      "name": "LaunchPad-v1.2.4.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.4/LaunchPad-v1.2.4.zip"
     },
     {
-      "name": "LaunchPad-v1.2.3.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.3/LaunchPad-v1.2.3.dmg"
+      "name": "LaunchPad-v1.2.4.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.4/LaunchPad-v1.2.4.dmg"
     }
   ]
 }

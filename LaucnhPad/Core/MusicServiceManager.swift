@@ -50,30 +50,53 @@ public enum MusicServiceStatus: Equatable, Sendable {
     }
 }
 
+@MainActor
+public final class MusicProgressState: ObservableObject {
+    @Published public var elapsedSeconds: Double = 0
+}
+
 public struct NowPlayingTrack: Equatable, @unchecked Sendable {
     nonisolated(unsafe) private static let sharedImageCache: NSCache<NSNumber, NSImage> = {
         let cache = NSCache<NSNumber, NSImage>()
         cache.countLimit = 48
+        cache.totalCostLimit = 32 * 1024 * 1024
         return cache
     }()
 
-    private static func cachedImage(for data: Data?) -> NSImage? {
-        guard let data, !data.isEmpty else { return nil }
+    nonisolated private static func artworkDigest(for data: Data) -> Int {
         var hasher = Hasher()
-        hasher.combine(data.count)
-        if data.count <= 256 {
+        let count = data.count
+        hasher.combine(count)
+        if count <= 512 {
             hasher.combine(data)
         } else {
-            hasher.combine(data.prefix(128))
-            hasher.combine(data.suffix(128))
+            let chunk = 64
+            let step = (count - chunk) / 7
+            for i in 0..<8 {
+                let start = min(count - chunk, i * step)
+                hasher.combine(data[start..<(start + chunk)])
+            }
         }
-        let key = NSNumber(value: hasher.finalize())
+        return hasher.finalize()
+    }
+
+    /// Décode et met en cache hors thread principal afin d'éviter tout blocage UI lors de l'assignation.
+    @discardableResult
+    nonisolated static func prewarmImageCache(for data: Data) -> NSImage? {
+        guard !data.isEmpty else { return nil }
+        let key = NSNumber(value: artworkDigest(for: data))
         if let existing = sharedImageCache.object(forKey: key) {
             return existing
         }
         guard let decoded = NSImage(data: data) else { return nil }
-        sharedImageCache.setObject(decoded, forKey: key)
+        let cost = max(1, data.count * 4)
+        sharedImageCache.setObject(decoded, forKey: key, cost: cost)
         return decoded
+    }
+
+    private static func cachedImage(for data: Data?) -> NSImage? {
+        guard let data, !data.isEmpty else { return nil }
+        return prewarmImageCache(for: data)
     }
 
     public var title: String
@@ -82,7 +105,11 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
     public var artworkURL: URL?
     public var artworkData: Data? {
         didSet {
-            if artworkData != oldValue {
+            let newCount = artworkData?.count ?? 0
+            let newHash = artworkData.map { Self.artworkDigest(for: $0) } ?? 0
+            if newCount != _artworkByteCount || newHash != _artworkHash {
+                _artworkByteCount = newCount
+                _artworkHash = newHash
                 _cachedImage = Self.cachedImage(for: artworkData)
             }
         }
@@ -98,6 +125,8 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
     public var sourceAppName: String = ""
 
     private var _cachedImage: NSImage?
+    private var _artworkByteCount: Int = 0
+    private var _artworkHash: Int = 0
 
     public init(
         title: String,
@@ -123,6 +152,8 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
         self.serviceSource = serviceSource
         self.canControlPlayback = canControlPlayback
         self.limitationNotice = limitationNotice
+        self._artworkByteCount = artworkData?.count ?? 0
+        self._artworkHash = artworkData.map { Self.artworkDigest(for: $0) } ?? 0
         self._cachedImage = Self.cachedImage(for: artworkData)
     }
 
@@ -131,7 +162,7 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
         if let lImg = lhs._cachedImage, let rImg = rhs._cachedImage, lImg === rImg {
             sameArtwork = true
         } else {
-            sameArtwork = (lhs.artworkData?.count == rhs.artworkData?.count) && (lhs.artworkData == rhs.artworkData)
+            sameArtwork = (lhs._artworkByteCount == rhs._artworkByteCount) && (lhs._artworkHash == rhs._artworkHash)
         }
         return lhs.title == rhs.title &&
         lhs.artist == rhs.artist &&
@@ -139,7 +170,6 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
         lhs.artworkURL == rhs.artworkURL &&
         sameArtwork &&
         lhs.isPlaying == rhs.isPlaying &&
-        Int(lhs.elapsedSeconds.rounded()) == Int(rhs.elapsedSeconds.rounded()) &&
         Int(lhs.durationSeconds.rounded()) == Int(rhs.durationSeconds.rounded()) &&
         lhs.serviceSource == rhs.serviceSource &&
         lhs.canControlPlayback == rhs.canControlPlayback &&
@@ -180,7 +210,7 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
 
 // MARK: - Sécurisation des jetons (Keychain macOS natif)
 
-enum KeychainHelper {
+nonisolated enum KeychainHelper {
     static let serviceName = "me.LaucnhPad.music"
 
     @discardableResult
@@ -275,6 +305,7 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     @Published public private(set) var currentTrack: NowPlayingTrack = .empty
+    public let progressState = MusicProgressState()
     @Published public private(set) var isLaunchingRandomTrack: Bool = false
     @Published public var isMuted: Bool = false
 
@@ -291,10 +322,18 @@ public final class MusicServiceManager: ObservableObject {
     private var lastProgressTickUptime: TimeInterval = 0
     private var artworkCache: [String: Data] = [:]
     private var inFlightArtworkQueries: Set<String> = []
+    private var inFlightSpotifyRefreshTask: Task<String?, Never>?
+    private var randomLaunchTask: Task<Void, Never>?
     private var isRefreshingNowPlaying = false
     private var lastRefreshUptime: TimeInterval = 0
     private var lastSystemFetchUptime: TimeInterval = 0
     private var cachedSystemTrack: NowPlayingTrack? = nil
+    private var hasPendingNotificationUpdate = false
+
+    deinit {
+        DistributedNotificationCenter.default().removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
+    }
 
     private init() {
         let savedPref = UserDefaults.standard.string(forKey: "PreferredMusicService")
@@ -315,7 +354,10 @@ public final class MusicServiceManager: ObservableObject {
                 self.verifyAppleMusicAuthorization()
             }
 
-            if KeychainHelper.loadString(key: "spotify_access_token") != nil {
+            let hasSpotifyToken = await Task.detached(priority: .utility) {
+                KeychainHelper.loadString(key: "spotify_access_token") != nil
+            }.value
+            if hasSpotifyToken {
                 self.spotifyStatus = .connected(details: UserDefaults.standard.string(forKey: "SpotifyUserDisplayName"))
                 self.verifySpotifyConnection()
             }
@@ -336,7 +378,6 @@ public final class MusicServiceManager: ObservableObject {
 
     private func setupDistributedNotifications() {
         let dnc = DistributedNotificationCenter.default()
-        // Changement de morceau dans l'application Musique macOS
         dnc.addObserver(
             self,
             selector: #selector(handleAppleMusicNotification(_:)),
@@ -344,7 +385,6 @@ public final class MusicServiceManager: ObservableObject {
             object: nil,
             suspensionBehavior: .deliverImmediately
         )
-        // Changement de morceau dans l'application Spotify macOS
         dnc.addObserver(
             self,
             selector: #selector(handleSpotifyNotification(_:)),
@@ -352,7 +392,6 @@ public final class MusicServiceManager: ObservableObject {
             object: nil,
             suspensionBehavior: .deliverImmediately
         )
-        // Visibilité du Launchpad pour suspendre/reprendre les tâches
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleLaunchpadVisibilityChanged(_:)),
@@ -362,23 +401,23 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     @objc private func handleLaunchpadVisibilityChanged(_ notif: Notification) {
-        let isVisible = (notif.object as? Bool) ?? false
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            if isVisible {
-                self.refreshNowPlaying(force: true)
-                self.startPolling()
-            } else {
-                self.stopPolling()
-            }
+        guard let isVisible = notif.object as? Bool else { return }
+        if isVisible {
+            self.hasPendingNotificationUpdate = false
+            self.refreshNowPlaying(force: true)
+            self.startPolling()
+        } else {
+            self.stopPolling()
         }
     }
 
     @objc private func handleAppleMusicNotification(_ notif: Notification) {
         guard let info = notif.userInfo else { return }
-        Task { @MainActor [weak self] in
-            self?.processAppleMusicNotification(info: info)
+        if !LaunchpadViewModel.isLaunchpadVisible {
+            hasPendingNotificationUpdate = true
+            return
         }
+        processAppleMusicNotification(info: info)
     }
 
     private func processAppleMusicNotification(info: [AnyHashable: Any]) {
@@ -393,20 +432,21 @@ public final class MusicServiceManager: ObservableObject {
             let isSameSong = (self.currentTrack.title == name && self.currentTrack.artist == artist)
             let cacheKey = artworkCacheKey(title: name, artist: artist)
             let existingArtwork = isSameSong ? self.currentTrack.artworkData : artworkCache[cacheKey]
+            let elapsed = isSameSong ? self.progressState.elapsedSeconds : 0
 
-            self.currentTrack = NowPlayingTrack(
+            assignCurrentTrack(NowPlayingTrack(
                 title: name,
                 artist: artist,
                 album: album,
                 artworkURL: nil,
                 artworkData: existingArtwork,
                 isPlaying: isPlaying,
-                elapsedSeconds: isSameSong ? self.currentTrack.elapsedSeconds : 0,
+                elapsedSeconds: elapsed,
                 durationSeconds: totalTimeSec > 0 ? totalTimeSec : (isSameSong ? self.currentTrack.durationSeconds : 240),
                 serviceSource: .appleMusic,
                 canControlPlayback: true,
                 limitationNotice: nil
-            )
+            ))
 
             if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
                 resolveArtwork(for: name, artist: artist, album: album)
@@ -416,9 +456,11 @@ public final class MusicServiceManager: ObservableObject {
 
     @objc private func handleSpotifyNotification(_ notif: Notification) {
         guard let info = notif.userInfo else { return }
-        Task { @MainActor [weak self] in
-            self?.processSpotifyNotification(info: info)
+        if !LaunchpadViewModel.isLaunchpadVisible {
+            hasPendingNotificationUpdate = true
+            return
         }
+        processSpotifyNotification(info: info)
     }
 
     private func processSpotifyNotification(info: [AnyHashable: Any]) {
@@ -432,20 +474,21 @@ public final class MusicServiceManager: ObservableObject {
             let isSameSong = (self.currentTrack.title == name && self.currentTrack.artist == artist)
             let cacheKey = artworkCacheKey(title: name, artist: artist)
             let existingArtwork = isSameSong ? self.currentTrack.artworkData : artworkCache[cacheKey]
+            let elapsed = isSameSong ? self.progressState.elapsedSeconds : 0
 
-            self.currentTrack = NowPlayingTrack(
+            assignCurrentTrack(NowPlayingTrack(
                 title: name,
                 artist: artist,
                 album: album,
-                artworkURL: self.currentTrack.artworkURL,
+                artworkURL: isSameSong ? self.currentTrack.artworkURL : nil,
                 artworkData: existingArtwork,
                 isPlaying: isPlaying,
-                elapsedSeconds: self.currentTrack.elapsedSeconds,
+                elapsedSeconds: elapsed,
                 durationSeconds: self.currentTrack.durationSeconds > 0 ? self.currentTrack.durationSeconds : 210,
                 serviceSource: .spotify,
                 canControlPlayback: true,
                 limitationNotice: spotifyLimitationNotice
-            )
+            ))
 
             if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
                 resolveArtwork(for: name, artist: artist, album: album, fallbackURL: self.currentTrack.artworkURL)
@@ -455,33 +498,45 @@ public final class MusicServiceManager: ObservableObject {
 
     private func startPolling() {
         timer?.invalidate()
-        progressTimer?.invalidate()
-
         let newTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 guard let self, LaunchpadViewModel.isLaunchpadVisible else { return }
                 self.refreshNowPlaying()
             }
         }
         newTimer.tolerance = 2.5
         timer = newTimer
+        updateProgressTimerState()
+    }
 
-        lastProgressTickUptime = ProcessInfo.processInfo.systemUptime
-        let newProgressTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, LaunchpadViewModel.isLaunchpadVisible else { return }
-                let now = ProcessInfo.processInfo.systemUptime
-                let delta = max(0, min(4.0, now - self.lastProgressTickUptime))
-                self.lastProgressTickUptime = now
-                guard self.currentTrack.isPlaying, self.currentTrack.hasTrack, self.currentTrack.durationSeconds > 0 else { return }
-                let nextElapsed = min(self.currentTrack.durationSeconds, self.currentTrack.elapsedSeconds + delta)
-                if Int(nextElapsed.rounded()) != Int(self.currentTrack.elapsedSeconds.rounded()) {
-                    self.currentTrack.elapsedSeconds = nextElapsed
+    private func updateProgressTimerState() {
+        let needsTick = LaunchpadViewModel.isLaunchpadVisible && currentTrack.isPlaying && currentTrack.hasTrack && currentTrack.durationSeconds > 0
+        if needsTick {
+            guard progressTimer == nil else { return }
+            lastProgressTickUptime = ProcessInfo.processInfo.systemUptime
+            let newProgressTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, LaunchpadViewModel.isLaunchpadVisible,
+                          self.currentTrack.isPlaying, self.currentTrack.hasTrack, self.currentTrack.durationSeconds > 0 else {
+                        self?.progressTimer?.invalidate()
+                        self?.progressTimer = nil
+                        return
+                    }
+                    let now = ProcessInfo.processInfo.systemUptime
+                    let delta = max(0, min(4.0, now - self.lastProgressTickUptime))
+                    self.lastProgressTickUptime = now
+                    let nextElapsed = min(self.currentTrack.durationSeconds, self.progressState.elapsedSeconds + delta)
+                    if Int(nextElapsed.rounded()) != Int(self.progressState.elapsedSeconds.rounded()) {
+                        self.progressState.elapsedSeconds = nextElapsed
+                    }
                 }
             }
+            newProgressTimer.tolerance = 0.5
+            progressTimer = newProgressTimer
+        } else {
+            progressTimer?.invalidate()
+            progressTimer = nil
         }
-        newProgressTimer.tolerance = 0.5
-        progressTimer = newProgressTimer
     }
 
     private func stopPolling() {
@@ -696,53 +751,79 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func refreshSpotifyTokenIfNeeded() async -> String? {
-        guard let expiryString = KeychainHelper.loadString(key: "spotify_token_expiry"),
-              let expiryTimestamp = Double(expiryString),
-              let refreshToken = KeychainHelper.loadString(key: "spotify_refresh_token") else {
-            return KeychainHelper.loadString(key: "spotify_access_token")
+        if let existingTask = inFlightSpotifyRefreshTask {
+            return await existingTask.value
         }
+        let clientID = effectiveSpotifyClientID
+        let task = Task<String?, Never> {
+            let credentials = await Task.detached(priority: .utility) {
+                (
+                    expiry: KeychainHelper.loadString(key: "spotify_token_expiry").flatMap(Double.init),
+                    refresh: KeychainHelper.loadString(key: "spotify_refresh_token"),
+                    access: KeychainHelper.loadString(key: "spotify_access_token")
+                )
+            }.value
 
-        // Si le jeton est encore valide au moins 60 secondes, on l'utilise
-        if Date().timeIntervalSince1970 < (expiryTimestamp - 60) {
-            return KeychainHelper.loadString(key: "spotify_access_token")
-        }
+            guard let expiryTimestamp = credentials.expiry,
+                  let refreshToken = credentials.refresh else {
+                return credentials.access
+            }
 
-        // Sinon, renouvellement via refresh_token
-        guard let url = URL(string: "https://accounts.spotify.com/api/token") else { return nil }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            if Date().timeIntervalSince1970 < (expiryTimestamp - 60) {
+                return credentials.access
+            }
 
-        let bodyParams = [
-            "grant_type": "refresh_token",
-            "client_id": effectiveSpotifyClientID,
-            "refresh_token": refreshToken
-        ]
-        request.httpBody = bodyParams
-            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")" }
-            .joined(separator: "&")
-            .data(using: .utf8)
+            guard let url = URL(string: "https://accounts.spotify.com/api/token") else { return nil }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200,
-                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let newAccessToken = json["access_token"] as? String else {
+            let bodyParams = [
+                "grant_type": "refresh_token",
+                "client_id": clientID,
+                "refresh_token": refreshToken
+            ]
+            request.httpBody = bodyParams
+                .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")" }
+                .joined(separator: "&")
+                .data(using: .utf8)
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if statusCode == 400 || statusCode == 401 {
+                    await MainActor.run { [weak self] in
+                        self?.spotifyStatus = .notConnected
+                    }
+                    return nil
+                }
+                guard statusCode == 200,
+                      let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let newAccessToken = json["access_token"] as? String else {
+                    return nil
+                }
+
+                let expiresIn = json["expires_in"] as? Double
+                let newRefresh = json["refresh_token"] as? String
+                await Task.detached(priority: .utility) {
+                    KeychainHelper.saveString(key: "spotify_access_token", value: newAccessToken)
+                    if let expiresIn {
+                        let expiryDate = Date().addingTimeInterval(expiresIn)
+                        KeychainHelper.saveString(key: "spotify_token_expiry", value: String(expiryDate.timeIntervalSince1970))
+                    }
+                    if let newRefresh {
+                        KeychainHelper.saveString(key: "spotify_refresh_token", value: newRefresh)
+                    }
+                }.value
+                return newAccessToken
+            } catch {
                 return nil
             }
-
-            KeychainHelper.saveString(key: "spotify_access_token", value: newAccessToken)
-            if let expiresIn = json["expires_in"] as? Double {
-                let expiryDate = Date().addingTimeInterval(expiresIn)
-                KeychainHelper.saveString(key: "spotify_token_expiry", value: String(expiryDate.timeIntervalSince1970))
-            }
-            if let newRefresh = json["refresh_token"] as? String {
-                KeychainHelper.saveString(key: "spotify_refresh_token", value: newRefresh)
-            }
-            return newAccessToken
-        } catch {
-            return nil
         }
+        inFlightSpotifyRefreshTask = task
+        let result = await task.value
+        inFlightSpotifyRefreshTask = nil
+        return result
     }
 
     private func fetchSpotifyProfile(accessToken: String) async {
@@ -810,6 +891,10 @@ public final class MusicServiceManager: ObservableObject {
         if currentTrack != newTrack {
             currentTrack = newTrack
         }
+        if Int(progressState.elapsedSeconds.rounded()) != Int(newTrack.elapsedSeconds.rounded()) {
+            progressState.elapsedSeconds = newTrack.elapsedSeconds
+        }
+        updateProgressTimerState()
     }
 
     private func performRefreshNowPlaying(force: Bool = false) async {
@@ -872,7 +957,7 @@ public final class MusicServiceManager: ObservableObject {
 
     private func fetchSystemTrack(force: Bool = false) async -> NowPlayingTrack? {
         let now = ProcessInfo.processInfo.systemUptime
-        if !force, (now - lastSystemFetchUptime) < 12.0 {
+        if !force, (now - lastSystemFetchUptime) < 8.5 {
             if var cached = cachedSystemTrack {
                 if cached.isPlaying, cached.durationSeconds > 0 {
                     let elapsedSinceFetch = max(0, now - lastSystemFetchUptime)
@@ -1018,7 +1103,8 @@ public final class MusicServiceManager: ObservableObject {
 
         // 1. Vérifier si l'image est déjà en cache mémoire
         if let cachedData = artworkCache[cacheKey] {
-            if self.currentTrack.title == trimmedTitle {
+            if self.currentTrack.title == trimmedTitle &&
+               (trimmedArtist.isEmpty || self.currentTrack.artist.caseInsensitiveCompare(trimmedArtist) == .orderedSame) {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     self.currentTrack.artworkData = cachedData
                 }
@@ -1030,60 +1116,68 @@ public final class MusicServiceManager: ObservableObject {
         if inFlightArtworkQueries.contains(cacheKey) { return }
         inFlightArtworkQueries.insert(cacheKey)
 
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
                 self.inFlightArtworkQueries.remove(cacheKey)
             }
 
-            // Étape A : Télécharger depuis le fallbackURL (ex: Spotify CDN) si présent
-            if let fallbackURL {
-                if let data = await self.fetchArtworkData(from: fallbackURL) {
-                    self.storeArtwork(data, forKey: cacheKey)
-                    if self.currentTrack.title == trimmedTitle {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            self.currentTrack.artworkData = data
-                        }
+            @MainActor
+            func applyIfStillCurrent(_ data: Data) {
+                self.storeArtwork(data, forKey: cacheKey)
+                if self.currentTrack.title == trimmedTitle &&
+                   (trimmedArtist.isEmpty || self.currentTrack.artist.caseInsensitiveCompare(trimmedArtist) == .orderedSame) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        self.currentTrack.artworkData = data
                     }
-                    return
                 }
             }
 
-            // Étape B : Tenter d'extraire la pochette locale via AppleScript (pour fichiers locaux MP3/AAC)
+            // Étape A : Télécharger depuis le fallbackURL (ex: Spotify CDN) si présent
+            if let fallbackURL, let data = await self.fetchArtworkData(from: fallbackURL) {
+                applyIfStillCurrent(data)
+                return
+            }
+
+            // Étape B : Extraction de la pochette locale via osascript hors du thread principal
             let localData: Data? = allowLocalMusicApp ? await Task.detached(priority: .userInitiated) {
                 Self.extractLocalMusicArtwork()
             }.value : nil
 
-            if let localData, !localData.isEmpty, NSImage(data: localData) != nil {
-                self.storeArtwork(localData, forKey: cacheKey)
-                if self.currentTrack.title == trimmedTitle {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        self.currentTrack.artworkData = localData
-                    }
+            if let localData, !localData.isEmpty {
+                let decoded = await Task.detached(priority: .userInitiated) {
+                    NowPlayingTrack.prewarmImageCache(for: localData) != nil
+                }.value
+                if decoded {
+                    applyIfStillCurrent(localData)
+                    return
                 }
-                return
             }
 
             // Étape C : Requête sur l'API officielle iTunes Search (Apple CDN, cover HD 600x600)
             if let remoteData = await self.searchArtworkOnITunes(title: trimmedTitle, artist: trimmedArtist) {
-                self.storeArtwork(remoteData, forKey: cacheKey)
-                if self.currentTrack.title == trimmedTitle {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        self.currentTrack.artworkData = remoteData
-                    }
-                }
+                applyIfStillCurrent(remoteData)
                 return
             }
         }
     }
 
-    private func searchArtworkOnITunes(title: String, artist: String) async -> Data? {
-        // Nettoyer les mentions feat/ft/avec pour maximiser les correspondances de recherche
-        let cleanTitle = title
-            .replacingOccurrences(of: #"\s*[\(\[][fF]eat[^\)\]]*[\)\]]"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\s*[\(\[][fF]t[^\)\]]*[\)\]]"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    nonisolated private static let featRegex = try? NSRegularExpression(pattern: #"\s*[\(\[]feat[^\)\]]*[\)\]]"#, options: [.caseInsensitive])
+    nonisolated private static let ftRegex = try? NSRegularExpression(pattern: #"\s*[\(\[]ft[^\)\]]*[\)\]]"#, options: [.caseInsensitive])
 
+    nonisolated private static func stripFeaturing(_ text: String) -> String {
+        var working = text
+        if let r1 = featRegex {
+            working = r1.stringByReplacingMatches(in: working, range: NSRange(working.startIndex..., in: working), withTemplate: "")
+        }
+        if let r2 = ftRegex {
+            working = r2.stringByReplacingMatches(in: working, range: NSRange(working.startIndex..., in: working), withTemplate: "")
+        }
+        return working.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func searchArtworkOnITunes(title: String, artist: String) async -> Data? {
+        let cleanTitle = Self.stripFeaturing(title)
         let cleanArtist = artist
             .components(separatedBy: ",")[0]
             .components(separatedBy: "&")[0]
@@ -1132,38 +1226,53 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     nonisolated private static func extractLocalMusicArtwork() -> Data? {
+        let tempFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lp_artwork_\(UUID().uuidString).dat")
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+
+        let escapedPath = tempFile.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let scriptSource = """
         if application "Music" is running then
             tell application "Music"
                 try
                     if exists (artwork 1 of current track) then
                         set rawData to raw data of artwork 1 of current track
-                        return rawData
+                        set fRef to open for access POSIX file "\(escapedPath)" with write permission
+                        set eof of fRef to 0
+                        write rawData to fRef
+                        close access fRef
+                        return "ok"
                     end if
+                on error
+                    try
+                        close access POSIX file "\(escapedPath)"
+                    end try
                 end try
             end tell
         end if
+        return ""
         """
-        guard let script = NSAppleScript(source: scriptSource) else { return nil }
-        var error: NSDictionary?
-        let descriptor = script.executeAndReturnError(&error)
-        let data = descriptor.data
-        return data.isEmpty ? nil : data
+        let result = runOsascriptSync(scriptSource, timeoutSeconds: 5.0)
+        guard result.success, result.output == "ok",
+              let data = try? Data(contentsOf: tempFile), !data.isEmpty else {
+            return nil
+        }
+        return data
     }
 
     private func fetchArtworkData(from url: URL) async -> Data? {
-        if let cached = artworkCache[url.absoluteString] { return cached }
         var request = URLRequest(url: url)
         request.timeoutInterval = 8.0
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200,
-              !data.isEmpty,
-              NSImage(data: data) != nil else {
+              !data.isEmpty else {
             return nil
         }
-        storeArtwork(data, forKey: url.absoluteString)
-        return data
+        let valid = await Task.detached(priority: .userInitiated) {
+            NowPlayingTrack.prewarmImageCache(for: data) != nil
+        }.value
+        return valid ? data : nil
     }
 
     private static func parseDouble(_ string: String) -> Double? {
@@ -1246,34 +1355,14 @@ public final class MusicServiceManager: ObservableObject {
     return ""
     """
 
-    nonisolated private static let appleScriptQueryQueue = DispatchQueue(label: "me.LaucnhPad.music.applescript", qos: .utility)
-    nonisolated(unsafe) private static var compiledAppleMusicQueryScript: NSAppleScript?
-    nonisolated(unsafe) private static var compiledSpotifyQueryScript: NSAppleScript?
-
     nonisolated private static func executeCachedAppleMusicQuery() -> String? {
-        appleScriptQueryQueue.sync {
-            if compiledAppleMusicQueryScript == nil {
-                let script = NSAppleScript(source: appleMusicQueryScriptSource)
-                var compileErr: NSDictionary?
-                script?.compileAndReturnError(&compileErr)
-                compiledAppleMusicQueryScript = script
-            }
-            var error: NSDictionary?
-            return compiledAppleMusicQueryScript?.executeAndReturnError(&error).stringValue
-        }
+        let res = runOsascriptSync(appleMusicQueryScriptSource, timeoutSeconds: 4.0)
+        return res.success && !res.output.isEmpty ? res.output : nil
     }
 
     nonisolated private static func executeCachedSpotifyQuery() -> String? {
-        appleScriptQueryQueue.sync {
-            if compiledSpotifyQueryScript == nil {
-                let script = NSAppleScript(source: spotifyQueryScriptSource)
-                var compileErr: NSDictionary?
-                script?.compileAndReturnError(&compileErr)
-                compiledSpotifyQueryScript = script
-            }
-            var error: NSDictionary?
-            return compiledSpotifyQueryScript?.executeAndReturnError(&error).stringValue
-        }
+        let res = runOsascriptSync(spotifyQueryScriptSource, timeoutSeconds: 4.0)
+        return res.success && !res.output.isEmpty ? res.output : nil
     }
 
     private func fetchLocalAppleMusicTrack() async -> NowPlayingTrack? {
@@ -1380,6 +1469,8 @@ public final class MusicServiceManager: ObservableObject {
         guard track.hasTrack, track.durationSeconds > 0 else { return }
         let seconds = min(track.durationSeconds, max(0, fraction * track.durationSeconds))
         currentTrack.elapsedSeconds = seconds
+        progressState.elapsedSeconds = seconds
+        lastProgressTickUptime = ProcessInfo.processInfo.systemUptime
 
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -1392,14 +1483,16 @@ public final class MusicServiceManager: ObservableObject {
                 if !done { _ = await SystemNowPlayingClient.seek(to: seconds) }
             case .spotify:
                 let done = await self.runAppleScript(Self.seekScript(app: "Spotify", seconds: seconds))
-                if !done { _ = await SystemNowPlayingClient.seek(to: seconds) }
-                if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium" {
-                    if let token = await self.refreshSpotifyTokenIfNeeded(),
+                if !done {
+                    if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium",
+                       let token = await self.refreshSpotifyTokenIfNeeded(),
                        let url = URL(string: "https://api.spotify.com/v1/me/player/seek?position_ms=\(Int(seconds * 1000))") {
                         var request = URLRequest(url: url)
                         request.httpMethod = "PUT"
                         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                         _ = try? await URLSession.shared.data(for: request)
+                    } else {
+                        _ = await SystemNowPlayingClient.seek(to: seconds)
                     }
                 }
             case .none:
@@ -1628,11 +1721,11 @@ public final class MusicServiceManager: ObservableObject {
 
     private func toggleSpotifyPlayback() {
         currentTrack.isPlaying.toggle()
+        updateProgressTimerState()
         let shouldPlay = currentTrack.isPlaying
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            // Spotify local : commande instantanée via AppleScript.
             let done = await self.runAppleScript("""
             tell application "Spotify"
                 if it is running then
@@ -1643,19 +1736,16 @@ public final class MusicServiceManager: ObservableObject {
                 end if
             end tell
             """)
-            // Si Spotify n'est pas lancé sur ce Mac (lecture distante), on tente MediaRemote.
-            if !done { await sendFallbackCommand(.togglePlayPause) }
-
-            // Et si connecté à la Web API Spotify avec Premium, synchronisation Cloud.
-            if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium" {
-                if let token = await self.refreshSpotifyTokenIfNeeded() {
-                    let endpoint = shouldPlay ? "play" : "pause"
-                    if let url = URL(string: "https://api.spotify.com/v1/me/player/\(endpoint)") {
-                        var request = URLRequest(url: url)
-                        request.httpMethod = "PUT"
-                        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                        _ = try? await URLSession.shared.data(for: request)
-                    }
+            if !done {
+                if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium",
+                   let token = await self.refreshSpotifyTokenIfNeeded(),
+                   let url = URL(string: "https://api.spotify.com/v1/me/player/\(shouldPlay ? "play" : "pause")") {
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "PUT"
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    _ = try? await URLSession.shared.data(for: request)
+                } else {
+                    await self.sendFallbackCommand(.togglePlayPause)
                 }
             }
             self.scheduleRefresh([0.35])
@@ -1675,15 +1765,16 @@ public final class MusicServiceManager: ObservableObject {
                 end if
             end tell
             """)
-            if !done { await sendFallbackCommand(.nextTrack) }
-
-            if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium" {
-                if let token = await self.refreshSpotifyTokenIfNeeded(),
+            if !done {
+                if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium",
+                   let token = await self.refreshSpotifyTokenIfNeeded(),
                    let url = URL(string: "https://api.spotify.com/v1/me/player/next") {
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                     _ = try? await URLSession.shared.data(for: request)
+                } else {
+                    await self.sendFallbackCommand(.nextTrack)
                 }
             }
             self.scheduleRefresh([0.4])
@@ -1703,15 +1794,16 @@ public final class MusicServiceManager: ObservableObject {
                 end if
             end tell
             """)
-            if !done { await sendFallbackCommand(.previousTrack) }
-
-            if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium" {
-                if let token = await self.refreshSpotifyTokenIfNeeded(),
+            if !done {
+                if self.spotifyStatus.isConnected && self.spotifyProductType?.lowercased() == "premium",
+                   let token = await self.refreshSpotifyTokenIfNeeded(),
                    let url = URL(string: "https://api.spotify.com/v1/me/player/previous") {
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                     _ = try? await URLSession.shared.data(for: request)
+                } else {
+                    await self.sendFallbackCommand(.previousTrack)
                 }
             }
             self.scheduleRefresh([0.4])
@@ -1731,13 +1823,15 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     public func playRandomMusic() {
-        Task { @MainActor [weak self] in
+        randomLaunchTask?.cancel()
+        randomLaunchTask = Task { @MainActor [weak self] in
             guard let self else { return }
             self.isLaunchingRandomTrack = true
             defer {
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .seconds(2))
-                    self?.isLaunchingRandomTrack = false
+                    guard let self, !Task.isCancelled else { return }
+                    self.isLaunchingRandomTrack = false
                 }
             }
 
@@ -1749,11 +1843,10 @@ public final class MusicServiceManager: ObservableObject {
                 await self.playRandomAppleMusicTrack()
             }
 
-            // Échelonne plusieurs rafraîchissements pour détecter le morceau dès qu'il démarre
             for delayMs in [400, 900, 1600, 2400] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
-                    self?.refreshNowPlaying()
-                }
+                try? await Task.sleep(for: .milliseconds(delayMs == 400 ? 400 : 550))
+                if Task.isCancelled { break }
+                self.refreshNowPlaying(force: true)
             }
         }
     }
@@ -1819,7 +1912,7 @@ public final class MusicServiceManager: ObservableObject {
                     try? await Task.sleep(for: .milliseconds(400))
                     if let track = await fetchSpotifyCurrentlyPlaying() {
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            self.currentTrack = track
+                            self.assignCurrentTrack(track)
                         }
                     }
                     return
@@ -1830,7 +1923,7 @@ public final class MusicServiceManager: ObservableObject {
         // 2. Application Spotify locale sur macOS via AppleScript
         if let track = await playSpotifyLocalWithShuffle() {
             withAnimation(.easeInOut(duration: 0.3)) {
-                self.currentTrack = track
+                self.assignCurrentTrack(track)
             }
             if track.artworkData == nil {
                 resolveArtwork(for: track.title, artist: track.artist, album: track.album, fallbackURL: track.artworkURL)
@@ -1962,13 +2055,10 @@ public final class MusicServiceManager: ObservableObject {
             end try
         end tell
         """
-        let result = await Task.detached(priority: .userInitiated) { () -> String? in
-            guard let script = NSAppleScript(source: scriptSource) else { return nil }
-            var error: NSDictionary?
-            return script.executeAndReturnError(&error).stringValue
-        }.value
+        let result = await Self.runOsascript(scriptSource).output
+        let resolvedResult: String? = result.isEmpty ? nil : result
 
-        guard let result, !result.isEmpty else { return nil }
+        guard let result = resolvedResult, !result.isEmpty else { return nil }
         let parts = result.components(separatedBy: "|||")
         guard parts.count >= 6 else { return nil }
 
@@ -2004,7 +2094,7 @@ public final class MusicServiceManager: ObservableObject {
     private func playRandomAppleMusicTrack() async {
         if let track = await playAppleMusicLocalWithShuffle() {
             withAnimation(.easeInOut(duration: 0.3)) {
-                self.currentTrack = track
+                self.assignCurrentTrack(track)
             }
             if track.artworkData == nil {
                 resolveArtwork(for: track.title, artist: track.artist, album: track.album)
@@ -2053,13 +2143,10 @@ public final class MusicServiceManager: ObservableObject {
             end try
         end tell
         """
-        let result = await Task.detached(priority: .userInitiated) { () -> String? in
-            guard let script = NSAppleScript(source: scriptSource) else { return nil }
-            var error: NSDictionary?
-            return script.executeAndReturnError(&error).stringValue
-        }.value
+        let result = await Self.runOsascript(scriptSource).output
+        let resolvedResult: String? = result.isEmpty ? nil : result
 
-        guard let result, !result.isEmpty else { return nil }
+        guard let result = resolvedResult, !result.isEmpty else { return nil }
         let parts = result.components(separatedBy: "|||")
         guard parts.count >= 6 else { return nil }
 
@@ -2109,28 +2196,36 @@ public final class MusicServiceManager: ObservableObject {
         }
     }
 
+    nonisolated private static func runOsascriptSync(_ source: String, timeoutSeconds: TimeInterval = 6.0) -> (success: Bool, output: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", source]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+
+        let timeoutWorkItem = DispatchWorkItem { [weak process] in
+            guard let process, process.isRunning else { return }
+            process.terminate()
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
+        defer { timeoutWorkItem.cancel() }
+
+        do {
+            try process.run()
+        } catch {
+            return (false, "")
+        }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let output = (String(data: data, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (process.terminationStatus == 0, output)
+    }
+
     nonisolated private static func runOsascript(_ source: String) async -> (success: Bool, output: String) {
-        await Task.detached(priority: .userInitiated) { () -> (Bool, String) in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", source]
-            let stdout = Pipe()
-            let stderr = Pipe()
-            process.standardOutput = stdout
-            process.standardError = stderr
-            do {
-                try process.run()
-            } catch {
-                return (false, "")
-            }
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
-            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            let output = (String(data: data, encoding: .utf8) ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let errorOutput = (String(data: errorData, encoding: .utf8) ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return (process.terminationStatus == 0, output.isEmpty ? errorOutput : output)
+        await Task.detached(priority: .userInitiated) {
+            runOsascriptSync(source)
         }.value
     }
 

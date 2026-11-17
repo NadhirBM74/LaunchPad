@@ -80,18 +80,27 @@ enum BackupManager {
         return backup
     }
 
+    private static let fileNameDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     static func restore(_ backup: BackupFile, store: LaunchpadStore) {
         for (key, value) in backup.preferences where PrefKey.backupKeys.contains(key) {
             UserDefaults.standard.set(value.object, forKey: key)
         }
+        CustomTileManager.shared.loadTiles()
+        WidgetManager.shared.loadSettings()
+        IconCache.shared.removeAll()
         store.importLayout(backup.layout)
         store.saveNow()
+        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
     }
 
     static var suggestedFileName: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return "LaucnhPad-Sauvegarde-\(formatter.string(from: Date())).json"
+        "LaucnhPad-Sauvegarde-\(fileNameDateFormatter.string(from: Date())).json"
     }
 
     /// Importe la disposition du Launchpad système (macOS ≤ 15) en rapprochant les bundle IDs.
@@ -136,6 +145,7 @@ nonisolated enum SystemLaunchpadReader {
         guard let url = databaseURL else { throw BackupError.databaseNotFound }
         var db: OpaquePointer?
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
+            if let db { sqlite3_close(db) }
             throw BackupError.databaseUnreadable("ouverture impossible")
         }
         defer { sqlite3_close(db) }
@@ -278,6 +288,7 @@ nonisolated enum LaunchOSReader {
 
         var db: OpaquePointer?
         guard sqlite3_open_v2(copy.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
+            if let db { sqlite3_close(db) }
             throw BackupError.databaseUnreadable("ouverture impossible")
         }
         defer { sqlite3_close(db) }

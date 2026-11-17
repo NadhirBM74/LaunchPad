@@ -400,6 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         store.saveNow()
+        WidgetManager.shared.saveWidgetsNow()
         HotKeyManager.shared.unregister()
         InputEventMonitor.shared.stopAll()
     }
@@ -454,10 +455,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous?.showDock != config.showDock {
             NSApp.setActivationPolicy(config.showDock || settings.isVisible || AdminTestWindowController.shared.isVisible ? .regular : .accessory)
         }
-        if config.hotKeyEnabled {
-            HotKeyManager.shared.register(keyCode: config.hotKeyCode, modifiers: config.hotKeyModifiers)
-        } else {
-            HotKeyManager.shared.unregister()
+        if force || previous?.hotKeyEnabled != config.hotKeyEnabled || previous?.hotKeyCode != config.hotKeyCode || previous?.hotKeyModifiers != config.hotKeyModifiers {
+            if config.hotKeyEnabled {
+                HotKeyManager.shared.register(keyCode: config.hotKeyCode, modifiers: config.hotKeyModifiers)
+            } else {
+                HotKeyManager.shared.unregister()
+            }
         }
         if force || previous?.pinch != config.pinch || previous?.hotCorner != config.hotCorner || previous?.interceptF4 != config.interceptF4 {
             InputEventMonitor.shared.reconfigure()

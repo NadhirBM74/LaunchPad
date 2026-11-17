@@ -18,13 +18,29 @@ struct WidgetContainerView<Content: View>: View {
         let w = targetSize?.width ?? size.width
         let h = targetSize?.height ?? size.height
         let cornerRadius = widgetManager.cornerRadius
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         content()
             .frame(width: w, height: h)
-            .background(isPureTranslucent ? AnyView(translucentGlassBackground(cornerRadius: cornerRadius)) : AnyView(glassBackground(cornerRadius: cornerRadius)))
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(isPureTranslucent ? AnyView(EmptyView()) : AnyView(luminousBorder(cornerRadius: cornerRadius)))
-            .shadow(color: .black.opacity(isPureTranslucent ? 0.24 : 0.38), radius: isPureTranslucent ? 12 : 14, x: 0, y: isPureTranslucent ? 6 : 7)
+            .clipShape(shape)
+            .background {
+                containerBackgroundLayer(cornerRadius: cornerRadius)
+                    .shadow(color: .black.opacity(isPureTranslucent ? 0.24 : 0.38), radius: isPureTranslucent ? 12 : 14, x: 0, y: isPureTranslucent ? 6 : 7)
+            }
+            .overlay {
+                if !isPureTranslucent {
+                    luminousBorder(cornerRadius: cornerRadius)
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func containerBackgroundLayer(cornerRadius: CGFloat) -> some View {
+        if isPureTranslucent {
+            translucentGlassBackground(cornerRadius: cornerRadius)
+        } else {
+            glassBackground(cornerRadius: cornerRadius)
+        }
     }
 
     @ViewBuilder
@@ -129,6 +145,7 @@ struct SeekBar: View {
 
     @State private var dragFraction: Double? = nil
     @State private var isHovering = false
+    @State private var clearDragTask: Task<Void, Never>?
 
     private var canSeek: Bool { isEnabled && duration > 0 }
 
@@ -150,17 +167,23 @@ struct SeekBar: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard canSeek else { return }
+                        clearDragTask?.cancel()
                         dragFraction = min(1.0, max(0.0, Double(value.location.x / max(1, geo.size.width))))
                     }
                     .onEnded { value in
                         guard canSeek else { dragFraction = nil; return }
                         let f = min(1.0, max(0.0, Double(value.location.x / max(1, geo.size.width))))
                         onSeek(f)
-                        // Garde la position visée jusqu'au prochain rafraîchissement du lecteur.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { dragFraction = nil }
+                        clearDragTask?.cancel()
+                        clearDragTask = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(600))
+                            guard !Task.isCancelled else { return }
+                            dragFraction = nil
+                        }
                     }
             )
             .onHover { isHovering = $0 }
+            .onDisappear { clearDragTask?.cancel() }
         }
         .frame(height: max(18, barHeight + 12))
     }
@@ -207,16 +230,18 @@ struct MediaControlButton: View {
         }
         .buttonStyle(MediaPressButtonStyle())
         .onHover { inside in
+            hovering = inside
             if inside {
-                if !hovering { NSCursor.pointingHand.push() }
-                hovering = true
+                NSCursor.pointingHand.set()
             } else {
-                if hovering { NSCursor.pop() }
-                hovering = false
+                NSCursor.arrow.set()
             }
         }
         .onDisappear {
-            if hovering { NSCursor.pop(); hovering = false }
+            if hovering {
+                hovering = false
+                NSCursor.arrow.set()
+            }
         }
         .animation(.easeOut(duration: 0.12), value: hovering)
         .help(help ?? "")
@@ -259,19 +284,22 @@ struct MiniEqualizerBars: View {
         }
         .frame(height: 14)
         .onAppear {
-            if isPlaying && !reduceMotion {
+            if isPlaying && !reduceMotion && LaunchpadViewModel.isLaunchpadVisible {
                 barHeights = [0.9, 0.35, 0.85, 0.45, 0.75]
             }
         }
+        .onDisappear {
+            barHeights = [0.35, 0.65, 0.95, 0.45, 0.8]
+        }
         .onChange(of: isPlaying) { _, playing in
-            if playing && !reduceMotion {
+            if playing && !reduceMotion && LaunchpadViewModel.isLaunchpadVisible {
                 barHeights = [0.9, 0.35, 0.85, 0.45, 0.75]
             } else {
                 barHeights = [0.35, 0.65, 0.95, 0.45, 0.8]
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
-            let isVisible = (notif.object as? Bool) ?? false
+            guard let isVisible = notif.object as? Bool else { return }
             if !isVisible {
                 barHeights = [0.35, 0.65, 0.95, 0.45, 0.8]
             } else if isPlaying && !reduceMotion {
@@ -366,9 +394,13 @@ struct ClockDialFace: View, Equatable {
     }
 }
 
-struct AnalogClockFace: View {
+struct AnalogClockFace: View, Equatable {
     let date: Date
     var size: CGFloat = 110
+
+    static func == (lhs: AnalogClockFace, rhs: AnalogClockFace) -> Bool {
+        Int(lhs.date.timeIntervalSince1970) == Int(rhs.date.timeIntervalSince1970) && lhs.size == rhs.size
+    }
 
     var body: some View {
         let calendar = Calendar.current
@@ -415,6 +447,7 @@ struct AnalogClockFace: View {
                 .frame(width: 2, height: 2)
         }
         .frame(width: size, height: size)
+        .drawingGroup()
     }
 }
 
@@ -492,16 +525,18 @@ private struct VinylTransportButton: View {
         }
         .buttonStyle(MediaPressButtonStyle())
         .onHover { inside in
+            hovering = inside
             if inside {
-                if !hovering { NSCursor.pointingHand.push() }
-                hovering = true
+                NSCursor.pointingHand.set()
             } else {
-                if hovering { NSCursor.pop() }
-                hovering = false
+                NSCursor.arrow.set()
             }
         }
         .onDisappear {
-            if hovering { NSCursor.pop(); hovering = false }
+            if hovering {
+                hovering = false
+                NSCursor.arrow.set()
+            }
         }
         .animation(.easeOut(duration: 0.14), value: hovering)
         .animation(.easeOut(duration: 0.18), value: showPersistentRing)
@@ -513,6 +548,7 @@ private struct VinylTransportButton: View {
 struct VinylPlayerWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var musicManager = MusicServiceManager.shared
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle = AppTheme.liquidGlass
@@ -529,6 +565,9 @@ struct VinylPlayerWidgetView: View {
     @State private var lastManualSkipDate: Date = .distantPast
     @State private var activeRingButton: String? = nil
     @State private var extractedAccentColor: Color? = nil
+    @State private var colorExtractTask: Task<Void, Never>?
+    @State private var bounceResetTask: Task<Void, Never>?
+    @State private var ringClearTask: Task<Void, Never>?
     @State private var spinTracker = VinylSpinTracker()
     @State private var isWindowVisible: Bool = LaunchpadViewModel.isLaunchpadVisible || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
@@ -608,19 +647,34 @@ struct VinylPlayerWidgetView: View {
     /// Le vinyle tourne uniquement lorsque la musique est en lecture active,
     /// que le launchpad/widget est visible et que Réduire les animations n'est pas activé.
     private var isSpinning: Bool {
-        isPlaying && !reduceMotion && isWindowVisible
+        isPlaying && !reduceMotion && isWindowVisible && !isPreview
     }
 
-    /// Conteneur réutilisable animant la rotation continue et fluide du disque vinyle à 60/120 Hz
-    /// via TimelineView sans recharger inutilement l'arborescence parente.
     @ViewBuilder
-    private func rotatingVinylWrapper<V: View>(disc: V) -> some View {
-        TimelineView(.animation(paused: !isSpinning)) { timeline in
-            let spinAngle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
-            disc
-                .scaleEffect(discScale)
-                .rotationEffect(.degrees(discRotation + spinAngle))
+    private func rotatingVinylWrapper<V: View>(
+        disc: V,
+        size: CGFloat,
+        shadowOpacity: Double,
+        shadowRadius: CGFloat,
+        shadowX: CGFloat = 0,
+        shadowY: CGFloat
+    ) -> some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.90))
+                .padding(2)
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(shadowOpacity), radius: shadowRadius, x: shadowX, y: shadowY)
+
+            TimelineView(.animation(paused: !isSpinning)) { timeline in
+                let spinAngle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
+                disc
+                    .drawingGroup()
+                    .scaleEffect(discScale)
+                    .rotationEffect(.degrees(discRotation + spinAngle))
+            }
         }
+        .frame(width: size, height: size)
     }
 
     private var elapsed: Int {
@@ -694,7 +748,9 @@ struct VinylPlayerWidgetView: View {
         .frame(width: w, height: h)
         .animation(.easeInOut(duration: 0.25), value: config.musicAppearance)
         .onAppear {
-            musicManager.refreshNowPlaying()
+            if !isPreview {
+                musicManager.refreshNowPlaying()
+            }
             updateExtractedAccentColor(from: track.displayImage)
             if LaunchpadViewModel.isLaunchpadVisible {
                 isWindowVisible = true
@@ -702,9 +758,12 @@ struct VinylPlayerWidgetView: View {
         }
         .onDisappear {
             spinTracker.reset()
+            colorExtractTask?.cancel()
+            bounceResetTask?.cancel()
+            ringClearTask?.cancel()
         }
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
-            let isVisible = (notif.object as? Bool) ?? false
+            guard let isVisible = notif.object as? Bool else { return }
             isWindowVisible = isVisible
             if !isVisible {
                 spinTracker.reset()
@@ -718,7 +777,7 @@ struct VinylPlayerWidgetView: View {
                 triggerTrackChangeAnimation(direction: 1)
             }
         }
-        .onChange(of: track.artworkData) { _, _ in
+        .onChange(of: track.artworkData?.count ?? 0) { _, _ in
             updateExtractedAccentColor(from: track.displayImage)
         }
     }
@@ -810,13 +869,14 @@ struct VinylPlayerWidgetView: View {
                 Spacer(minLength: 1)
 
                 // Barre de progression dynamique assortie au vinyle en cours
-                SeekBar(
-                    elapsed: Double(elapsed),
+                VinylSeekBarView(
+                    progressState: musicManager.progressState,
+                    hasTrack: track.hasTrack,
+                    fallbackElapsed: config.musicElapsedSeconds,
                     duration: Double(max(1, duration)),
                     trackColor: seekTrackColor,
                     fillColor: activeProgressColor,
-                    barHeight: barHeight,
-                    isEnabled: track.hasTrack
+                    barHeight: barHeight
                 ) { fraction in
                     musicManager.seek(toFraction: fraction)
                 }
@@ -873,14 +933,14 @@ struct VinylPlayerWidgetView: View {
             .position(x: availW / 2, y: contentTopY + contentHeight / 2)
 
             // 4. Disque Vinyle Circulaire du son en lecture débordant en haut (tourne lentement pendant la lecture)
-            rotatingVinylWrapper(disc: vinylRecordDisc(size: discSize))
-                .shadow(
-                    color: .black.opacity(isLightTheme ? 0.28 : 0.52),
-                    radius: isUltraCompact ? 6 : 8,
-                    x: 0,
-                    y: isUltraCompact ? 3 : 4
-                )
-                .position(x: discCenterX, y: discCenterY)
+            rotatingVinylWrapper(
+                disc: vinylRecordDisc(size: discSize),
+                size: discSize,
+                shadowOpacity: isLightTheme ? 0.28 : 0.52,
+                shadowRadius: isUltraCompact ? 6 : 8,
+                shadowY: isUltraCompact ? 3 : 4
+            )
+            .position(x: discCenterX, y: discCenterY)
         }
         .frame(width: availW, height: availH)
     }
@@ -973,13 +1033,14 @@ struct VinylPlayerWidgetView: View {
                 Spacer(minLength: 2)
 
                 // Barre de lecture avec couleur dynamique assortie au vinyle en cours
-                SeekBar(
-                    elapsed: Double(elapsed),
+                VinylSeekBarView(
+                    progressState: musicManager.progressState,
+                    hasTrack: track.hasTrack,
+                    fallbackElapsed: config.musicElapsedSeconds,
                     duration: Double(max(1, duration)),
                     trackColor: seekTrackColor,
                     fillColor: activeProgressColor,
-                    barHeight: barHeight,
-                    isEnabled: track.hasTrack
+                    barHeight: barHeight
                 ) { fraction in
                     musicManager.seek(toFraction: fraction)
                 }
@@ -1036,14 +1097,15 @@ struct VinylPlayerWidgetView: View {
             .position(x: contentLeadX + contentWidth / 2, y: availH / 2)
 
             // 3. Disque Vinyle Circulaire du son en lecture (flottant à gauche et tournant lentement pendant la lecture)
-            rotatingVinylWrapper(disc: vinylRecordDisc(size: discSize))
-                .shadow(
-                    color: .black.opacity(isLightTheme ? 0.30 : 0.54),
-                    radius: isCompact ? 7 : 10,
-                    x: 2,
-                    y: isCompact ? 3 : 5
-                )
-                .position(x: sideInset + discSize / 2, y: availH / 2)
+            rotatingVinylWrapper(
+                disc: vinylRecordDisc(size: discSize),
+                size: discSize,
+                shadowOpacity: isLightTheme ? 0.30 : 0.54,
+                shadowRadius: isCompact ? 7 : 10,
+                shadowX: 2,
+                shadowY: isCompact ? 3 : 5
+            )
+            .position(x: sideInset + discSize / 2, y: availH / 2)
         }
         .frame(width: availW, height: availH)
     }
@@ -1080,14 +1142,15 @@ struct VinylPlayerWidgetView: View {
             // Plan 2 & 3 : Disque Vinyle flottant + Bras de Lecture flottant (séparés uniquement par des ombres douces)
             ZStack {
                 // Plan 2 : Grand disque vinyle noir épuré avec ombre diffuse profonde sur la carte (tourne lentement pendant la lecture)
-                rotatingVinylWrapper(disc: verticalTurntableVinylDisc(size: discSize))
-                    .shadow(
-                        color: .black.opacity(isLightTheme ? 0.22 : 0.50),
-                        radius: isCompactVertical ? 14 : 18,
-                        x: isCompactVertical ? 4 : 5,
-                        y: isCompactVertical ? 8 : 11
-                    )
-                    .position(x: discCenterX, y: discCenterY)
+                rotatingVinylWrapper(
+                    disc: verticalTurntableVinylDisc(size: discSize),
+                    size: discSize,
+                    shadowOpacity: isLightTheme ? 0.22 : 0.50,
+                    shadowRadius: isCompactVertical ? 14 : 18,
+                    shadowX: isCompactVertical ? 4 : 5,
+                    shadowY: isCompactVertical ? 8 : 11
+                )
+                .position(x: discCenterX, y: discCenterY)
 
                 // Plan 3 : Bras de lecture minimaliste flottant au-dessus du vinyle
                 verticalTurntableTonearm(availW: availW, availH: availH, discSize: discSize)
@@ -1141,13 +1204,14 @@ struct VinylPlayerWidgetView: View {
                     }
 
                     // Barre de progression minimaliste assortie à la couleur du morceau
-                    SeekBar(
-                        elapsed: Double(elapsed),
+                    VinylSeekBarView(
+                        progressState: musicManager.progressState,
+                        hasTrack: track.hasTrack,
+                        fallbackElapsed: config.musicElapsedSeconds,
                         duration: Double(max(1, duration)),
                         trackColor: seekTrackColor,
                         fillColor: activeProgressColor,
-                        barHeight: barHeight,
-                        isEnabled: track.hasTrack
+                        barHeight: barHeight
                     ) { fraction in
                         musicManager.seek(toFraction: fraction)
                     }
@@ -1235,10 +1299,13 @@ struct VinylPlayerWidgetView: View {
     private func handlePlayPauseTap() {
         flashButtonRing("play")
         if !reduceMotion {
+            bounceResetTask?.cancel()
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
                 discScale = 0.95
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            bounceResetTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(120))
+                guard !Task.isCancelled else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                     discScale = 1.0
                 }
@@ -1253,8 +1320,11 @@ struct VinylPlayerWidgetView: View {
     }
 
     private func flashButtonRing(_ id: String) {
+        ringClearTask?.cancel()
         activeRingButton = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        ringClearTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
             if activeRingButton == id {
                 activeRingButton = nil
             }
@@ -1270,6 +1340,7 @@ struct VinylPlayerWidgetView: View {
         }
         guard !reduceMotion else { return }
 
+        bounceResetTask?.cancel()
         withAnimation(.easeOut(duration: 0.12)) {
             discScale = 0.94
             tonearmBounceAngle = -4.5
@@ -1277,7 +1348,9 @@ struct VinylPlayerWidgetView: View {
         withAnimation(.spring(response: 0.64, dampingFraction: 0.66)) {
             discRotation += Double(direction) * 360.0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+        bounceResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(140))
+            guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.45, dampingFraction: 0.68)) {
                 discScale = 1.0
                 tonearmBounceAngle = 0
@@ -1302,6 +1375,7 @@ struct VinylPlayerWidgetView: View {
                         .scaleEffect(1.25)
                         .blur(radius: 30)
                         .saturation(1.22)
+                        .drawingGroup()
                 } else {
                     // Fallback élégant si aucune jaquette : fond coloré démo flouté
                     demoVinylArtwork(diameter: max(width, height))
@@ -1309,6 +1383,7 @@ struct VinylPlayerWidgetView: View {
                         .scaleEffect(1.3)
                         .blur(radius: 35)
                         .saturation(1.2)
+                        .drawingGroup()
                 }
             }
             .frame(width: width, height: height)
@@ -1347,7 +1422,7 @@ struct VinylPlayerWidgetView: View {
             )
         )
         .shadow(color: .black.opacity(isLightTheme ? 0.16 : 0.45), radius: 14, x: 0, y: 7)
-        .animation(.easeInOut(duration: 0.45), value: track.artworkData)
+        .animation(.easeInOut(duration: 0.45), value: trackTransitionID)
     }
 
     /// Disque vinyle noir minimaliste de la version verticale avec sillons subtils
@@ -1802,6 +1877,7 @@ struct VinylPlayerWidgetView: View {
     private static var accentColorCache: [String: Color] = [:]
 
     private func updateExtractedAccentColor(from image: NSImage?) {
+        colorExtractTask?.cancel()
         guard let image else {
             if extractedAccentColor != nil { extractedAccentColor = nil }
             return
@@ -1813,22 +1889,30 @@ struct VinylPlayerWidgetView: View {
             }
             return
         }
-        if let color = Self.extractVibrantColor(from: image) {
-            if Self.accentColorCache.count > 64 {
-                Self.accentColorCache.removeAll(keepingCapacity: true)
-            }
-            Self.accentColorCache[cacheKey] = color
-            extractedAccentColor = color
-        } else {
+        var rect = CGRect(origin: .zero, size: image.size)
+        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
             extractedAccentColor = nil
+            return
+        }
+        colorExtractTask = Task { @MainActor in
+            let color = await Task.detached(priority: .utility) {
+                Self.extractVibrantColor(from: cgImage)
+            }.value
+            guard !Task.isCancelled else { return }
+            if let color {
+                if Self.accentColorCache.count >= 64 {
+                    let dropKeys = Array(Self.accentColorCache.keys.prefix(32))
+                    for k in dropKeys { Self.accentColorCache.removeValue(forKey: k) }
+                }
+                Self.accentColorCache[cacheKey] = color
+                extractedAccentColor = color
+            } else {
+                extractedAccentColor = nil
+            }
         }
     }
 
-    private static func extractVibrantColor(from image: NSImage) -> Color? {
-        var rect = CGRect(origin: .zero, size: image.size)
-        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
-            return nil
-        }
+    nonisolated private static func extractVibrantColor(from cgImage: CGImage) -> Color? {
         let sampleSize = 12
         var pixels = [UInt8](repeating: 0, count: sampleSize * sampleSize * 4)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -1861,7 +1945,6 @@ struct VinylPlayerWidgetView: View {
             let saturation = maxC > 0 ? (delta / maxC) : 0
             let brightness = maxC
 
-            // Privilégie les teintes saturées ni trop noires ni trop blanches
             let score = saturation * 2.2 + (brightness > 0.18 && brightness < 0.92 ? 0.5 : 0.0)
             if score > bestScore {
                 bestScore = score
@@ -1877,6 +1960,30 @@ struct VinylPlayerWidgetView: View {
         let adjustedS = max(0.65, min(0.95, s * 1.15))
         let adjustedB = max(0.58, min(0.88, b))
         return Color(hue: Double(h), saturation: Double(adjustedS), brightness: Double(adjustedB))
+    }
+}
+
+/// Sous-vue isolée pour la SeekBar du lecteur vinyle : seule cette barre se met à jour toutes les 2 s.
+private struct VinylSeekBarView: View {
+    @ObservedObject var progressState: MusicProgressState
+    let hasTrack: Bool
+    let fallbackElapsed: Int
+    let duration: Double
+    let trackColor: Color
+    let fillColor: Color
+    let barHeight: CGFloat
+    let onSeek: (Double) -> Void
+
+    var body: some View {
+        SeekBar(
+            elapsed: hasTrack ? progressState.elapsedSeconds : Double(fallbackElapsed),
+            duration: max(1, duration),
+            trackColor: trackColor,
+            fillColor: fillColor,
+            barHeight: barHeight,
+            isEnabled: hasTrack,
+            onSeek: onSeek
+        )
     }
 }
 
@@ -2921,7 +3028,7 @@ struct ClockWidgetView: View {
             stopTimer()
         }
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
-            let isVisible = (notif.object as? Bool) ?? false
+            guard let isVisible = notif.object as? Bool else { return }
             if isVisible {
                 currentDate = Date()
                 startTimer()
@@ -3188,7 +3295,6 @@ struct SystemWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
     @ObservedObject private var stats = SystemStatsMonitor.shared
-    @ObservedObject private var widgetManager = WidgetManager.shared
 
     var body: some View {
         WidgetContainerView(size: config.size, targetSize: targetSize) {
@@ -3349,6 +3455,9 @@ struct QuickNoteWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
     @AppStorage(PrefKey.widgetQuickNoteText) private var noteText = ""
+    @State private var draftText = ""
+    @State private var saveDebounceTask: Task<Void, Never>?
+    @State private var copiedResetTask: Task<Void, Never>?
     @State private var showCopiedCheckmark = false
 
     var body: some View {
@@ -3374,14 +3483,17 @@ struct QuickNoteWidgetView: View {
                         Spacer()
 
                         // Bouton Copier
-                        if !noteText.isEmpty {
+                        if !draftText.isEmpty {
                             Button {
                                 NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(noteText, forType: .string)
+                                NSPasteboard.general.setString(draftText, forType: .string)
                                 withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                     showCopiedCheckmark = true
                                 }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                copiedResetTask?.cancel()
+                                copiedResetTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(1500))
+                                    guard !Task.isCancelled else { return }
                                     withAnimation { showCopiedCheckmark = false }
                                 }
                             } label: {
@@ -3403,6 +3515,8 @@ struct QuickNoteWidgetView: View {
                             // Bouton Effacer
                             Button {
                                 withAnimation(.easeOut(duration: 0.2)) {
+                                    saveDebounceTask?.cancel()
+                                    draftText = ""
                                     noteText = ""
                                 }
                             } label: {
@@ -3416,7 +3530,7 @@ struct QuickNoteWidgetView: View {
 
                     // Zone de saisie
                     ZStack(alignment: .topLeading) {
-                        if noteText.isEmpty {
+                        if draftText.isEmpty {
                             Text(loc("widget.quickNote.placeholder"))
                                 .font(.system(size: isCompact ? 11 : 12, weight: .regular))
                                 .foregroundStyle(Color.white.opacity(0.55))
@@ -3425,20 +3539,29 @@ struct QuickNoteWidgetView: View {
                                 .allowsHitTesting(false)
                         }
 
-                        TextEditor(text: $noteText)
+                        TextEditor(text: $draftText)
                             .scrollContentBackground(.hidden)
                             .background(Color.clear)
                             .font(.system(size: isCompact ? 11.5 : 12.5))
                             .foregroundStyle(.white)
                             .lineSpacing(isCompact ? 2 : 3)
+                            .onChange(of: draftText) { _, newValue in
+                                guard newValue != noteText else { return }
+                                saveDebounceTask?.cancel()
+                                saveDebounceTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(250))
+                                    guard !Task.isCancelled else { return }
+                                    noteText = newValue
+                                }
+                            }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     // Pied de carte : Compteur
-                    if !noteText.isEmpty {
+                    if !draftText.isEmpty {
                         HStack {
                             Spacer()
-                            Text("\(noteText.count) car.")
+                            Text("\(draftText.count) car.")
                                 .font(.system(size: isCompact ? 8.5 : 9.5, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.65))
                         }
@@ -3447,6 +3570,17 @@ struct QuickNoteWidgetView: View {
                 .padding(isCompact ? 10 : 14)
                 .frame(width: geo.size.width, height: geo.size.height)
             }
+        }
+        .onAppear {
+            if draftText != noteText { draftText = noteText }
+        }
+        .onDisappear {
+            saveDebounceTask?.cancel()
+            copiedResetTask?.cancel()
+            if noteText != draftText { noteText = draftText }
+        }
+        .onChange(of: noteText) { _, updated in
+            if updated != draftText { draftText = updated }
         }
     }
 }
@@ -3466,18 +3600,18 @@ struct WidgetHostView: View, Equatable {
         switch config.kind {
         case .vinylPlayer:
             if config.musicStyle == .classicTurntable {
-                VinylPlayerWidgetView(config: config, targetSize: targetSize)
+                VinylPlayerWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
             } else {
                 ReferenceMusicWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
             }
         case .mediaWide:
             ReferenceMusicWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .weather:
-            PremiumWeatherWidgetView(config: config, targetSize: targetSize)
+            PremiumWeatherWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .calendar:
-            PremiumCalendarWidgetView(config: config, targetSize: targetSize)
+            PremiumCalendarWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .clock:
-            PremiumClockWidgetView(config: config, targetSize: targetSize)
+            PremiumClockWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .system:
             SystemWidgetView(config: config, targetSize: targetSize)
         case .quickNote:

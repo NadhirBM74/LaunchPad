@@ -54,7 +54,7 @@ final class MusicVinylRotationTracker {
 
 // MARK: - Disques Vinyles Haute Fidélité (Marbré Cyan Splatter & Blanc Microsillon)
 
-struct ReferenceVinylDiscView: View {
+struct ReferenceVinylDiscView: View, Equatable {
     enum DiscVariant {
         case cyanSplatter // Photo 3 Haut-Gauche & Haut-Droite : Vinyle marbré bleu/cyan/blanc
         case whiteGrooved // Photo 3 Col 2 Haut : Vinyle blanc/argenté microsillon
@@ -64,6 +64,10 @@ struct ReferenceVinylDiscView: View {
     let size: CGFloat
     let variant: DiscVariant
     let artwork: NSImage?
+
+    static func == (lhs: ReferenceVinylDiscView, rhs: ReferenceVinylDiscView) -> Bool {
+        lhs.size == rhs.size && lhs.variant == rhs.variant && lhs.artwork === rhs.artwork
+    }
 
     var body: some View {
         let labelSize = size * 0.36
@@ -260,6 +264,7 @@ struct ReferenceMusicWidgetView: View {
     @State private var spinTracker = MusicVinylRotationTracker()
     @State private var discBounceScale: CGFloat = 1.0
     @State private var extraDiscRotation: Double = 0
+    @State private var bounceTask: Task<Void, Never>?
     @State private var isWindowVisible: Bool = LaunchpadViewModel.isLaunchpadVisible || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
     private var reduceMotion: Bool { userReduceMotion || systemReduceMotion }
@@ -320,7 +325,7 @@ struct ReferenceMusicWidgetView: View {
     }
 
     private var isSpinning: Bool {
-        isPlaying && !reduceMotion && isWindowVisible
+        isPlaying && !reduceMotion && isWindowVisible && !isPreview
     }
 
     private var isDarkMusic: Bool {
@@ -403,16 +408,19 @@ struct ReferenceMusicWidgetView: View {
         }
         .frame(width: w, height: h)
         .onAppear {
-            musicManager.refreshNowPlaying()
+            if !isPreview {
+                musicManager.refreshNowPlaying()
+            }
             if LaunchpadViewModel.isLaunchpadVisible {
                 isWindowVisible = true
             }
         }
         .onDisappear {
             spinTracker.reset()
+            bounceTask?.cancel()
         }
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
-            let visible = (notif.object as? Bool) ?? false
+            guard let visible = notif.object as? Bool else { return }
             isWindowVisible = visible
             if !visible { spinTracker.reset() }
         }
@@ -604,8 +612,7 @@ struct ReferenceMusicWidgetView: View {
                 let discSize = min(h * 0.68, w * 0.44)
                 VStack(spacing: 0) {
                     HStack(alignment: .center, spacing: 12) {
-                        spinningDiscView(size: discSize, variant: .cyanSplatter)
-                            .shadow(color: .black.opacity(isDarkMusic ? 0.40 : 0.18), radius: 8, y: 4)
+                        spinningDiscView(size: discSize, variant: .cyanSplatter, shadowOpacity: isDarkMusic ? 0.40 : 0.18, shadowRadius: 8, shadowY: 4)
 
                         VStack(spacing: 4) {
                             Text(displayTitle)
@@ -645,8 +652,7 @@ struct ReferenceMusicWidgetView: View {
                 let isCompact = h < 145
 
                 ZStack(alignment: .bottom) {
-                    spinningDiscView(size: discSize, variant: .cyanSplatter)
-                        .shadow(color: .black.opacity(isDarkMusic ? 0.40 : 0.18), radius: 8, y: 4)
+                    spinningDiscView(size: discSize, variant: .cyanSplatter, shadowOpacity: isDarkMusic ? 0.40 : 0.18, shadowRadius: 8, shadowY: 4)
                         .position(x: w / 2, y: discSize * 0.08)
 
                     VStack(spacing: isCompact ? 2.5 : 4) {
@@ -694,8 +700,7 @@ struct ReferenceMusicWidgetView: View {
                 let discSize = min(h * 0.68, w * 0.44)
                 VStack(spacing: 0) {
                     HStack(alignment: .center, spacing: 12) {
-                        spinningDiscView(size: discSize, variant: .whiteGrooved)
-                            .shadow(color: .black.opacity(isDarkMusic ? 0.38 : 0.15), radius: 8, y: 4)
+                        spinningDiscView(size: discSize, variant: .whiteGrooved, shadowOpacity: isDarkMusic ? 0.38 : 0.15, shadowRadius: 8, shadowY: 4)
 
                         VStack(spacing: 4) {
                             Text(displayTitle)
@@ -739,8 +744,7 @@ struct ReferenceMusicWidgetView: View {
         VStack(spacing: isSmall ? 3 : (isNarrowVertical ? 8 : 10)) {
             Spacer(minLength: 2)
 
-            spinningDiscView(size: discSize, variant: variant)
-                .shadow(color: .black.opacity(isDarkMusic ? 0.42 : 0.18), radius: 10, y: 5)
+            spinningDiscView(size: discSize, variant: variant, shadowOpacity: isDarkMusic ? 0.42 : 0.18, shadowRadius: 10, shadowY: 5)
 
             Spacer(minLength: 2)
 
@@ -915,17 +919,34 @@ struct ReferenceMusicWidgetView: View {
     }
 
     @ViewBuilder
-    private func spinningDiscView(size: CGFloat, variant: ReferenceVinylDiscView.DiscVariant) -> some View {
-        TimelineView(.animation(paused: !isSpinning)) { timeline in
-            let angle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
-            ReferenceVinylDiscView(
-                size: size,
-                variant: variant,
-                artwork: track.displayImage
-            )
-            .scaleEffect(discBounceScale)
-            .rotationEffect(.degrees(angle + extraDiscRotation))
+    private func spinningDiscView(
+        size: CGFloat,
+        variant: ReferenceVinylDiscView.DiscVariant,
+        shadowOpacity: Double = 0.25,
+        shadowRadius: CGFloat = 8,
+        shadowY: CGFloat = 4
+    ) -> some View {
+        ZStack {
+            // Masque d'ombre circulaire statique mis en cache GPU (ne se recalcule pas pendant la rotation 120 Hz)
+            Circle()
+                .fill(Color.black.opacity(0.88))
+                .padding(2)
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(shadowOpacity), radius: shadowRadius, y: shadowY)
+
+            TimelineView(.animation(paused: !isSpinning)) { timeline in
+                let angle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
+                ReferenceVinylDiscView(
+                    size: size,
+                    variant: variant,
+                    artwork: track.displayImage
+                )
+                .equatable()
+                .scaleEffect(discBounceScale)
+                .rotationEffect(.degrees(angle + extraDiscRotation))
+            }
         }
+        .frame(width: size, height: size)
     }
 
     @ViewBuilder
@@ -992,32 +1013,18 @@ struct ReferenceMusicWidgetView: View {
         fillColor: Color,
         isCompact: Bool
     ) -> some View {
-        VStack(spacing: isCompact ? 1.5 : 2.5) {
-            HStack {
-                Text(formatTime(Int(elapsedSeconds)))
-                    .font(.system(size: isCompact ? 8.0 : 9.0, weight: .bold))
-                    .foregroundStyle(textColor)
-                    .monospacedDigit()
-                Spacer()
-                Text(formatTime(Int(durationSeconds)))
-                    .font(.system(size: isCompact ? 8.0 : 9.0, weight: .bold))
-                    .foregroundStyle(textColor)
-                    .monospacedDigit()
+        ReferenceProgressSectionView(
+            progressState: musicManager.progressState,
+            hasTrack: track.hasTrack,
+            durationSeconds: durationSeconds,
+            textColor: textColor,
+            trackColor: trackColor,
+            fillColor: fillColor,
+            isCompact: isCompact
+        ) { fraction in
+            if track.hasTrack {
+                musicManager.seek(toFraction: fraction)
             }
-
-            SeekBar(
-                elapsed: elapsedSeconds,
-                duration: max(1, durationSeconds),
-                trackColor: trackColor,
-                fillColor: fillColor,
-                barHeight: isCompact ? 2.5 : 3.2,
-                isEnabled: true
-            ) { fraction in
-                if track.hasTrack {
-                    musicManager.seek(toFraction: fraction)
-                }
-            }
-            .frame(height: isCompact ? 8 : 10)
         }
     }
 
@@ -1080,11 +1087,14 @@ struct ReferenceMusicWidgetView: View {
 
     private func animateSkip(direction: Int) {
         guard !reduceMotion else { return }
+        bounceTask?.cancel()
         withAnimation(AppleDesignSystem.Springs.bouncy) {
             extraDiscRotation += Double(direction) * 180.0
             discBounceScale = 0.94
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+        bounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(140))
+            guard !Task.isCancelled else { return }
             withAnimation(AppleDesignSystem.Springs.bouncy) {
                 discBounceScale = 1.0
             }
@@ -1093,13 +1103,60 @@ struct ReferenceMusicWidgetView: View {
 
     private func animatePlayPause() {
         guard !reduceMotion else { return }
+        bounceTask?.cancel()
         withAnimation(AppleDesignSystem.Springs.snappy) {
             discBounceScale = 0.95
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+        bounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             withAnimation(AppleDesignSystem.Springs.bouncy) {
                 discBounceScale = 1.0
             }
+        }
+    }
+}
+
+/// Sous-vue isolée pour la barre de progression et le compteur temporel :
+/// seul ce composant est invalidé toutes les 2 s sans redessiner la pochette floutée ou le vinyle.
+private struct ReferenceProgressSectionView: View {
+    @ObservedObject var progressState: MusicProgressState
+    let hasTrack: Bool
+    let durationSeconds: Double
+    let textColor: Color
+    let trackColor: Color
+    let fillColor: Color
+    let isCompact: Bool
+    let onSeek: (Double) -> Void
+
+    private var elapsedSeconds: Double {
+        hasTrack ? progressState.elapsedSeconds : 80
+    }
+
+    var body: some View {
+        VStack(spacing: isCompact ? 1.5 : 2.5) {
+            HStack {
+                Text(formatTime(Int(elapsedSeconds)))
+                    .font(.system(size: isCompact ? 8.0 : 9.0, weight: .bold))
+                    .foregroundStyle(textColor)
+                    .monospacedDigit()
+                Spacer()
+                Text(formatTime(Int(durationSeconds)))
+                    .font(.system(size: isCompact ? 8.0 : 9.0, weight: .bold))
+                    .foregroundStyle(textColor)
+                    .monospacedDigit()
+            }
+
+            SeekBar(
+                elapsed: elapsedSeconds,
+                duration: max(1, durationSeconds),
+                trackColor: trackColor,
+                fillColor: fillColor,
+                barHeight: isCompact ? 2.5 : 3.2,
+                isEnabled: true,
+                onSeek: onSeek
+            )
+            .frame(height: isCompact ? 8 : 10)
         }
     }
 

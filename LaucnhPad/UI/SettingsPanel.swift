@@ -63,10 +63,8 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.widgetSystemEnabled) private var widgetSystemEnabled = true
     @AppStorage(PrefKey.widgetQuickNoteEnabled) private var widgetQuickNoteEnabled = true
     @ObservedObject private var licenseManager = LicenseManager.shared
-    @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var customTileManager = CustomTileManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
-    @ObservedObject private var updateManager = UpdateManager.shared
     @ObservedObject private var adminManager = AdminManager.shared
     @State private var adminUsername = ""
     @State private var adminPassword = ""
@@ -86,6 +84,12 @@ struct SettingsPanel: View {
     @State private var settingsToast: String? = nil
     @State private var settingsSearchQuery: String = ""
     @State private var isPlusSectionExpanded: Bool = true
+    @State private var hasLaunchOSDB = false
+    @State private var hasSystemLPDB = false
+    @State private var fourFingerPinchConflict = false
+    @State private var threeFingerDragConflict = false
+    @State private var hotCornerConflict = false
+    @State private var settingsToastTask: Task<Void, Never>? = nil
     @AppStorage(PrefKey.autoCheckUpdates) private var autoCheckUpdates = true
     @AppStorage("LaunchpadEnableUsageTips") private var enableUsageTips = true
     @AppStorage("LaunchpadEnableSoundFeedback") private var enableSoundFeedback = true
@@ -143,10 +147,13 @@ struct SettingsPanel: View {
     }
 
     private func triggerSettingsToast(_ text: String) {
+        settingsToastTask?.cancel()
         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
             settingsToast = text
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+        settingsToastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.2))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.2)) {
                 if settingsToast == text {
                     settingsToast = nil
@@ -155,7 +162,82 @@ struct SettingsPanel: View {
         }
     }
 
+    private func refreshSystemChecks() {
+        hasLaunchOSDB = LaunchOSReader.databaseURL != nil
+        hasSystemLPDB = SystemLaunchpadReader.databaseURL != nil
+        fourFingerPinchConflict = SystemConflicts.systemFourFingerPinchEnabled
+        threeFingerDragConflict = SystemConflicts.systemThreeFingerDragEnabled
+        hotCornerConflict = (hotCorner != .off && SystemConflicts.systemHotCornerAssigned(hotCorner))
+    }
+
     var body: some View {
+        settingsInteractionShell
+            .onAppear {
+                PermissionManager.shared.checkStatus()
+                accessibilityGranted = AXIsProcessTrusted()
+                refreshSystemChecks()
+                if let target = SettingsPanel.targetTab {
+                    selectedTab = target
+                    SettingsPanel.targetTab = nil
+                }
+            }
+            .onDisappear {
+                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { note in
+                if let tab = note.object as? SettingsTab {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                }
+            }
+    }
+
+    private var settingsInteractionShell: some View {
+        settingsDecoratedShell
+            .onReceive(PermissionManager.shared.$isAccessibilityGranted) { granted in
+                accessibilityGranted = granted
+            }
+            .onChange(of: hotCorner) { (_: HotCorner, newValue: HotCorner) in
+                hotCornerConflict = (newValue != .off && SystemConflicts.systemHotCornerAssigned(newValue))
+            }
+            .onChange(of: selectedTab) { (_: SettingsTab, tab: SettingsTab) in
+                if tab == .general || tab == .interface || tab == .advanced {
+                    refreshSystemChecks()
+                }
+                if tab != .interface {
+                    NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
+                }
+            }
+            .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+                Button("OK", role: .cancel) { message = nil }
+            }
+    }
+
+    private var settingsDecoratedShell: some View {
+        settingsShell
+            .frame(width: Self.size.width, height: Self.size.height)
+            .background(settingsBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay { settingsBorderOverlay }
+            .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
+    }
+
+    @ViewBuilder
+    private var settingsBorderOverlay: some View {
+        if backgroundStyle == .liquidGlass {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(
+                    LiquidGlassStyle.specularBorder(intensity: liquidGlassIntensity),
+                    lineWidth: 1.2
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1.0)
+        }
+    }
+
+    private var settingsShell: some View {
         ZStack(alignment: .bottom) {
             HStack(spacing: 0) {
                 // Barre latérale gauche inspirée de l'interface Apple (Photo de référence 1)
@@ -229,51 +311,6 @@ struct SettingsPanel: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .zIndex(999)
             }
-        }
-        .frame(width: Self.size.width, height: Self.size.height)
-        .background(settingsBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            if backgroundStyle == .liquidGlass {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(
-                        LiquidGlassStyle.specularBorder(intensity: liquidGlassIntensity),
-                        lineWidth: 1.2
-                    )
-            } else {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1.0)
-            }
-        }
-        .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
-        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
-            guard selectedTab == .general, !accessibilityGranted else { return }
-            accessibilityGranted = AXIsProcessTrusted()
-        }
-        .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
-            Button("OK", role: .cancel) { message = nil }
-        }
-        .onAppear {
-            accessibilityGranted = AXIsProcessTrusted()
-            if let target = SettingsPanel.targetTab {
-                selectedTab = target
-                SettingsPanel.targetTab = nil
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { note in
-            if let tab = note.object as? SettingsTab {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedTab = tab
-                }
-            }
-        }
-        .onChange(of: selectedTab) { _, newTab in
-            if newTab != .interface {
-                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
-            }
-        }
-        .onDisappear {
-            NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
         }
     }
 
@@ -507,24 +544,22 @@ struct SettingsPanel: View {
         let keywords: String
     }
 
-    private var searchableShortcuts: [SettingsSearchShortcut] {
-        [
-            SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd"),
-            SettingsSearchShortcut(title: "Thème et apparence", description: "Liquid Glass, Sombre ou Clair et transparence du verre", icon: "paintpalette.fill", tab: .interface, keywords: "theme apparence liquid glass sombre clair transparence"),
-            SettingsSearchShortcut(title: "Taille des icônes & grille", description: "Colonnes, lignes, échelle des icônes et barre de favoris", icon: "square.grid.3x3.fill", tab: .apps, keywords: "grille taille colonnes lignes echelle favoris labels"),
-            SettingsSearchShortcut(title: "Gestes Trackpad & Raccourci clavier", description: "Pincement à 3/4 doigts, touche F4 et raccourci global", icon: "hand.pinch.fill", tab: .general, keywords: "geste trackpad pincer clavier raccourci f4 coin actif"),
-            SettingsSearchShortcut(title: "Notifications & Mises à jour auto", description: "Alertes de nouvelles versions et bannières visuelles", icon: "bell.badge.fill", tab: .notifications, keywords: "notification alerte mise a jour automatique banner"),
-            SettingsSearchShortcut(title: "Apple Music & Spotify", description: "Connecter vos services musicaux pour les widgets", icon: "music.note", tab: .apps, keywords: "musique spotify apple music widget"),
-            SettingsSearchShortcut(title: "Sauvegarde & Réinitialisation", description: "Exporter/importer votre disposition ou réinitialiser", icon: "externaldrive.fill", tab: .advanced, keywords: "sauvegarde export import reinitialiser tri launchos"),
-            SettingsSearchShortcut(title: "Licence LaunchPad Pro", description: "Essai gratuit 7 jours et activation de clé", icon: "crown.fill", tab: .license, keywords: "licence pro essai cle activation"),
-            SettingsSearchShortcut(title: "À propos & Version", description: "Vérifier les mises à jour et informations de version", icon: "info.circle.fill", tab: .about, keywords: "apropos version update github discord")
-        ]
-    }
+    private static let searchableShortcuts: [SettingsSearchShortcut] = [
+        SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd"),
+        SettingsSearchShortcut(title: "Thème et apparence", description: "Liquid Glass, Sombre ou Clair et transparence du verre", icon: "paintpalette.fill", tab: .interface, keywords: "theme apparence liquid glass sombre clair transparence"),
+        SettingsSearchShortcut(title: "Taille des icônes & grille", description: "Colonnes, lignes, échelle des icônes et barre de favoris", icon: "square.grid.3x3.fill", tab: .apps, keywords: "grille taille colonnes lignes echelle favoris labels"),
+        SettingsSearchShortcut(title: "Gestes Trackpad & Raccourci clavier", description: "Pincement à 3/4 doigts, touche F4 et raccourci global", icon: "hand.pinch.fill", tab: .general, keywords: "geste trackpad pincer clavier raccourci f4 coin actif"),
+        SettingsSearchShortcut(title: "Notifications & Mises à jour auto", description: "Alertes de nouvelles versions et bannières visuelles", icon: "bell.badge.fill", tab: .notifications, keywords: "notification alerte mise a jour automatique banner"),
+        SettingsSearchShortcut(title: "Apple Music & Spotify", description: "Connecter vos services musicaux pour les widgets", icon: "music.note", tab: .apps, keywords: "musique spotify apple music widget"),
+        SettingsSearchShortcut(title: "Sauvegarde & Réinitialisation", description: "Exporter/importer votre disposition ou réinitialiser", icon: "externaldrive.fill", tab: .advanced, keywords: "sauvegarde export import reinitialiser tri launchos"),
+        SettingsSearchShortcut(title: "Licence LaunchPad Pro", description: "Essai gratuit 7 jours et activation de clé", icon: "crown.fill", tab: .license, keywords: "licence pro essai cle activation"),
+        SettingsSearchShortcut(title: "À propos & Version", description: "Vérifier les mises à jour et informations de version", icon: "info.circle.fill", tab: .about, keywords: "apropos version update github discord")
+    ]
 
     @ViewBuilder
     private var searchResultsSection: some View {
         let q = settingsSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let matches = searchableShortcuts.filter {
+        let matches = Self.searchableShortcuts.filter {
             $0.title.lowercased().contains(q) || $0.description.lowercased().contains(q) || $0.keywords.lowercased().contains(q)
         }
         if matches.isEmpty {
@@ -596,14 +631,7 @@ struct SettingsPanel: View {
                 "Vérifier automatiquement les mises à jour",
                 subtitle: "Vous prévient dès qu'une nouvelle version de LaunchPad est disponible."
             ) {
-                SettingsSwitch(isOn: Binding(
-                    get: { updateManager.autoCheckEnabled },
-                    set: { newVal in
-                        updateManager.autoCheckEnabled = newVal
-                        autoCheckUpdates = newVal
-                        triggerSettingsToast(newVal ? "Mises à jour automatiques activées" : "Mises à jour automatiques désactivées")
-                    }
-                ))
+                SettingsAutoUpdateSwitch(autoCheckUpdates: $autoCheckUpdates, triggerToast: triggerSettingsToast)
             }
             SettingsSeparator()
             SettingsRow(
@@ -931,10 +959,10 @@ struct SettingsPanel: View {
             SettingsRow(loc("general.pinch"), subtitle: loc("general.pinch_subtitle")) {
                 SettingsMenuPicker(selection: $pinchMode, options: PinchMode.allCases, title: \.title)
             }
-            if pinchMode != .off && pinchMode != .three && SystemConflicts.systemFourFingerPinchEnabled {
+            if pinchMode != .off && pinchMode != .three && fourFingerPinchConflict {
                 SettingsWarning(loc("general.pinch_conflict"))
             }
-            if pinchMode != .off && SystemConflicts.systemThreeFingerDragEnabled {
+            if pinchMode != .off && threeFingerDragConflict {
                 SettingsWarning(loc("general.three_finger_drag_tip"))
             }
             SettingsSeparator()
@@ -943,7 +971,7 @@ struct SettingsPanel: View {
             SettingsRow(loc("general.hot_corner")) {
                 SettingsMenuPicker(selection: $hotCorner, options: HotCorner.allCases, title: \.title)
             }
-            if hotCorner != .off && SystemConflicts.systemHotCornerAssigned(hotCorner) {
+            if hotCorner != .off && hotCornerConflict {
                 SettingsWarning(loc("general.hot_corner_conflict"))
             }
             SettingsSeparator()
@@ -1059,7 +1087,7 @@ struct SettingsPanel: View {
             SettingsRow(loc("interface.sort_by"), info: loc("interface.sort_info")) {
                 Picker("", selection: $sortChoice) {
                     Text(loc("interface.sort_custom")).tag("custom")
-                    if LaunchOSReader.databaseURL != nil {
+                    if hasLaunchOSDB {
                         Text(loc("interface.sort_launchos")).tag("launchos")
                     }
                     Divider()
@@ -1445,11 +1473,12 @@ struct SettingsPanel: View {
         }
 
         SettingsSectionTitle(loc("section.hidden_apps"))
+        let hiddenApps = store.hiddenApps
         SettingsCardBox {
-            if store.hiddenApps.isEmpty {
+            if hiddenApps.isEmpty {
                 SettingsNote(loc("apps.no_hidden")).padding(.vertical, 6)
             } else {
-                ForEach(Array(store.hiddenApps.enumerated()), id: \.element.id) { index, app in
+                ForEach(Array(hiddenApps.enumerated()), id: \.element.id) { index, app in
                     if index > 0 { SettingsSeparator() }
                     HStack(spacing: 10) {
                         Image(nsImage: IconCache.shared.icon(for: app.id)).resizable().frame(width: 24, height: 24)
@@ -1583,7 +1612,7 @@ struct SettingsPanel: View {
             }
             SettingsSeparator()
             SettingsRow(loc("advanced.launchos_title"),
-                        subtitle: LaunchOSReader.databaseURL == nil
+                        subtitle: !hasLaunchOSDB
                             ? loc("advanced.launchos_no_db")
                             : loc("advanced.launchos_subtitle")) {
                 Button(loc("advanced.import")) {
@@ -1591,11 +1620,11 @@ struct SettingsPanel: View {
                         importLaunchOS()
                     }
                 }
-                .disabled(LaunchOSReader.databaseURL == nil)
+                .disabled(!hasLaunchOSDB)
             }
             SettingsSeparator()
             SettingsRow(loc("advanced.system_launchpad_title"),
-                        subtitle: SystemLaunchpadReader.databaseURL == nil
+                        subtitle: !hasSystemLPDB
                             ? loc("advanced.system_launchpad_no_db")
                             : loc("advanced.system_launchpad_subtitle")) {
                 Button(loc("advanced.import")) {
@@ -1608,7 +1637,7 @@ struct SettingsPanel: View {
                         }
                     }
                 }
-                .disabled(SystemLaunchpadReader.databaseURL == nil)
+                .disabled(!hasSystemLPDB)
             }
         }
 
@@ -1697,12 +1726,7 @@ struct SettingsPanel: View {
                             .background(SettingsStyle.accent.opacity(0.16), in: Capsule())
                             .foregroundStyle(SettingsStyle.accent)
                         } else if licenseManager.isTrialActive {
-                            Text(licenseManager.trialDaysRemaining > 0 ? "\(licenseManager.trialDaysRemaining)j restants" : "7 JOURS")
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2.5)
-                                .background(Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.18), in: Capsule())
-                                .foregroundStyle(Color(red: 0.85, green: 0.55, blue: 0.00))
+                            SettingsTrialDaysBadgeView(countdown: licenseManager.countdown)
                         }
                     }
 
@@ -1759,82 +1783,16 @@ struct SettingsPanel: View {
 
         // Bandeau Compte à Rebours de l'Essai 7 Jours (si actif)
         if licenseManager.isTrialActive && !licenseManager.isProLifetime {
-            SettingsCardBox {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.badge.checkmark.fill")
-                                .foregroundStyle(Color.orange)
-                                .font(.system(size: 14))
-                            Text("Décompte de l'essai gratuit de 7 jours")
-                                .font(.system(size: 13, weight: .bold))
-                        }
-
-                        Spacer()
-
-                        Text(licenseManager.timeRemainingString)
-                            .font(.system(size: 13.5, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Color.orange)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 3)
-                            .background(Color.orange.opacity(0.15))
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-
-                    // Jauge de progression
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Color.white.opacity(0.10))
-                                .frame(height: 6)
-
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(LinearGradient(colors: [Color.orange, SettingsStyle.accent], startPoint: .leading, endPoint: .trailing))
-                                .frame(width: max(8, geo.size.width * CGFloat(1.0 - licenseManager.trialProgress)), height: 6)
-                        }
-                    }
-                    .frame(height: 6)
-
-                    HStack {
-                        Text("Activé le \(licenseManager.trialStartDate?.formatted(date: .abbreviated, time: .shortened) ?? "récemment")")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Text("Expiration automatique le \(licenseManager.trialEndDate?.formatted(date: .abbreviated, time: .shortened) ?? "dans 7 jours")")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    SettingsSeparator()
-                        .padding(.vertical, 2)
-
-                    HStack {
-                        Text("Vous pouvez annuler l'essai à tout moment et repasser en version gratuite.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Button(role: .destructive) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                licenseManager.cancelTrial()
-                                licenseFeedback = nil
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "xmark.circle")
-                                Text("Annuler l'essai gratuit")
-                            }
-                            .font(.system(size: 11.5, weight: .medium))
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            SettingsTrialCountdownCard(
+                licenseManager: licenseManager,
+                countdown: licenseManager.countdown,
+                onCancelTrial: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        licenseManager.cancelTrial()
+                        licenseFeedback = nil
                     }
                 }
-                .padding(.vertical, 10)
-            }
+            )
         } else if !licenseManager.isPro && !licenseManager.hasUsedTrial {
             // Proposition de démarrer l'essai 7 jours
             SettingsCardBox {
@@ -2147,7 +2105,7 @@ struct SettingsPanel: View {
                         Text("Version installée :")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
-                        Text("v\(updateManager.currentAppVersion)")
+                        Text("v\(UpdateManager.shared.currentAppVersion)")
                             .font(.system(size: 12.5, weight: .semibold))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 2)
@@ -2165,230 +2123,7 @@ struct SettingsPanel: View {
         }
 
         // Section Mise à jour
-        SettingsCardBox {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(Color.purple.opacity(0.16))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.purple)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Mise à jour du logiciel")
-                            .font(.system(size: 14, weight: .semibold))
-                        if let lastChecked = updateManager.lastChecked {
-                            Text("Dernière vérification : \(lastChecked.formatted(date: .abbreviated, time: .shortened))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Vérification automatique activée")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    if updateManager.state == .checking {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                }
-
-                SettingsSeparator()
-                    .padding(.vertical, 2)
-
-                switch updateManager.state {
-                case .idle:
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Version actuelle : v\(updateManager.currentAppVersion)")
-                                .font(.system(size: 13, weight: .medium))
-                            Text("Rechercher si une nouvelle version est disponible.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Rechercher") {
-                            updateManager.checkForUpdates(manual: true)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                case .checking:
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
-                        Text("Recherche de mises à jour sur GitHub...")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-
-                case .upToDate(let version):
-                    HStack(spacing: 12) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.system(size: 16))
-                            Text("LaucnhPad est à jour (v\(version))")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        Spacer()
-                        Button("Vérifier à nouveau") {
-                            updateManager.checkForUpdates(manual: true)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                case .updateAvailable(let version, let notes, _):
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            HStack(spacing: 8) {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(SettingsStyle.accent)
-                                Text("Mise à jour disponible : v\(version)")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(SettingsStyle.accent)
-                            }
-                            Spacer()
-                            Button {
-                                updateManager.downloadAndInstall()
-                            } label: {
-                                Label("Installer la mise à jour", systemImage: "arrow.down.circle.fill")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(SettingsStyle.accent)
-                        }
-
-                        if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            let cleanNotes = notes
-                                .replacingOccurrences(of: "### ", with: "")
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Nouveautés de cette version :")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                Text(LocalizedStringKey(cleanNotes))
-                                    .font(.system(size: 12.5))
-                                    .foregroundStyle(.primary.opacity(0.92))
-                                    .lineSpacing(3)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.primary.opacity(0.04))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
-                    }
-
-                case .downloading(let progress):
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Téléchargement en cours... \(Int(progress * 100))%")
-                                .font(.system(size: 13, weight: .medium))
-                            Spacer()
-                            Button("Annuler") {
-                                updateManager.cancelDownload()
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
-                        ProgressView(value: progress)
-                    }
-
-                case .readyToRestart(let version):
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.green)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Mise à jour v\(version) téléchargée avec succès !")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.green)
-                                Text("L'ancienne version sera automatiquement remplacée et supprimée.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        HStack {
-                            Spacer()
-                            Button {
-                                updateManager.applyUpdateAndRelaunch()
-                            } label: {
-                                Label("Redémarrer l'application", systemImage: "arrow.clockwise.circle.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.green)
-                        }
-                    }
-                    .padding(12)
-                    .background(Color.green.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                case .installing:
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
-                        Text("Installation et redémarrage automatique en cours...")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(SettingsStyle.accent)
-                    }
-                    .padding(.vertical, 4)
-
-                case .error(let message):
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Impossible de vérifier")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.red)
-                            Text(message)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Réessayer") {
-                            updateManager.checkForUpdates(manual: true)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-
-                SettingsSeparator()
-                    .padding(.vertical, 2)
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Recherche automatique")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Vérifier régulièrement si une nouvelle version est disponible.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $updateManager.autoCheckEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .tint(SettingsStyle.accent)
-                }
-            }
-            .padding(.vertical, 16)
-        }
+        SettingsUpdateCardView()
 
         // Section Guide & Tutoriel
         SettingsCardBox {
@@ -2815,7 +2550,11 @@ struct ShortcutRecorder: View {
                 .monospaced()
                 .frame(minWidth: 140)
         }
-        .onDisappear { stop() }
+        .onDisappear {
+            if recording || monitor != nil {
+                stop()
+            }
+        }
     }
 
     private func start() {
@@ -2839,6 +2578,7 @@ struct ShortcutRecorder: View {
     }
 
     private func stop() {
+        guard recording || monitor != nil else { return }
         recording = false
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
@@ -3406,6 +3146,7 @@ private struct CelebrationParticle: Identifiable {
     let color: Color
     let symbol: String
     let rotation: Double
+    let endScale: CGFloat
 }
 
 struct ProCelebrationPopup: View {
@@ -3435,7 +3176,8 @@ struct ProCelebrationPopup: View {
             let color = colors[i % colors.count]
             let symbol = symbols[i % symbols.count]
             let rotation = Double.random(in: 0...360)
-            return CelebrationParticle(angle: angle, distance: distance, size: size, color: color, symbol: symbol, rotation: rotation)
+            let endScale = CGFloat.random(in: 0.8...1.25)
+            return CelebrationParticle(angle: angle, distance: distance, size: size, color: color, symbol: symbol, rotation: rotation, endScale: endScale)
         }
     }()
 
@@ -3475,7 +3217,7 @@ struct ProCelebrationPopup: View {
                         x: particlesExploded ? cos(p.angle) * p.distance : 0,
                         y: particlesExploded ? sin(p.angle) * p.distance : 0
                     )
-                    .scaleEffect(particlesExploded ? CGFloat.random(in: 0.8...1.25) : 0.1)
+                    .scaleEffect(particlesExploded ? p.endScale : 0.1)
                     .opacity(particlesExploded ? 0.95 : 0.0)
                 }
             }
@@ -3774,6 +3516,8 @@ struct IconScalePreviewBox: View {
         }
         .padding(.vertical, 3)
         .onDisappear {
+            temporaryPreviewTask?.cancel()
+            temporaryPreviewTask = nil
             if isLivePreviewingOnLaunchpad {
                 isLivePreviewingOnLaunchpad = false
                 NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
@@ -4005,5 +3749,348 @@ struct MusicConnectionStatusBadge: View {
         if case .restricted = status { return Color.orange.opacity(0.30) }
         if case .error = status { return Color.red.opacity(0.30) }
         return Color.primary.opacity(0.08)
+    }
+}
+
+// MARK: - Sous-vues isolées des Paramètres (évitent le re-render complet à chaque tick)
+
+private struct SettingsAutoUpdateSwitch: View {
+    @Binding var autoCheckUpdates: Bool
+    let triggerToast: (String) -> Void
+    @ObservedObject private var updateManager = UpdateManager.shared
+
+    var body: some View {
+        SettingsSwitch(isOn: Binding(
+            get: { updateManager.autoCheckEnabled },
+            set: { newVal in
+                updateManager.autoCheckEnabled = newVal
+                autoCheckUpdates = newVal
+                triggerToast(newVal ? "Mises à jour automatiques activées" : "Mises à jour automatiques désactivées")
+            }
+        ))
+    }
+}
+
+private struct SettingsTrialDaysBadgeView: View {
+    @ObservedObject var countdown: TrialCountdownState
+
+    var body: some View {
+        Text(countdown.trialDaysRemaining > 0 ? "\(countdown.trialDaysRemaining)j restants" : "7 JOURS")
+            .font(.system(size: 10, weight: .bold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2.5)
+            .background(Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.18), in: Capsule())
+            .foregroundStyle(Color(red: 0.85, green: 0.55, blue: 0.00))
+    }
+}
+
+private struct SettingsTrialCountdownCard: View {
+    @ObservedObject var licenseManager: LicenseManager
+    @ObservedObject var countdown: TrialCountdownState
+    let onCancelTrial: () -> Void
+
+    var body: some View {
+        SettingsCardBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.badge.checkmark.fill")
+                            .foregroundStyle(Color.orange)
+                            .font(.system(size: 14))
+                        Text("Décompte de l'essai gratuit de 7 jours")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+
+                    Spacer()
+
+                    Text(countdown.timeRemainingString)
+                        .font(.system(size: 13.5, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.orange)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(Color.orange.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+
+                // Jauge de progression
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.white.opacity(0.10))
+                            .frame(height: 6)
+
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(LinearGradient(colors: [Color.orange, SettingsStyle.accent], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(8, geo.size.width * CGFloat(1.0 - countdown.trialProgress)), height: 6)
+                    }
+                }
+                .frame(height: 6)
+
+                HStack {
+                    Text("Activé le \(licenseManager.trialStartDate?.formatted(date: .abbreviated, time: .shortened) ?? "récemment")")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text("Expiration automatique le \(licenseManager.trialEndDate?.formatted(date: .abbreviated, time: .shortened) ?? "dans 7 jours")")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+
+                SettingsSeparator()
+                    .padding(.vertical, 2)
+
+                HStack {
+                    Text("Vous pouvez annuler l'essai à tout moment et repasser en version gratuite.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button(role: .destructive, action: onCancelTrial) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle")
+                            Text("Annuler l'essai gratuit")
+                        }
+                        .font(.system(size: 11.5, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+    }
+}
+
+private struct SettingsUpdateCardView: View {
+    @ObservedObject private var updateManager = UpdateManager.shared
+
+    var body: some View {
+        SettingsCardBox {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color.purple.opacity(0.16))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.purple)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Mise à jour du logiciel")
+                            .font(.system(size: 14, weight: .semibold))
+                        if let lastChecked = updateManager.lastChecked {
+                            Text("Dernière vérification : \(lastChecked.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Vérification automatique activée")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    if updateManager.state == .checking {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+
+                SettingsSeparator()
+                    .padding(.vertical, 2)
+
+                switch updateManager.state {
+                case .idle:
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Version actuelle : v\(updateManager.currentAppVersion)")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Rechercher si une nouvelle version est disponible.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Rechercher") {
+                            updateManager.checkForUpdates(manual: true)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                case .checking:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Recherche de mises à jour sur GitHub...")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+
+                case .upToDate(let version):
+                    HStack(spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.system(size: 16))
+                            Text("LaucnhPad est à jour (v\(version))")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        Spacer()
+                        Button("Vérifier à nouveau") {
+                            updateManager.checkForUpdates(manual: true)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                case .updateAvailable(let version, let notes, _):
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            HStack(spacing: 8) {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(SettingsStyle.accent)
+                                Text("Mise à jour disponible : v\(version)")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(SettingsStyle.accent)
+                            }
+                            Spacer()
+                            Button {
+                                updateManager.downloadAndInstall()
+                            } label: {
+                                Label("Installer la mise à jour", systemImage: "arrow.down.circle.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(SettingsStyle.accent)
+                        }
+
+                        if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            let cleanNotes = notes
+                                .replacingOccurrences(of: "### ", with: "")
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Nouveautés de cette version :")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(LocalizedStringKey(cleanNotes))
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(.primary.opacity(0.92))
+                                    .lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.primary.opacity(0.04))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+
+                case .downloading(let progress):
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Téléchargement en cours... \(Int(progress * 100))%")
+                                .font(.system(size: 13, weight: .medium))
+                            Spacer()
+                            Button("Annuler") {
+                                updateManager.cancelDownload()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                        ProgressView(value: progress)
+                    }
+
+                case .readyToRestart(let version):
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Mise à jour v\(version) téléchargée avec succès !")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(.green)
+                                Text("L'ancienne version sera automatiquement remplacée et supprimée.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button {
+                                updateManager.applyUpdateAndRelaunch()
+                            } label: {
+                                Label("Redémarrer l'application", systemImage: "arrow.clockwise.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.green.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                case .installing:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Installation et redémarrage automatique en cours...")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(SettingsStyle.accent)
+                    }
+                    .padding(.vertical, 4)
+
+                case .error(let message):
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Impossible de vérifier")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.red)
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Réessayer") {
+                            updateManager.checkForUpdates(manual: true)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
+                SettingsSeparator()
+                    .padding(.vertical, 2)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Recherche automatique")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Vérifier régulièrement si une nouvelle version est disponible.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $updateManager.autoCheckEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(SettingsStyle.accent)
+                }
+            }
+            .padding(.vertical, 16)
+        }
     }
 }

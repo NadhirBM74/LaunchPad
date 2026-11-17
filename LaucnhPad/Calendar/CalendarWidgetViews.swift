@@ -29,18 +29,41 @@ public enum CalendarWidgetStyle: String, Codable, CaseIterable, Identifiable, Se
 
 // MARK: - Modèle et Service de Synchronisation avec le Calendrier macOS (EventKit)
 
-public struct LaunchpadCalendarEvent: Identifiable, Equatable, Sendable {
+nonisolated public struct LaunchpadCalendarEvent: Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String
     public let startDate: Date
     public let endDate: Date
     public let colorHex: String
+    public let color: Color
     public let location: String?
     public let isAllDay: Bool
 
+    public init(
+        id: String,
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        colorHex: String,
+        location: String?,
+        isAllDay: Bool
+    ) {
+        self.id = id
+        self.title = title
+        self.startDate = startDate
+        self.endDate = endDate
+        self.colorHex = colorHex
+        self.color = Color(nsColor: NSColor(hexString: colorHex) ?? .systemRed)
+        self.location = location
+        self.isAllDay = isAllDay
+    }
+
     public var isOngoing: Bool {
-        let now = Date()
-        return now >= startDate && now <= endDate
+        isOngoing(at: Date())
+    }
+
+    public func isOngoing(at referenceDate: Date) -> Bool {
+        referenceDate >= startDate && referenceDate <= endDate
     }
 }
 
@@ -52,26 +75,38 @@ public final class CalendarEventService: ObservableObject {
     @Published public private(set) var isAuthorized: Bool = false
 
     private let store = EKEventStore()
+    private var lastFetchUptime: TimeInterval = 0
+    private var fetchTask: Task<Void, Never>?
 
     private init() {
-        refreshEvents()
+        loadFallbackSchedule()
+        Task { @MainActor [weak self] in
+            self?.refreshEvents(force: true)
+        }
     }
 
-    public func refreshEvents() {
+    public func refreshEvents(force: Bool = false) {
+        let now = ProcessInfo.processInfo.systemUptime
+        if !force && (now - lastFetchUptime) < 3.0 {
+            return
+        }
         let status = EKEventStore.authorizationStatus(for: .event)
         if status == .fullAccess {
             isAuthorized = true
+            lastFetchUptime = now
             loadSystemEvents()
         } else {
             isAuthorized = false
-            loadFallbackSchedule()
+            lastFetchUptime = now
+            if events.isEmpty { loadFallbackSchedule() }
         }
     }
 
     public func requestAccessIfNeeded() {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
-                let granted = try await store.requestFullAccessToEvents()
+                let granted = try await self.store.requestFullAccessToEvents()
                 self.isAuthorized = granted
                 if granted {
                     self.loadSystemEvents()
@@ -83,36 +118,46 @@ public final class CalendarEventService: ObservableObject {
     }
 
     private func loadSystemEvents() {
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: Date())
-        guard let end = cal.date(byAdding: .day, value: 14, to: start) else { return }
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        let ekEvents = store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
-
-        if ekEvents.isEmpty {
-            loadFallbackSchedule()
-            return
-        }
-
-        self.events = ekEvents.prefix(12).map { ev in
-            let hex: String = {
-                if let cg = ev.calendar?.cgColor, let ns = NSColor(cgColor: cg)?.usingColorSpace(.sRGB) {
-                    let r = Int(ns.redComponent * 255)
-                    let g = Int(ns.greenComponent * 255)
-                    let b = Int(ns.blueComponent * 255)
-                    return String(format: "#%02X%02X%02X", r, g, b)
+        fetchTask?.cancel()
+        fetchTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let cal = Calendar.current
+            let start = cal.startOfDay(for: Date())
+            guard let end = cal.date(byAdding: .day, value: 14, to: start) else { return }
+            let eventStore = self.store
+            let loaded = await Task.detached(priority: .utility) { () -> [LaunchpadCalendarEvent] in
+                let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
+                let ekEvents = eventStore.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+                return ekEvents.prefix(12).map { ev in
+                    let hex: String = {
+                        if let cg = ev.calendar?.cgColor, let ns = NSColor(cgColor: cg)?.usingColorSpace(.sRGB) {
+                            let r = Int(ns.redComponent * 255)
+                            let g = Int(ns.greenComponent * 255)
+                            let b = Int(ns.blueComponent * 255)
+                            return String(format: "#%02X%02X%02X", r, g, b)
+                        }
+                        return "#FF3B30"
+                    }()
+                    let baseID = ev.eventIdentifier ?? UUID().uuidString
+                    let uniqueID = "\(baseID)_\(Int(ev.startDate.timeIntervalSince1970))"
+                    return LaunchpadCalendarEvent(
+                        id: uniqueID,
+                        title: ev.title ?? "Événement",
+                        startDate: ev.startDate,
+                        endDate: ev.endDate,
+                        colorHex: hex,
+                        location: ev.location,
+                        isAllDay: ev.isAllDay
+                    )
                 }
-                return "#FF3B30"
-            }()
-            return LaunchpadCalendarEvent(
-                id: ev.eventIdentifier ?? UUID().uuidString,
-                title: ev.title ?? "Événement",
-                startDate: ev.startDate,
-                endDate: ev.endDate,
-                colorHex: hex,
-                location: ev.location,
-                isAllDay: ev.isAllDay
-            )
+            }.value
+
+            guard !Task.isCancelled else { return }
+            if loaded.isEmpty {
+                self.loadFallbackSchedule()
+            } else if self.events != loaded {
+                self.events = loaded
+            }
         }
     }
 
@@ -168,6 +213,7 @@ public final class CalendarEventService: ObservableObject {
 struct PremiumCalendarWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var calendarService = CalendarEventService.shared
@@ -222,7 +268,9 @@ struct PremiumCalendarWidgetView: View {
         .frame(width: w, height: h)
         .onAppear {
             currentDate = Date()
-            calendarService.refreshEvents()
+            if !isPreview {
+                calendarService.refreshEvents()
+            }
         }
     }
 
@@ -749,10 +797,9 @@ struct PremiumCalendarWidgetView: View {
     // MARK: - Ligne d'Événement Réutilisable
 
     private func eventCompactRow(_ ev: LaunchpadCalendarEvent) -> some View {
-        let barColor = Color(nsColor: NSColor(hexString: ev.colorHex) ?? .systemRed)
         return HStack(spacing: 7) {
             Capsule()
-                .fill(barColor)
+                .fill(ev.color)
                 .frame(width: 3, height: 24)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -761,7 +808,7 @@ struct PremiumCalendarWidgetView: View {
                         .font(.system(size: 10.5, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    if ev.isOngoing {
+                    if ev.isOngoing(at: currentDate) {
                         Text("EN COURS")
                             .font(.system(size: 6.5, weight: .black))
                             .foregroundStyle(.black)
@@ -808,17 +855,22 @@ struct PremiumCalendarWidgetView: View {
         return f
     }()
 
+    private static let frLocale = Locale(identifier: "fr_FR")
+    private static let enLocale = Locale(identifier: "en_US")
+
     private var activeAppLocale: Locale {
-        Locale(identifier: LocalizationManager.activeLanguageCode == "fr" ? "fr_FR" : "en_US")
+        LocalizationManager.activeLanguageCode == "fr" ? Self.frLocale : Self.enLocale
     }
 
     private func shortWeekdayString(for date: Date) -> String {
-        Self.weekdayFmt.locale = activeAppLocale
+        let loc = activeAppLocale
+        if Self.weekdayFmt.locale != loc { Self.weekdayFmt.locale = loc }
         return Self.weekdayFmt.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func shortMonthString(for date: Date) -> String {
-        Self.monthFmt.locale = activeAppLocale
+        let loc = activeAppLocale
+        if Self.monthFmt.locale != loc { Self.monthFmt.locale = loc }
         return Self.monthFmt.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
@@ -827,7 +879,8 @@ struct PremiumCalendarWidgetView: View {
     }
 
     private func monthYearTitle(for date: Date) -> String {
-        Self.monthYearFmt.locale = activeAppLocale
+        let loc = activeAppLocale
+        if Self.monthYearFmt.locale != loc { Self.monthYearFmt.locale = loc }
         return Self.monthYearFmt.string(from: date).capitalized
     }
 

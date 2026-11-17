@@ -73,7 +73,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     private func finalizeClose() {
-        guard let window else { return }
+        guard isClosing, let window else { return }
         window.orderOut(nil)
         window.contentViewController = nil
         window.alphaValue = 1.0
@@ -133,7 +133,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             NSApp.setActivationPolicy(.regular)
         }
         let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
-        window.contentView?.layoutSubtreeIfNeeded()
         center(window, on: targetScreen)
 
         // Prépare le fondu d'apparition sans déplacement ni saut
@@ -144,10 +143,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
 
-        // SwiftUI peut ajuster la taille de la fenêtre après l'affichage : on recentre ensuite.
-        center(window, on: targetScreen)
         DispatchQueue.main.async { [weak self, weak window] in
-            guard let self, let window else { return }
+            guard let self, let window, !self.isClosing else { return }
             self.center(window, on: targetScreen)
         }
 

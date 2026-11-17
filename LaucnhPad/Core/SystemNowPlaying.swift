@@ -188,6 +188,8 @@ nonisolated enum SystemNowPlayingClient {
 
     @MainActor
     private static var appIconCache: [String: NSImage] = [:]
+    @MainActor
+    private static var missingBundleIDs: Set<String> = []
 
     /// Icône de l'application source mise en cache mémoire (repli visuel quand aucune miniature n'est publiée).
     @MainActor
@@ -196,7 +198,13 @@ nonisolated enum SystemNowPlayingClient {
         if let cached = appIconCache[bundleID] {
             return cached
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        if missingBundleIDs.contains(bundleID) {
+            return nil
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            missingBundleIDs.insert(bundleID)
+            return nil
+        }
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         appIconCache[bundleID] = icon
         return icon

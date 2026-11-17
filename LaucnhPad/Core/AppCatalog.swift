@@ -183,6 +183,7 @@ final class FolderWatcher {
 final class IconCache {
     static let shared = IconCache()
     private var images: [String: NSImage] = [:]
+    private var fallbackCachedPaths: Set<String> = []
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     init() {
@@ -190,6 +191,7 @@ final class IconCache {
         source.setEventHandler { [weak self] in
             guard let self else { return }
             self.images.removeAll(keepingCapacity: false)
+            self.fallbackCachedPaths.removeAll(keepingCapacity: false)
         }
         source.resume()
         self.memoryPressureSource = source
@@ -211,22 +213,32 @@ final class IconCache {
         return parsed
     }
 
-    var activeTintColor: Color {
-        let key = UserDefaults.standard.string(forKey: PrefKey.tintedIconColor) ?? "blue"
-        switch key {
-        case "graphite": return Color(white: 0.78)
-        case "purple": return Color(red: 0.65, green: 0.42, blue: 1.0)
-        case "orange": return Color(red: 1.0, green: 0.56, blue: 0.14)
-        case "mint": return Color(red: 0.18, green: 0.85, blue: 0.68)
-        case "rose": return Color(red: 1.0, green: 0.32, blue: 0.56)
-        case "gold": return Color(red: 0.98, green: 0.78, blue: 0.22)
-        default: return Color(red: 0.08, green: 0.54, blue: 0.98)
+    var activeTintKey: String {
+        UserDefaults.standard.string(forKey: PrefKey.tintedIconColor) ?? "blue"
+    }
+
+    var activeTintRGB: (r: Double, g: Double, b: Double) {
+        switch activeTintKey {
+        case "graphite": return (0.78, 0.78, 0.78)
+        case "purple": return (0.65, 0.42, 1.0)
+        case "orange": return (1.0, 0.56, 0.14)
+        case "mint": return (0.18, 0.85, 0.68)
+        case "rose": return (1.0, 0.32, 0.56)
+        case "gold": return (0.98, 0.78, 0.22)
+        default: return (0.08, 0.54, 0.98)
         }
     }
 
+    var activeTintColor: Color {
+        let rgb = activeTintRGB
+        return Color(red: rgb.r, green: rgb.g, blue: rgb.b)
+    }
+
     func icon(for path: String) -> NSImage {
-        // Vérification du cache avec contrôle qualité : on rejette toute icône en cache de moins de 512 px
         if let cached = images[path] {
+            if fallbackCachedPaths.contains(path) {
+                return cached
+            }
             let maxPx = cached.representations.map(\.pixelsWide).max() ?? 0
             if maxPx >= IconRenderer.pixelSize {
                 return cached
@@ -234,7 +246,9 @@ final class IconCache {
         }
 
         let style = currentAppearanceStyle
-        if !path.hasPrefix("web:") && !path.hasPrefix("shortcut:") {
+        let tintRGB = activeTintRGB
+        if !path.hasPrefix("web:") && !path.hasPrefix("shortcut:"),
+           CustomIconManager.shared.hasOverride(for: path) {
             let appName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
             if let customImg = CustomAppIconRenderer.renderIcon(
                 for: path,
@@ -245,40 +259,55 @@ final class IconCache {
                 pixelSize: 256
             ) {
                 images[path] = customImg
+                fallbackCachedPaths.remove(path)
                 return customImg
             }
         }
 
-        // Fallback pour signets web et raccourcis à 512×512 Retina
-        if let cg = IconRenderer.renderStyledHighResIcon(for: path, style: style, tintRGB: (0.08, 0.54, 0.98)) {
+        // Rendu haute résolution 512×512 Retina (apps & tuiles personnalisées)
+        if let cg = IconRenderer.renderStyledHighResIcon(for: path, style: style, tintRGB: tintRGB) {
             let hdImage = CustomAppIconRenderer.wrapCGImageAsRetinaNSImage(cg)
             images[path] = hdImage
+            fallbackCachedPaths.remove(path)
             return hdImage
         }
 
         let fallback = IconRenderer.sourceIcon(for: path, original: useOriginalColors)
         fallback.size = NSSize(width: 256, height: 256)
         images[path] = fallback
+        fallbackCachedPaths.insert(path)
         return fallback
     }
 
     func contains(_ path: String) -> Bool {
         guard let cached = images[path] else { return false }
+        if fallbackCachedPaths.contains(path) { return true }
         let maxPx = cached.representations.map(\.pixelsWide).max() ?? 0
         return maxPx >= IconRenderer.pixelSize
     }
 
-    func store(_ rendered: [String: CGImage]) {
+    func store(_ rendered: [String: CGImage], forStyle expectedStyle: IconAppearanceStyle? = nil, tintKey expectedTintKey: String? = nil) {
         let style = currentAppearanceStyle
-        guard style == .system || style == .original else { return }
+        if let expectedStyle, expectedStyle != style { return }
+        if style == .tinted, let expectedTintKey, expectedTintKey != activeTintKey { return }
         for (path, cgImage) in rendered where images[path] == nil {
             if CustomIconManager.shared.hasOverride(for: path) { continue }
             images[path] = CustomAppIconRenderer.wrapCGImageAsRetinaNSImage(cgImage)
+            fallbackCachedPaths.remove(path)
         }
     }
 
-    func invalidate(_ paths: [String]) { paths.forEach { images[$0] = nil } }
-    func removeAll() { images.removeAll() }
+    func invalidate(_ paths: [String]) {
+        for path in paths {
+            images[path] = nil
+            fallbackCachedPaths.remove(path)
+        }
+    }
+
+    func removeAll() {
+        images.removeAll()
+        fallbackCachedPaths.removeAll()
+    }
 }
 
 nonisolated enum IconRenderer {
@@ -302,16 +331,16 @@ nonisolated enum IconRenderer {
     /// Extrait la meilleure représentation haute résolution (jusqu'à 1024×1024) depuis Assets.car ou les fichiers .icns du bundle
     static func bundleIcon(for path: String) -> NSImage? {
         let url = URL(fileURLWithPath: path)
-        let bundle = Bundle(url: url)
-        let info = bundle?.infoDictionary ?? AppScanner.infoDictionary(for: url)
+        let info = AppScanner.infoDictionary(for: url)
+
+        let iconName = (info?["CFBundleIconName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let iconFile = (info?["CFBundleIconFile"] as? String).flatMap { $0.isEmpty ? nil : $0 }
 
         var candidates: [String] = []
-        if let name = info?["CFBundleIconName"] as? String, !name.isEmpty {
-            candidates.append(name)
-        }
-        if let file = info?["CFBundleIconFile"] as? String, !file.isEmpty {
-            if !candidates.contains(file) { candidates.append(file) }
-            let stripped = (file as NSString).deletingPathExtension
+        if let iconName { candidates.append(iconName) }
+        if let iconFile {
+            if !candidates.contains(iconFile) { candidates.append(iconFile) }
+            let stripped = (iconFile as NSString).deletingPathExtension
             if !stripped.isEmpty && !candidates.contains(stripped) {
                 candidates.append(stripped)
             }
@@ -320,8 +349,11 @@ nonisolated enum IconRenderer {
             candidates.append("AppIcon")
         }
 
-        // 1. Lecture directe depuis Assets.car / Bundle resources (fournit 1024×1024 ou 512×512 en pleine couleur)
-        if let bundle {
+        let resources = url.appendingPathComponent("Contents/Resources", isDirectory: true)
+        let hasAssetsCar = FileManager.default.fileExists(atPath: resources.appendingPathComponent("Assets.car").path)
+
+        // 1. Lecture depuis Assets.car uniquement si présent (évite la rétention permanente de Bundle(url:) sinon)
+        if hasAssetsCar, let bundle = Bundle(url: url) {
             for candidate in candidates {
                 if let bImg = bundle.image(forResource: candidate), bImg.isValid, !bImg.representations.isEmpty {
                     let copy = (bImg.copy() as? NSImage) ?? bImg
@@ -331,8 +363,7 @@ nonisolated enum IconRenderer {
             }
         }
 
-        // 2. Lecture directe des fichiers .icns dans Contents/Resources/
-        let resources = url.appendingPathComponent("Contents/Resources", isDirectory: true)
+        // 2. Lecture directe des fichiers .icns nommés dans Contents/Resources/
         for candidate in candidates {
             let fileName = (candidate as NSString).pathExtension.isEmpty ? candidate + ".icns" : candidate
             let iconURL = resources.appendingPathComponent(fileName)
@@ -343,23 +374,23 @@ nonisolated enum IconRenderer {
             }
         }
 
-        // 3. Recherche du plus grand fichier .icns dans Contents/Resources/ si le nom diffère
+        // 3. Recherche du plus gros fichier .icns (tri par taille fichier avant décodage)
         if let files = try? FileManager.default.contentsOfDirectory(at: resources, includingPropertiesForKeys: [.fileSizeKey]) {
-            let icnsFiles = files.filter { $0.pathExtension.lowercased() == "icns" }
-            var bestImg: NSImage? = nil
-            var bestPixels = 0
-            for fileURL in icnsFiles {
-                if let img = NSImage(contentsOf: fileURL) {
+            let sortedIcns = files
+                .filter { $0.pathExtension.lowercased() == "icns" }
+                .compactMap { fileURL -> (url: URL, size: Int)? in
+                    let fSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                    return fSize > 4_000 ? (fileURL, fSize) : nil
+                }
+                .sorted { $0.size > $1.size }
+            for entry in sortedIcns.prefix(2) {
+                if let img = NSImage(contentsOf: entry.url) {
                     let maxP = img.representations.map { $0.pixelsWide * $0.pixelsHigh }.max() ?? 0
-                    if maxP > bestPixels {
-                        bestPixels = maxP
-                        bestImg = img
+                    if maxP >= 128 * 128 {
+                        img.size = NSSize(width: pixelSize, height: pixelSize)
+                        return img
                     }
                 }
-            }
-            if let bestImg, bestPixels >= 128 * 128 {
-                bestImg.size = NSSize(width: pixelSize, height: pixelSize)
-                return bestImg
             }
         }
         return nil
@@ -645,31 +676,34 @@ nonisolated enum IconRenderer {
     /// Calcule un masque de fond lissé (`0.0` = logo/premier plan, `1.0` = fond du squircle)
     /// par modélisation bilinéaire 4 coins + remplissage par propagation (flood-fill) depuis le pourtour.
     /// Détoure proprement les fonds unis, dégradés verticaux/diagonaux et cartes blanches (Messages, WhatsApp, Canopy, FaceTime, Discord…).
-    private static func computeSmoothBackgroundMatte(px: [UInt8], size: Int) -> [Double] {
+    private static func computeSmoothBackgroundMatte(px: [UInt8], size: Int) -> [Float] {
         let total = size * size
         // Périmètre intérieur sûr à 13.5% du canevas (~17 px à l'intérieur du bord squircle 9.1%)
-        let m = Int(Double(size) * 0.135)
+        let m = Int(Float(size) * 0.135)
         let maxM = size - 1 - m
-        let cornerInset = Int(Double(size) * 0.165)
-        let cornerSpan = Int(Double(size) * 0.065)
+        let cornerInset = Int(Float(size) * 0.165)
+        let cornerSpan = Int(Float(size) * 0.065)
         let step = max(3, size / 64)
+        let inv255: Float = 1.0 / 255.0
 
         @inline(__always)
-        func sampleRGB(x: Int, y: Int) -> (r: Double, g: Double, b: Double)? {
+        func sampleRGB(x: Int, y: Int) -> (r: Float, g: Float, b: Float)? {
             guard x >= 0, x < size, y >= 0, y < size else { return nil }
             let off = (y * size + x) * 4
-            let a = Double(px[off + 3]) / 255.0
+            let a = Float(px[off + 3]) * inv255
             guard a > 0.72 else { return nil }
+            let invA = 1.0 / (255.0 * a)
             return (
-                min(1.0, Double(px[off]) / (255.0 * a)),
-                min(1.0, Double(px[off + 1]) / (255.0 * a)),
-                min(1.0, Double(px[off + 2]) / (255.0 * a))
+                min(1.0, Float(px[off]) * invA),
+                min(1.0, Float(px[off + 1]) * invA),
+                min(1.0, Float(px[off + 2]) * invA)
             )
         }
 
         // Échantillonnage des 4 coins avec valeur médiane (résistant aux logos traversant un bord)
-        func cornerCluster(cx: Int, cy: Int) -> (r: Double, g: Double, b: Double)? {
-            var list: [(r: Double, g: Double, b: Double)] = []
+        func cornerCluster(cx: Int, cy: Int) -> (r: Float, g: Float, b: Float)? {
+            var list: [(r: Float, g: Float, b: Float)] = []
+            list.reserveCapacity(25)
             for dy in stride(from: -cornerSpan, through: cornerSpan, by: max(3, cornerSpan / 4)) {
                 for dx in stride(from: -cornerSpan, through: cornerSpan, by: max(3, cornerSpan / 4)) {
                     if let c = sampleRGB(x: cx + dx, y: cy + dy) {
@@ -685,8 +719,8 @@ nonisolated enum IconRenderer {
             return (rs[mid], gs[mid], bs[mid])
         }
 
-        var ringCount = 0
-        var ringSamples: [(x: Int, y: Int, r: Double, g: Double, b: Double)] = []
+        var ringSamples: [(x: Int, y: Int, r: Float, g: Float, b: Float)] = []
+        ringSamples.reserveCapacity(128)
         let spanStart = m + 16
         let spanEnd = maxM - 16
         if spanEnd > spanStart {
@@ -705,29 +739,37 @@ nonisolated enum IconRenderer {
         let brCorner = cornerCluster(cx: size - 1 - cornerInset, cy: size - 1 - cornerInset)
 
         let cornerList = [tlCorner, trCorner, blCorner, brCorner].compactMap { $0 }
-        ringCount = ringSamples.count + cornerList.count
+        let ringCount = ringSamples.count + cornerList.count
         guard ringCount >= 8, !cornerList.isEmpty else {
-            // Icône flottante détourée sans cadre squircle (VS Code, QuickTime, TV, etc.)
-            return [Double](repeating: 0.0, count: total)
+            return []
         }
 
+        let invCorners = 1.0 / Float(cornerList.count)
         let fallback = (
-            r: cornerList.map(\.r).reduce(0, +) / Double(cornerList.count),
-            g: cornerList.map(\.g).reduce(0, +) / Double(cornerList.count),
-            b: cornerList.map(\.b).reduce(0, +) / Double(cornerList.count)
+            r: cornerList.reduce(Float(0)) { $0 + $1.r } * invCorners,
+            g: cornerList.reduce(Float(0)) { $0 + $1.g } * invCorners,
+            b: cornerList.reduce(Float(0)) { $0 + $1.b } * invCorners
         )
         let tl = tlCorner ?? fallback
         let tr = trCorner ?? fallback
         let bl = blCorner ?? fallback
         let br = brCorner ?? fallback
 
+        let invSpan: Float = 1.0 / Float(max(1, maxM - m))
+        var uLUT = [Float](repeating: 0, count: size)
+        for i in 0..<size {
+            uLUT[i] = Float(max(m, min(maxM, i)) - m) * invSpan
+        }
+
         @inline(__always)
-        func bilinearBG(x: Int, y: Int) -> (r: Double, g: Double, b: Double) {
-            let u = Double(max(m, min(maxM, x)) - m) / Double(max(1, maxM - m))
-            let v = Double(max(m, min(maxM, y)) - m) / Double(max(1, maxM - m))
-            let wTL = (1.0 - u) * (1.0 - v)
-            let wTR = u * (1.0 - v)
-            let wBL = (1.0 - u) * v
+        func bilinearBG(x: Int, y: Int) -> (r: Float, g: Float, b: Float) {
+            let u = uLUT[x]
+            let v = uLUT[y]
+            let oneMinusU = 1.0 - u
+            let oneMinusV = 1.0 - v
+            let wTL = oneMinusU * oneMinusV
+            let wTR = u * oneMinusV
+            let wBL = oneMinusU * v
             let wBR = u * v
             return (
                 tl.r * wTL + tr.r * wTR + bl.r * wBL + br.r * wBR,
@@ -740,47 +782,62 @@ nonisolated enum IconRenderer {
         var consistent = 0
         for s in ringSamples {
             let bg = bilinearBG(x: s.x, y: s.y)
-            let d = hypot(s.r - bg.r, hypot(s.g - bg.g, s.b - bg.b))
-            if d < 0.34 { consistent += 1 }
+            let dr = s.r - bg.r, dg = s.g - bg.g, db = s.b - bg.b
+            if (dr * dr + dg * dg + db * db) < 0.1156 { consistent += 1 }
         }
-        let ringMatchRatio = ringSamples.isEmpty ? 1.0 : Double(consistent) / Double(ringSamples.count)
+        let ringMatchRatio = ringSamples.isEmpty ? 1.0 : Float(consistent) / Float(ringSamples.count)
         guard ringMatchRatio > 0.42 else {
-            return [Double](repeating: 0.0, count: total)
+            return []
         }
 
-        // 2. Extraction des composantes RGB dé-prémultipliées & distance locale au champ bilinéaire
-        var rgb = [Double](repeating: 0.0, count: total * 3)
-        var alphas = [Double](repeating: 0.0, count: total)
-        var bgDist = [Double](repeating: 1.0, count: total)
+        // 2. Extraction RGB dé-prémultiplié & distance locale au champ bilinéaire (tampons Float compacts)
+        var rgb = [Float](repeating: 0.0, count: total * 3)
+        var alphas = [Float](repeating: 0.0, count: total)
+        var bgDist = [Float](repeating: 1.0, count: total)
 
         for y in 0..<size {
             let row = y * size
+            let v = uLUT[y]
+            let oneMinusV = 1.0 - v
+            let topR = tl.r * oneMinusV + bl.r * v
+            let topG = tl.g * oneMinusV + bl.g * v
+            let topB = tl.b * oneMinusV + bl.b * v
+            let botR = tr.r * oneMinusV + br.r * v
+            let botG = tr.g * oneMinusV + br.g * v
+            let botB = tr.b * oneMinusV + br.b * v
+
             for x in 0..<size {
                 let idx = row + x
                 let off = idx * 4
-                let a = Double(px[off + 3]) / 255.0
+                let a = Float(px[off + 3]) * inv255
                 alphas[idx] = a
                 if a < 0.03 {
                     bgDist[idx] = 0.0
                     continue
                 }
-                let r = min(1.0, Double(px[off]) / (255.0 * a))
-                let g = min(1.0, Double(px[off + 1]) / (255.0 * a))
-                let b = min(1.0, Double(px[off + 2]) / (255.0 * a))
-                rgb[idx * 3] = r
-                rgb[idx * 3 + 1] = g
-                rgb[idx * 3 + 2] = b
+                let invA = 1.0 / (255.0 * a)
+                let r = min(1.0, Float(px[off]) * invA)
+                let g = min(1.0, Float(px[off + 1]) * invA)
+                let b = min(1.0, Float(px[off + 2]) * invA)
+                let rgbOff = idx * 3
+                rgb[rgbOff] = r
+                rgb[rgbOff + 1] = g
+                rgb[rgbOff + 2] = b
 
-                let bg = bilinearBG(x: x, y: y)
-                bgDist[idx] = hypot(r - bg.r, hypot(g - bg.g, b - bg.b))
+                let u = uLUT[x]
+                let oneMinusU = 1.0 - u
+                let bgR = topR * oneMinusU + botR * u
+                let bgG = topG * oneMinusU + botG * u
+                let bgB = topB * oneMinusU + botB * u
+                let dr = r - bgR, dg = g - bgG, db = b - bgB
+                bgDist[idx] = sqrtf(dr * dr + dg * dg + db * db)
             }
         }
 
         // 3. Flood-fill connecté depuis le pourtour et les pixels transparents externes
-        // Garantit la suppression complète du fond dégradé tout en protégeant les détails fermés internes des logos !
         var visited = [Bool](repeating: false, count: total)
         var isBackground = [Bool](repeating: false, count: total)
-        var queue = [Int]()
+        var queue = [Int32]()
         queue.reserveCapacity(total / 2)
 
         func trySeed(_ idx: Int) {
@@ -788,7 +845,7 @@ nonisolated enum IconRenderer {
             if alphas[idx] < 0.12 || bgDist[idx] < 0.25 {
                 visited[idx] = true
                 isBackground[idx] = true
-                queue.append(idx)
+                queue.append(Int32(idx))
             }
         }
 
@@ -806,86 +863,81 @@ nonisolated enum IconRenderer {
         }
 
         var head = 0
-        let dx4 = [-1, 1, 0, 0]
-        let dy4 = [0, 0, -1, 1]
+        let maxIdx = size - 1
+        let stepDistSqMax: Float = 0.045 * 0.045
+        let isPow2Size = (size & (size - 1)) == 0
+        let sizeMask = size - 1
+        let sizeShift = isPow2Size ? size.trailingZeroBitCount : 0
+
         while head < queue.count {
-            let cur = queue[head]
+            let cur = Int(queue[head])
             head += 1
-            let cx = cur % size
-            let cy = cur / size
+            let cx = isPow2Size ? (cur & sizeMask) : (cur % size)
+            let cy = isPow2Size ? (cur >> sizeShift) : (cur / size)
             let curAlpha = alphas[cur]
-            let cr = rgb[cur * 3], cg = rgb[cur * 3 + 1], cb = rgb[cur * 3 + 2]
+            let curRgbOff = cur * 3
+            let cr = rgb[curRgbOff], cg = rgb[curRgbOff + 1], cb = rgb[curRgbOff + 2]
 
-            for dir in 0..<4 {
-                let nx = cx + dx4[dir]
-                let ny = cy + dy4[dir]
-                guard nx >= 0, nx < size, ny >= 0, ny < size else { continue }
-                let nIdx = ny * size + nx
-                guard !visited[nIdx] else { continue }
-
-                let na = alphas[nIdx]
-                if na < 0.08 {
+            @inline(__always)
+            func visitNeighbor(_ nIdx: Int) {
+                guard !visited[nIdx] else { return }
+                if alphas[nIdx] < 0.08 || bgDist[nIdx] < 0.24 {
                     visited[nIdx] = true
                     isBackground[nIdx] = true
-                    queue.append(nIdx)
-                    continue
+                    queue.append(Int32(nIdx))
+                    return
                 }
-
-                let dField = bgDist[nIdx]
-                if dField < 0.24 {
-                    visited[nIdx] = true
-                    isBackground[nIdx] = true
-                    queue.append(nIdx)
-                    continue
-                }
-
-                // Transition douce pour dégradés radiaux sans franchir de bordure nette du logo
-                if curAlpha > 0.7 && dField < 0.36 {
-                    let nr = rgb[nIdx * 3], ng = rgb[nIdx * 3 + 1], nb = rgb[nIdx * 3 + 2]
-                    let stepDist = hypot(nr - cr, hypot(ng - cg, nb - cb))
-                    if stepDist < 0.045 {
+                if curAlpha > 0.7 && bgDist[nIdx] < 0.36 {
+                    let nRgbOff = nIdx * 3
+                    let dr = rgb[nRgbOff] - cr
+                    let dg = rgb[nRgbOff + 1] - cg
+                    let db = rgb[nRgbOff + 2] - cb
+                    if (dr * dr + dg * dg + db * db) < stepDistSqMax {
                         visited[nIdx] = true
                         isBackground[nIdx] = true
-                        queue.append(nIdx)
+                        queue.append(Int32(nIdx))
                     }
                 }
             }
+
+            if cx > 0 { visitNeighbor(cur - 1) }
+            if cx < maxIdx { visitNeighbor(cur + 1) }
+            if cy > 0 { visitNeighbor(cur - size) }
+            if cy < maxIdx { visitNeighbor(cur + size) }
         }
 
-        // 4. Matte adouci sur le frontière logo/fond pour zéro crénelage
-        var rawMatte = [Double](repeating: 0.0, count: total)
-        let edgeInnerLow = 0.06
-        let edgeInnerHigh = 0.24
-        for idx in 0..<total {
-            if isBackground[idx] {
-                if alphas[idx] < 0.08 {
-                    rawMatte[idx] = 1.0
-                } else {
-                    let d = bgDist[idx]
-                    let t = min(1.0, max(0.0, (d - edgeInnerLow) / (edgeInnerHigh - edgeInnerLow)))
-                    rawMatte[idx] = 1.0 - (t * t * (3.0 - 2.0 * t)) * 0.45
-                }
+        // 4. Matte adouci sur la frontière logo/fond pour zéro crénelage
+        var bufA = [Float](repeating: 0.0, count: total)
+        let edgeInnerLow: Float = 0.06
+        let invEdgeSpan: Float = 1.0 / (0.24 - 0.06)
+        for idx in 0..<total where isBackground[idx] {
+            if alphas[idx] < 0.08 {
+                bufA[idx] = 1.0
+            } else {
+                let d = bgDist[idx]
+                let t = min(1.0, max(0.0, (d - edgeInnerLow) * invEdgeSpan))
+                bufA[idx] = 1.0 - (t * t * (3.0 - 2.0 * t)) * 0.45
             }
         }
 
-        // 5. Lissage séparable 3×3
-        var temp = rawMatte
+        // 5. Lissage séparable 3×3 avec réutilisation de 2 tampons uniquement
+        var bufB = bufA
         for y in 1..<(size - 1) {
             let row = y * size
             for x in 1..<(size - 1) {
                 let idx = row + x
-                temp[idx] = (rawMatte[idx - 1] + 2.0 * rawMatte[idx] + rawMatte[idx + 1]) * 0.25
+                bufB[idx] = (bufA[idx - 1] + 2.0 * bufA[idx] + bufA[idx + 1]) * 0.25
             }
         }
-        var smoothed = temp
+        bufA = bufB
         for y in 1..<(size - 1) {
             let row = y * size
             for x in 1..<(size - 1) {
                 let idx = row + x
-                smoothed[idx] = (temp[idx - size] + 2.0 * temp[idx] + temp[idx + size]) * 0.25
+                bufA[idx] = (bufB[idx - size] + 2.0 * bufB[idx] + bufB[idx + size]) * 0.25
             }
         }
-        return smoothed
+        return bufA
     }
 
     /// Shader 512×512 ultra-rapide et lissé adaptant chaque icône sans bavures ni pixels crénelés
@@ -899,102 +951,101 @@ nonisolated enum IconRenderer {
         let isGlassStyle = (style == .transparent || style == .clearLiquid || style == .clearDark || style == .frostedGlass)
         let needsMatte = isGlassStyle || style == .dark || style == .light
         let bgMatte = needsMatte ? computeSmoothBackgroundMatte(px: px, size: size) : []
-        // Rognage ultra-fin du liseré externe (1.8% à l'intérieur du squircle) lorsqu'un fond squircle a été détouré,
-        // afin d'éliminer tout halo coloré d'origine (bordure verte/dorée/grise des icônes macOS) en style verre transparent.
-        let clipOuterRimForGlass = isGlassStyle && bgMatte.contains(where: { $0 > 0.5 })
-        let innerTrimMargin = Double(size) * 0.130
-        let innerTrimMax = Double(size) - 1.0 - innerTrimMargin
+        // Rognage ultra-fin du liseré externe (1.8% à l'intérieur du squircle) lorsqu'un fond squircle a été détouré
+        let clipOuterRimForGlass = isGlassStyle && !bgMatte.isEmpty && bgMatte.contains(where: { $0 > 0.5 })
+        let innerTrimMargin = Float(size) * 0.130
+        let innerTrimMax = Float(size) - 1.0 - innerTrimMargin
         let innerTrimW = innerTrimMax - innerTrimMargin
         let innerCorner = innerTrimW * 0.225
+        let halfSize = Float(size) * 0.5
+        let cornerThreshold = innerTrimW * 0.5 - innerCorner
+        let tintR = Float(tintRGB.r), tintG = Float(tintRGB.g), tintB = Float(tintRGB.b)
+        let inv255: Float = 1.0 / 255.0
+        let isPow2Size = (size & (size - 1)) == 0
+        let sizeMask = size - 1
+        let sizeShift = isPow2Size ? size.trailingZeroBitCount : 0
 
         for idx in 0..<total {
             let offset = idx * 4
-            let a = Double(px[offset + 3]) / 255.0
+            let a = Float(px[offset + 3]) * inv255
             guard a > 0.02 else { continue }
 
-            // Dé-prémultiplication alpha
-            var r = min(1.0, Double(px[offset]) / (255.0 * a))
-            var g = min(1.0, Double(px[offset + 1]) / (255.0 * a))
-            var b = min(1.0, Double(px[offset + 2]) / (255.0 * a))
+            let invA = 1.0 / (255.0 * a)
+            var r = min(1.0, Float(px[offset]) * invA)
+            var g = min(1.0, Float(px[offset + 1]) * invA)
+            var b = min(1.0, Float(px[offset + 2]) * invA)
             var outA = a
 
             if clipOuterRimForGlass {
-                let pxX = Double(idx % size)
-                let pxY = Double(idx / size)
-                let clampedX = max(innerTrimMargin, min(innerTrimMax, pxX))
-                let clampedY = max(innerTrimMargin, min(innerTrimMax, pxY))
-                let dx = abs(pxX - clampedX)
-                let dy = abs(pxY - clampedY)
-                if dx > 0 || dy > 0 {
+                let pxX = Float(isPow2Size ? (idx & sizeMask) : (idx % size))
+                let pxY = Float(isPow2Size ? (idx >> sizeShift) : (idx / size))
+                if pxX < innerTrimMargin || pxX > innerTrimMax || pxY < innerTrimMargin || pxY > innerTrimMax {
                     outA = 0.0
                 } else {
-                    let cxEdge = max(0.0, (abs(pxX - Double(size) * 0.5) - (innerTrimW * 0.5 - innerCorner)))
-                    let cyEdge = max(0.0, (abs(pxY - Double(size) * 0.5) - (innerTrimW * 0.5 - innerCorner)))
-                    let cornerDist = hypot(cxEdge, cyEdge) - innerCorner
-                    if cornerDist > 0.0 {
-                        outA = 0.0
-                    } else if cornerDist > -2.0 {
-                        outA *= min(1.0, max(0.0, -cornerDist / 2.0))
+                    let cxEdge = abs(pxX - halfSize) - cornerThreshold
+                    let cyEdge = abs(pxY - halfSize) - cornerThreshold
+                    if cxEdge > 0 && cyEdge > 0 {
+                        let cornerDist = sqrtf(cxEdge * cxEdge + cyEdge * cyEdge) - innerCorner
+                        if cornerDist > 0.0 {
+                            outA = 0.0
+                        } else if cornerDist > -2.0 {
+                            outA *= min(1.0, max(0.0, -cornerDist * 0.5))
+                        }
                     }
                 }
             }
 
             let maxC = max(r, max(g, b))
             let minC = min(r, min(g, b))
-            let delta = maxC - minC
-            let sat = maxC > 0.001 ? (delta / maxC) : 0.0
-            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            let sat = maxC > 0.001 ? ((maxC - minC) / maxC) : 0.0
+            let lum: Float = 0.2126 * r + 0.7152 * g + 0.0722 * b
             let bgW = bgMatte.isEmpty ? 0.0 : bgMatte[idx]
 
             switch style {
             case .dark:
-                // Convertit en douceur les fonds clairs en obsidienne sombre (#16171E)
                 let lumT = min(1.0, max(0.0, (lum - 0.56) / 0.30))
                 let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
                 let t = max(bgW * lumT, lumT * satT)
                 if t > 0.001 {
-                    let darkR = 0.09 + (1.0 - lum) * 0.12
-                    let darkG = 0.095 + (1.0 - lum) * 0.12
-                    let darkB = 0.125 + (1.0 - lum) * 0.14
-                    r = r * (1.0 - t) + darkR * t
-                    g = g * (1.0 - t) + darkG * t
-                    b = b * (1.0 - t) + darkB * t
+                    let darkR: Float = 0.09 + (1.0 - lum) * 0.12
+                    let darkG: Float = 0.095 + (1.0 - lum) * 0.12
+                    let darkB: Float = 0.125 + (1.0 - lum) * 0.14
+                    let oneMinusT = 1.0 - t
+                    r = r * oneMinusT + darkR * t
+                    g = g * oneMinusT + darkG * t
+                    b = b * oneMinusT + darkB * t
                 }
 
             case .light:
-                // Éclaircit en douceur les fonds très sombres vers une surface nacrée claire
                 let lumT = min(1.0, max(0.0, (0.28 - lum) / 0.24))
                 let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
                 let t = max(bgW * lumT, lumT * satT)
                 if t > 0.001 {
-                    let lightVal = 0.94 - lum * 0.22
-                    r = r * (1.0 - t) + lightVal * t
-                    g = g * (1.0 - t) + lightVal * t
-                    b = b * (1.0 - t) + (lightVal + 0.02) * t
+                    let lightVal: Float = 0.94 - lum * 0.22
+                    let oneMinusT = 1.0 - t
+                    r = r * oneMinusT + lightVal * t
+                    g = g * oneMinusT + lightVal * t
+                    b = b * oneMinusT + (lightVal + 0.02) * t
                 }
 
             case .tinted:
-                let baseDarkR = 0.04, baseDarkG = 0.06, baseDarkB = 0.10
-                let curve = pow(lum, 0.88)
-                r = baseDarkR + (tintRGB.r - baseDarkR) * curve
-                g = baseDarkG + (tintRGB.g - baseDarkG) * curve
-                b = baseDarkB + (tintRGB.b - baseDarkB) * curve
+                let baseDarkR: Float = 0.04, baseDarkG: Float = 0.06, baseDarkB: Float = 0.10
+                let curve = powf(max(0.0, lum), 0.88)
+                r = baseDarkR + (tintR - baseDarkR) * curve
+                g = baseDarkG + (tintG - baseDarkG) * curve
+                b = baseDarkB + (tintB - baseDarkB) * curve
 
             case .monochrome:
                 let contrasted = min(1.0, max(0.0, (lum - 0.5) * 1.16 + 0.52))
                 r = contrasted * 0.96
                 g = contrasted * 0.97
-                b = contrasted * 1.00
+                b = contrasted
 
             case .transparent, .clearLiquid, .clearDark, .frostedGlass:
-                // Grâce au masque lissé bgW, le fond du squircle s'efface proprement pour laisser
-                // apparaître le socle de verre translucide dessiné en étape 3 — sans aucun grain ni bavure !
                 if bgW > 0.01 {
-                    let fgWeight = 1.0 - bgW
-                    outA *= fgWeight
+                    outA *= (1.0 - bgW)
                 }
                 if style == .frostedGlass || style == .clearLiquid {
-                    // Légère brillance sur le premier plan pour s'harmoniser avec le verre
                     r = min(1.0, r * 0.95 + 0.05)
                     g = min(1.0, g * 0.95 + 0.05)
                     b = min(1.0, b * 0.96 + 0.06)
@@ -1004,26 +1055,39 @@ nonisolated enum IconRenderer {
                 break
             }
 
-            // Re-prémultiplication alpha
-            px[offset]     = UInt8(clamping: Int((r * outA * 255.0).rounded()))
-            px[offset + 1] = UInt8(clamping: Int((g * outA * 255.0).rounded()))
-            px[offset + 2] = UInt8(clamping: Int((b * outA * 255.0).rounded()))
-            px[offset + 3] = UInt8(clamping: Int((outA * 255.0).rounded()))
+            let outA255 = outA * 255.0
+            px[offset]     = UInt8(clamping: Int((r * outA255).rounded()))
+            px[offset + 1] = UInt8(clamping: Int((g * outA255).rounded()))
+            px[offset + 2] = UInt8(clamping: Int((b * outA255).rounded()))
+            px[offset + 3] = UInt8(clamping: Int(outA255.rounded()))
         }
     }
 
-    /// Rend chaque icône en arrière-plan à 512×512 pour un démarrage instantané
-    static func render(_ paths: [String], original: Bool) -> [String: CGImage] {
+    /// Rend chaque icône en parallèle multi-cœur en arrière-plan à 512×512 pour un démarrage et un changement de style fluides
+    static func render(
+        _ paths: [String],
+        style: IconAppearanceStyle,
+        tintRGB: (r: Double, g: Double, b: Double) = (0.08, 0.54, 0.98)
+    ) -> [String: CGImage] {
+        guard !paths.isEmpty else { return [:] }
         var output: [String: CGImage] = [:]
-        let style: IconAppearanceStyle = original ? .original : .system
-        for path in paths {
+        output.reserveCapacity(paths.count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: paths.count) { index in
+            let path = paths[index]
             autoreleasepool {
-                if let cg = renderStyledHighResIcon(for: path, style: style, tintRGB: (0.08, 0.54, 0.98)) {
+                if let cg = renderStyledHighResIcon(for: path, style: style, tintRGB: tintRGB) {
+                    lock.lock()
                     output[path] = cg
+                    lock.unlock()
                 }
             }
         }
         return output
+    }
+
+    static func render(_ paths: [String], original: Bool) -> [String: CGImage] {
+        render(paths, style: original ? .original : .system)
     }
 
     static func isBlank(_ image: CGImage) -> Bool {
@@ -1142,17 +1206,51 @@ enum AppleAppLocalizer {
         "passwords": "Mots de passe"
     ]
 
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var localizedNameCache: [String: String] = [:]
+
+    static func clearCache() {
+        cacheLock.lock()
+        localizedNameCache.removeAll(keepingCapacity: true)
+        cacheLock.unlock()
+    }
+
     static func localizedName(for app: AppInfo, languageCode: String) -> String {
         let lang = languageCode.lowercased()
         let isAppleApp = (app.bundleID?.lowercased().hasPrefix("com.apple.") == true)
             || app.id.hasPrefix("/System/Applications")
         guard isAppleApp else { return app.name }
 
+        let cacheKey = "\(app.id)|\(lang)"
+        cacheLock.lock()
+        if let cached = localizedNameCache[cacheKey] {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
+        let resolved = computeLocalizedName(for: app, lang: lang)
+        cacheLock.lock()
+        localizedNameCache[cacheKey] = resolved
+        cacheLock.unlock()
+        return resolved
+    }
+
+    private static func computeLocalizedName(for app: AppInfo, lang: String) -> String {
+        let lprojCandidates: [String]
+        switch lang {
+        case "fr": lprojCandidates = ["fr", "fr_FR", "French"]
+        case "en": lprojCandidates = ["en", "en_US", "en_GB", "English"]
+        case "es": lprojCandidates = ["es", "es_ES", "es_419", "Spanish"]
+        case "de": lprojCandidates = ["de", "de_DE", "German"]
+        case "it": lprojCandidates = ["it", "it_IT", "Italian"]
+        case "pt": lprojCandidates = ["pt", "pt_PT", "pt_BR", "Portuguese"]
+        default:   lprojCandidates = [lang, "\(lang)_\(lang.uppercased())"]
+        }
+
         // 1. Lecture directe depuis <App>.app/Contents/Resources/<lang>.lproj/InfoPlist.strings
-        let lprojCandidates = [lang, "\(lang)_FR", "\(lang)_ES", "\(lang)_DE", "\(lang)_IT", "\(lang)_PT", "French"]
         let resourcesDir = app.url.appendingPathComponent("Contents/Resources", isDirectory: true)
         for code in lprojCandidates {
-            if code == "French" && lang != "fr" { continue }
             let stringsURL = resourcesDir.appendingPathComponent("\(code).lproj/InfoPlist.strings")
             if let dict = NSDictionary(contentsOf: stringsURL) as? [String: Any] {
                 if let display = dict["CFBundleDisplayName"] as? String, !display.isEmpty {

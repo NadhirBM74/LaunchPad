@@ -773,13 +773,18 @@ struct FolderAppPickerSheet: View {
     @ObservedObject var store: LaunchpadStore
     @Binding var isPresented: Bool
     @State private var filterText: String = ""
+    @State private var sortedApps: [AppInfo] = []
 
     private var filteredApps: [AppInfo] {
-        let all = store.catalog.values.filter { !store.hidden.contains($0.id) }
-            .sorted { store.displayName($0.id).localizedStandardCompare(store.displayName($1.id)) == .orderedAscending }
         let q = filterText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return all }
-        return all.filter { store.displayName($0.id).lowercased().contains(q) }
+        guard !q.isEmpty else { return sortedApps }
+        return sortedApps.filter { store.displayName($0.id).lowercased().contains(q) }
+    }
+
+    private func rebuildSortedApps() {
+        sortedApps = store.catalog.values
+            .filter { !store.hidden.contains($0.id) }
+            .sorted { store.displayName($0.id).localizedStandardCompare(store.displayName($1.id)) == .orderedAscending }
     }
 
     var body: some View {
@@ -866,5 +871,7 @@ struct FolderAppPickerSheet: View {
                         .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
                 )
         )
+        .onAppear { rebuildSortedApps() }
+        .onChange(of: store.revision) { _, _ in rebuildSortedApps() }
     }
 }

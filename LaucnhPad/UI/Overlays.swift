@@ -4,6 +4,7 @@ import AppKit
 
 struct LaunchpadOverlays: View {
     @ObservedObject var vm: LaunchpadViewModel
+    @ObservedObject private var permissionManager = PermissionManager.shared
 
     var body: some View {
         ZStack {
@@ -34,10 +35,10 @@ struct LaunchpadOverlays: View {
                 TutorialModalView(vm: vm)
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
-            if PermissionManager.shared.showPermissionCard && !PermissionManager.shared.isAccessibilityGranted {
+            if permissionManager.showPermissionCard && !permissionManager.isAccessibilityGranted {
                 dimmer {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        PermissionManager.shared.showPermissionCard = false
+                        permissionManager.showPermissionCard = false
                     }
                     vm.focusSearch()
                 }
@@ -66,7 +67,7 @@ struct LaunchpadOverlays: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.uninstall?.id)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.customTileModal?.id)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: vm.showTutorial)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: PermissionManager.shared.showPermissionCard)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: permissionManager.showPermissionCard)
     }
 
     private func dimmer(_ action: @escaping () -> Void) -> some View {
@@ -249,22 +250,24 @@ struct AddCustomTileCard: View {
 
     enum Field { case title, target }
 
-    private let webSymbols = [
+    private static let webSymbols = [
         "globe", "safari", "sparkles", "bubble.left.and.bubble.right.fill",
         "doc.text.fill", "chevron.left.forwardslash.chevron.right",
         "play.rectangle.fill", "cart.fill", "link", "newspaper.fill"
     ]
 
-    private let shortcutSymbols = [
+    private static let shortcutSymbols = [
         "bolt.fill", "wand.and.stars", "play.fill", "gearshape.fill",
         "trash.fill", "folder.badge.gearshape", "music.note", "moon.fill",
         "camera.fill", "terminal.fill"
     ]
 
-    private let colors = [
+    private static let colorSwatches: [(hex: String, color: Color)] = [
         "#0A84FF", "#5E5CE6", "#BF5AF2", "#FF375F",
         "#FF453A", "#FF9F0A", "#30D158", "#63E6E2", "#64D2FF", "#8E8E93"
-    ]
+    ].map { ($0, Color(nsColor: NSColor(hexString: $0) ?? .systemBlue)) }
+
+    private var symbolsList: [String] { kind == .web ? Self.webSymbols : Self.shortcutSymbols }
 
     init(modal: CustomTileModalModel, vm: LaunchpadViewModel) {
         self.modal = modal
@@ -291,10 +294,10 @@ struct AddCustomTileCard: View {
             .pickerStyle(.segmented)
             .onChange(of: kind) { _, newKind in
                 if newKind == .web {
-                    if !webSymbols.contains(symbol) { symbol = "globe" }
+                    if !Self.webSymbols.contains(symbol) { symbol = "globe" }
                     if colorHex == "#5E5CE6" { colorHex = "#0A84FF" }
                 } else {
-                    if !shortcutSymbols.contains(symbol) { symbol = "bolt.fill" }
+                    if !Self.shortcutSymbols.contains(symbol) { symbol = "bolt.fill" }
                     if colorHex == "#0A84FF" { colorHex = "#5E5CE6" }
                 }
             }
@@ -337,8 +340,7 @@ struct AddCustomTileCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(loc("overlay.icon")).font(.caption).foregroundStyle(.white.opacity(0.7))
                 HStack(spacing: 8) {
-                    let symbols = kind == .web ? webSymbols : shortcutSymbols
-                    ForEach(symbols, id: \.self) { sym in
+                    ForEach(symbolsList, id: \.self) { sym in
                         Button {
                             symbol = sym
                         } label: {
@@ -364,18 +366,18 @@ struct AddCustomTileCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(loc("overlay.color")).font(.caption).foregroundStyle(.white.opacity(0.7))
                 HStack(spacing: 8) {
-                    ForEach(colors, id: \.self) { hex in
+                    ForEach(Self.colorSwatches, id: \.hex) { swatch in
                         Button {
-                            colorHex = hex
+                            colorHex = swatch.hex
                         } label: {
                             Circle()
-                                .fill(Color(nsColor: NSColor(hexString: hex) ?? .systemBlue))
+                                .fill(swatch.color)
                                 .frame(width: 22, height: 22)
                                 .overlay(
                                     Circle()
-                                        .stroke(colorHex == hex ? Color.white : Color.clear, lineWidth: 2)
+                                        .stroke(colorHex == swatch.hex ? Color.white : Color.clear, lineWidth: 2)
                                 )
-                                .scaleEffect(colorHex == hex ? 1.15 : 1.0)
+                                .scaleEffect(colorHex == swatch.hex ? 1.15 : 1.0)
                         }
                         .buttonStyle(.plain)
                     }

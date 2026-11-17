@@ -236,15 +236,21 @@ final class LaunchpadWindowController: NSObject {
     }
 
     @objc private func defaultsChanged() {
-        Task { @MainActor [weak self] in
-            guard let self, self.isVisible else { return }
-            if self.appliedMode != Prefs.displayMode {
+        guard isVisible else { return }
+        MainActor.assumeIsolated {
+            let currentMode = Prefs.displayMode
+            if self.appliedMode != currentMode {
                 let screen = self.panel.screen ?? self.targetScreen()
                 self.viewModel.updateTopInset(self.topInset(for: screen))
                 self.applyLayout(on: screen, display: true)
             }
             self.applyDockOption()
         }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     private func targetScreen() -> NSScreen {
