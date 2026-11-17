@@ -1141,9 +1141,7 @@ struct SettingsPanel: View {
                     Spacer(minLength: 0)
 
                     sourceOption(source: .system, label: "Auto") {
-                        Image(systemName: "person.crop.rectangle.stack.fill")
-                            .font(.system(size: 30, weight: .regular))
-                            .foregroundStyle(.primary.opacity(musicManager.preferredService == .system ? 0.96 : 0.72))
+                        autoSourceLogo
                     }
 
                     sourceOption(source: .spotify, label: "Spotify") {
@@ -1203,14 +1201,40 @@ struct SettingsPanel: View {
             }
         }
 
-        private func sourceAppLogo(_ assetName: String) -> some View {
-            Image(assetName)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
+        private func sourceSquircle<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+            content()
                 .frame(width: 46, height: 46)
-                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 11.5, style: .continuous))
                 .shadow(color: .black.opacity(0.24), radius: 5, y: 2)
+        }
+
+        private var autoSourceLogo: some View {
+            sourceSquircle {
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.25, green: 0.27, blue: 0.31),
+                            Color(red: 0.13, green: 0.14, blue: 0.17)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    RoundedRectangle(cornerRadius: 11.5, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.8)
+                    Image(systemName: "person.crop.rectangle.stack.fill")
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.95))
+                }
+            }
+        }
+
+        private func sourceAppLogo(_ assetName: String) -> some View {
+            sourceSquircle {
+                Image(assetName)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+            }
         }
 
         @ViewBuilder

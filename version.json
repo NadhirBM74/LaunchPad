@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.9",
-  "name": "LaunchPad v1.2.9",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.9",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.9\n\n- 🎵 **Nouveaux Logos Officiels Spotify & Apple Music** : Intégration des icônes haute définition importées pour le sélecteur de sources audio dans les réglages.\n- 🎯 **Présentation Centrée du Sélecteur Source** : Alignement centré du titre Source et harmonisation parfaite de la taille visuelle des icônes audio.",
+  "tag_name": "v1.2.10",
+  "name": "LaunchPad v1.2.10",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.10",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.10\n\n- 🎨 **Harmonie Parfaite des Logos de Source** : Harmonisation des icônes Auto, Spotify et Apple Music dans un gabarit squircle continu exactement identique en taille et en forme.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.9.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.9/LaunchPad-v1.2.9.zip"
+      "name": "LaunchPad-v1.2.10.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.10/LaunchPad-v1.2.10.zip"
     },
     {
-      "name": "LaunchPad-v1.2.9.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.9/LaunchPad-v1.2.9.dmg"
+      "name": "LaunchPad-v1.2.10.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.10/LaunchPad-v1.2.10.dmg"
     }
   ]
 }
