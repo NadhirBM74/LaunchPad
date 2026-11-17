@@ -486,6 +486,7 @@ nonisolated enum Translations_IT: Sendable {
         "widget.menu.change_size": "Modifica dimensione",
         "widget.menu.remove": "Rimuovi widget",
         "common.done": "Fine",
+        "common.later": "Più tardi",
         "widget.add_widget_short": "Widgets",
         "widget.gallery.title": "Galleria widget",
         "widget.gallery.subtitle": "Aggiungi widget interattivi al tuo Launchpad",

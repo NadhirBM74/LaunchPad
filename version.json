@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.11",
-  "name": "LaunchPad v1.2.11",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.11",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.11\n\n- 🔍 **Bouton d'Autorisation Accessibilité Lisible** : Contraste nettement renforcé sur le bouton Autoriser dans les réglages pour une parfaite visibilité en mode clair et sombre.\n- ✨ **Bannière Accessibilité Assortie à la Barre de Recherche** : Libellé raccourci, espacement aéré sous la barre de recherche et style Liquid Glass identique.",
+  "tag_name": "v1.2.12",
+  "name": "LaunchPad v1.2.12",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.12",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.12\n\n- 💬 **Libellé d'Autorisation Corrigé** : Affichage du texte traduit Plus tard au lieu de la clé brute dans la fenêtre de demande d'autorisation d'Accessibilité.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.11.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.11/LaunchPad-v1.2.11.zip"
+      "name": "LaunchPad-v1.2.12.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.12/LaunchPad-v1.2.12.zip"
     },
     {
-      "name": "LaunchPad-v1.2.11.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.11/LaunchPad-v1.2.11.dmg"
+      "name": "LaunchPad-v1.2.12.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.12/LaunchPad-v1.2.12.dmg"
     }
   ]
 }
