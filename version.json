@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.6",
-  "name": "LaunchPad v1.2.6",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.6",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.6\n\n- 📂 **Ouverture en Fondu des Dossiers** : Suppression du carré noir instantané au profit d'une apparition douce en fondu et d'une surface vitrée translucide homogène.\n- ✨ **Transition Fluide Arrière-Plan & Panneau** : Découplage du voile d'assombrissement et composition graphique unifiée à 120 Hz pour une ouverture et fermeture sans à-coup.\n- 🎨 **Harmonie Vitrée Multi-Thèmes** : Surface cristalline lumineuse sur Liquid Glass, verre fumé translucide en mode Sombre et verre givré doux en mode Clair.",
+  "tag_name": "v1.2.7",
+  "name": "LaunchPad v1.2.7",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.7",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.7\n\n- 🎨 **Thème de l'Application dans Personnalisation** : Déplacement du choix de thème (Sombre, Clair, Liquid Glass) vers l'onglet Personnalisation pour centraliser tout le style visuel.\n- 🎵 **Services Musicaux dans Général** : Regroupement de la connexion Apple Music et Spotify directement dans l'onglet Général pour un accès immédiat.\n- 📐 **Sélecteur de Taille d'Icônes Épuré** : Boutons centrés Petit, Moyen et Grand sans curseur d'ajustement fin ni raccourcis d'échelle chiffrés.\n- 💎 **Section Style des Icônes Réservée au Mode Pro** : Masquage automatique des options avancées de style d'icônes lorsque la licence Pro n'est pas activée.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.6.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.6/LaunchPad-v1.2.6.zip"
+      "name": "LaunchPad-v1.2.7.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.7/LaunchPad-v1.2.7.zip"
     },
     {
-      "name": "LaunchPad-v1.2.6.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.6/LaunchPad-v1.2.6.dmg"
+      "name": "LaunchPad-v1.2.7.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.7/LaunchPad-v1.2.7.dmg"
     }
   ]
 }

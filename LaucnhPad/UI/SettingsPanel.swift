@@ -112,10 +112,10 @@ struct SettingsPanel: View {
 
         var subtitle: String {
             switch self {
-            case .interface: return "Thème visuel, mode d'affichage et transparence"
-            case .apps: return "Icônes HD, grille, barre de favoris et applications"
+            case .interface: return "Mode d'affichage, disposition et effets visuels"
+            case .apps: return "Thème de l'application, icônes HD, taille et dossiers"
             case .notifications: return "Mises à jour automatiques et alertes visuelles"
-            case .general: return "Ouverture, gestes trackpad, raccourcis et langue"
+            case .general: return "Langue, logo, services musicaux et activation"
             case .advanced: return "Tri, sauvegarde de disposition et réinitialisation"
             case .license: return "Essai gratuit 7 jours et activation LaunchPad Pro"
             case .about: return "Version installée, nouveautés et communauté"
@@ -542,15 +542,16 @@ struct SettingsPanel: View {
         let icon: String
         let tab: SettingsTab
         let keywords: String
+        var requiresPro: Bool = false
     }
 
     private static let searchableShortcuts: [SettingsSearchShortcut] = [
-        SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd"),
-        SettingsSearchShortcut(title: "Thème et apparence", description: "Liquid Glass, Sombre ou Clair et transparence du verre", icon: "paintpalette.fill", tab: .interface, keywords: "theme apparence liquid glass sombre clair transparence"),
+        SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd", requiresPro: true),
+        SettingsSearchShortcut(title: "Thème et apparence", description: "Liquid Glass, Sombre ou Clair et transparence du verre", icon: "paintpalette.fill", tab: .apps, keywords: "theme apparence liquid glass sombre clair transparence"),
         SettingsSearchShortcut(title: "Taille des icônes & grille", description: "Colonnes, lignes, échelle des icônes et barre de favoris", icon: "square.grid.3x3.fill", tab: .apps, keywords: "grille taille colonnes lignes echelle favoris labels"),
         SettingsSearchShortcut(title: "Gestes Trackpad & Raccourci clavier", description: "Pincement à 3/4 doigts, touche F4 et raccourci global", icon: "hand.pinch.fill", tab: .general, keywords: "geste trackpad pincer clavier raccourci f4 coin actif"),
         SettingsSearchShortcut(title: "Notifications & Mises à jour auto", description: "Alertes de nouvelles versions et bannières visuelles", icon: "bell.badge.fill", tab: .notifications, keywords: "notification alerte mise a jour automatique banner"),
-        SettingsSearchShortcut(title: "Apple Music & Spotify", description: "Connecter vos services musicaux pour les widgets", icon: "music.note", tab: .apps, keywords: "musique spotify apple music widget"),
+        SettingsSearchShortcut(title: "Apple Music & Spotify", description: "Connecter vos services musicaux pour les widgets", icon: "music.note", tab: .general, keywords: "musique spotify apple music widget"),
         SettingsSearchShortcut(title: "Sauvegarde & Réinitialisation", description: "Exporter/importer votre disposition ou réinitialiser", icon: "externaldrive.fill", tab: .advanced, keywords: "sauvegarde export import reinitialiser tri launchos"),
         SettingsSearchShortcut(title: "Licence LaunchPad Pro", description: "Essai gratuit 7 jours et activation de clé", icon: "crown.fill", tab: .license, keywords: "licence pro essai cle activation"),
         SettingsSearchShortcut(title: "À propos & Version", description: "Vérifier les mises à jour et informations de version", icon: "info.circle.fill", tab: .about, keywords: "apropos version update github discord")
@@ -560,7 +561,8 @@ struct SettingsPanel: View {
     private var searchResultsSection: some View {
         let q = settingsSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let matches = Self.searchableShortcuts.filter {
-            $0.title.lowercased().contains(q) || $0.description.lowercased().contains(q) || $0.keywords.lowercased().contains(q)
+            (!$0.requiresPro || licenseManager.isPro)
+                && ($0.title.lowercased().contains(q) || $0.description.lowercased().contains(q) || $0.keywords.lowercased().contains(q))
         }
         if matches.isEmpty {
             SettingsCardBox {
@@ -688,36 +690,88 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var customizationAndAppsTab: some View {
-        SettingsSectionTitle("Style et qualité des icônes (512×512 HD)")
+        if licenseManager.isPro {
+            SettingsSectionTitle("Style et qualité des icônes (512×512 HD)")
+            SettingsCardBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    IconAppearanceShowcaseView(
+                        onStyleChanged: {
+                            store.reloadIcons()
+                            triggerSettingsToast("Style d'icônes mis à jour en haute définition")
+                        },
+                        onRequirePro: { title, msg in
+                            confirm(title, msg) {
+                                withAnimation { selectedTab = .license }
+                            }
+                        }
+                    )
+                }
+                .padding(.vertical, 10)
+
+                if !CustomIconManager.shared.overrides.isEmpty {
+                    SettingsSeparator()
+                    SettingsRow(
+                        "Icônes personnalisées individuellement",
+                        subtitle: "\(CustomIconManager.shared.overrides.count) application(s) utilisent une icône sur mesure."
+                    ) {
+                        Button("Tout rétablir par défaut") {
+                            CustomIconManager.shared.removeAllOverrides()
+                            store.reloadIcons()
+                            triggerSettingsToast("Toutes les icônes d'origine ont été rétablies")
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+        }
+
+        SettingsSectionTitle(loc("section.theme"))
         SettingsCardBox {
-            VStack(alignment: .leading, spacing: 10) {
-                IconAppearanceShowcaseView(
-                    onStyleChanged: {
-                        store.reloadIcons()
-                        triggerSettingsToast("Style d'icônes mis à jour en haute définition")
-                    },
-                    onRequirePro: { title, msg in
-                        confirm(title, msg) {
-                            withAnimation { selectedTab = .license }
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    ForEach(AppTheme.allCases) { theme in
+                        ThemeCardButton(
+                            theme: theme,
+                            isSelected: backgroundStyle == theme,
+                            isProUnlocked: licenseManager.isPro
+                        ) {
+                            handleThemeSelection(theme)
                         }
                     }
-                )
-            }
-            .padding(.vertical, 10)
-
-            if !CustomIconManager.shared.overrides.isEmpty {
-                SettingsSeparator()
-                SettingsRow(
-                    "Icônes personnalisées individuellement",
-                    subtitle: "\(CustomIconManager.shared.overrides.count) application(s) utilisent une icône sur mesure."
-                ) {
-                    Button("Tout rétablir par défaut") {
-                        CustomIconManager.shared.removeAllOverrides()
-                        store.reloadIcons()
-                        triggerSettingsToast("Toutes les icônes d'origine ont été rétablies")
-                    }
-                    .controlSize(.small)
                 }
+
+                // Description et retour visuel du thème actif
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(SettingsStyle.accent)
+                        .font(.system(size: 13))
+                    Text(backgroundStyle.subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if backgroundStyle == .liquidGlass {
+                        Text(loc("interface.apple_style"))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(SettingsStyle.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SettingsStyle.accent.opacity(0.12), in: Capsule())
+                    }
+                }
+                .padding(.top, 2)
+            }
+            .padding(.vertical, 14)
+
+            if licenseManager.isPro && backgroundStyle == .liquidGlass {
+                SettingsSeparator()
+                SettingsSliderRow(
+                    loc("interface.liquid_glass_intensity"),
+                    subtitle: loc("interface.liquid_glass_intensity_subtitle"),
+                    value: $liquidGlassIntensity,
+                    range: 0.05...1.0,
+                    step: 0.05,
+                    isPercentage: true
+                )
             }
         }
 
@@ -728,49 +782,48 @@ struct SettingsPanel: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Taille des icônes")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Choisissez une taille prédéfinie ou ajustez précisément avec le curseur.")
+                        Text("Choisissez la taille des icônes affichées dans le Launchpad.")
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
 
-                HStack(spacing: 8) {
-                    ForEach([
-                        ("Petit", 0.80),
-                        ("Normal", 1.00),
-                        ("Grand", 1.15),
-                        ("Très grand", 1.28)
-                    ], id: \.0) { label, value in
-                        let isChosen = abs(iconScale - value) < 0.04
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
-                                iconScale = value
+                HStack {
+                    Spacer(minLength: 0)
+                    HStack(spacing: 10) {
+                        ForEach([
+                            ("Petit", 0.80),
+                            ("Moyen", 1.00),
+                            ("Grand", 1.15)
+                        ], id: \.0) { label, value in
+                            let isChosen = value == 1.15 ? (iconScale >= 1.11) : abs(iconScale - value) < 0.04
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+                                    iconScale = value
+                                }
+                                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: true)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
+                                }
+                                triggerSettingsToast("Taille des icônes : \(label)")
+                            } label: {
+                                Text(label)
+                                    .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
+                                    .foregroundStyle(isChosen ? .white : .primary.opacity(0.88))
+                                    .frame(width: 112)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        isChosen ? SettingsStyle.accent : Color.primary.opacity(0.07),
+                                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    )
                             }
-                            NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: true)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
-                            }
-                            triggerSettingsToast("Taille des icônes : \(label)")
-                        } label: {
-                            Text(label)
-                                .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
-                                .foregroundStyle(isChosen ? .white : .primary.opacity(0.88))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 7)
-                                .background(
-                                    isChosen ? SettingsStyle.accent : Color.primary.opacity(0.07),
-                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                )
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    Spacer(minLength: 0)
                 }
 
-                SettingsSliderRow("Ajustement fin", value: $iconScale, range: 0.7...1.3, onEditingChanged: { editing in
-                    NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: editing)
-                    if !editing { triggerSettingsToast("Taille des icônes enregistrée") }
-                })
                 IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
             }
             .padding(.vertical, 6)
@@ -812,8 +865,6 @@ struct SettingsPanel: View {
                 ))
             }
         }
-
-        musicServicesSection
 
         SettingsSectionTitle("Applications et dossiers")
         appsTab
@@ -945,6 +996,8 @@ struct SettingsPanel: View {
                 SettingsSwitch(isOn: $showDockIcon)
             }
         }
+
+        musicServicesSection
 
         SettingsSectionTitle(loc("section.activation"))
         SettingsCardBox {
@@ -1112,56 +1165,6 @@ struct SettingsPanel: View {
             }
             SettingsSeparator()
             SettingsRow(loc("interface.show_running")) { SettingsSwitch(isOn: $showRunning) }
-        }
-
-        SettingsSectionTitle(loc("section.theme"))
-        SettingsCardBox {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    ForEach(AppTheme.allCases) { theme in
-                        ThemeCardButton(
-                            theme: theme,
-                            isSelected: backgroundStyle == theme,
-                            isProUnlocked: licenseManager.isPro
-                        ) {
-                            handleThemeSelection(theme)
-                        }
-                    }
-                }
-
-                // Description et retour visuel du thème actif
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(SettingsStyle.accent)
-                        .font(.system(size: 13))
-                    Text(backgroundStyle.subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if backgroundStyle == .liquidGlass {
-                        Text(loc("interface.apple_style"))
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(SettingsStyle.accent)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(SettingsStyle.accent.opacity(0.12), in: Capsule())
-                    }
-                }
-                .padding(.top, 2)
-            }
-            .padding(.vertical, 14)
-
-            if licenseManager.isPro && backgroundStyle == .liquidGlass {
-                SettingsSeparator()
-                SettingsSliderRow(
-                    loc("interface.liquid_glass_intensity"),
-                    subtitle: loc("interface.liquid_glass_intensity_subtitle"),
-                    value: $liquidGlassIntensity,
-                    range: 0.05...1.0,
-                    step: 0.05,
-                    isPercentage: true
-                )
-            }
         }
 
         SettingsSectionTitle(loc("section.pro_customization"))
@@ -1596,8 +1599,6 @@ struct SettingsPanel: View {
                 }
             }
         }
-
-        musicServicesSection
 
         SettingsSectionTitle(loc("section.backup"))
         SettingsCardBox {
@@ -3538,7 +3539,6 @@ struct IconScalePreviewBox: View {
     @Binding var iconScale: Double
     var reduceMotion: Bool
     @State private var isLivePreviewingOnLaunchpad = false
-    @State private var temporaryPreviewTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3550,12 +3550,6 @@ struct IconScalePreviewBox: View {
                 livePreviewPillButton
 
                 Spacer()
-
-                HStack(spacing: 6) {
-                    presetButton("0.85×", scale: 0.85)
-                    presetButton("1.00×", scale: 1.00)
-                    presetButton("1.15×", scale: 1.15)
-                }
             }
 
             HStack(spacing: 24) {
@@ -3590,8 +3584,6 @@ struct IconScalePreviewBox: View {
         }
         .padding(.vertical, 3)
         .onDisappear {
-            temporaryPreviewTask?.cancel()
-            temporaryPreviewTask = nil
             if isLivePreviewingOnLaunchpad {
                 isLivePreviewingOnLaunchpad = false
                 NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
@@ -3602,7 +3594,6 @@ struct IconScalePreviewBox: View {
     private var livePreviewPillButton: some View {
         Button {
             isLivePreviewingOnLaunchpad.toggle()
-            temporaryPreviewTask?.cancel()
             NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: isLivePreviewingOnLaunchpad)
         } label: {
             HStack(spacing: 4) {
@@ -3622,35 +3613,6 @@ struct IconScalePreviewBox: View {
                     .stroke(isLivePreviewingOnLaunchpad ? SettingsStyle.accent.opacity(0.55) : Color.white.opacity(0.12), lineWidth: 0.8)
             )
             .foregroundStyle(isLivePreviewingOnLaunchpad ? SettingsStyle.accent : .secondary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func triggerTemporaryPreview() {
-        guard !isLivePreviewingOnLaunchpad else { return }
-        temporaryPreviewTask?.cancel()
-        NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: true)
-        temporaryPreviewTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1600))
-            guard !Task.isCancelled, !isLivePreviewingOnLaunchpad else { return }
-            NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
-        }
-    }
-
-    private func presetButton(_ label: String, scale: Double) -> some View {
-        let isSelected = abs(iconScale - scale) < 0.02
-        return Button {
-            withAnimation(.easeInOut(duration: 0.20)) {
-                iconScale = scale
-            }
-            triggerTemporaryPreview()
-        } label: {
-            Text(label)
-                .font(.system(size: 10.5, weight: isSelected ? .bold : .regular))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2.5)
-                .background(isSelected ? SettingsStyle.accent.opacity(0.2) : Color.primary.opacity(0.04), in: Capsule())
-                .foregroundStyle(isSelected ? SettingsStyle.accent : .secondary)
         }
         .buttonStyle(.plain)
     }
