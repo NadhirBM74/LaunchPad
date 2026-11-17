@@ -86,35 +86,19 @@ struct IconAppearanceShowcaseView: View {
             .padding(10)
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Sélecteur rapide de tous les styles d'icônes
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(IconAppearanceStyle.allCases) { mode in
-                        let isSelected = (activeStyle == mode)
-                        Button {
-                            selectMode(mode)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: mode.badgeIcon)
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text(mode.title)
-                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                isSelected
-                                    ? LinearGradient(colors: [Color(red: 0.35, green: 0.32, blue: 0.96), Color(red: 0.56, green: 0.34, blue: 0.96)], startPoint: .leading, endPoint: .trailing)
-                                    : LinearGradient(colors: [Color.primary.opacity(0.07), Color.primary.opacity(0.07)], startPoint: .leading, endPoint: .trailing),
-                                in: Capsule()
-                            )
-                            .foregroundStyle(isSelected ? .white : .primary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Style d'icônes \(mode.title)")
-                    }
-                }
-                .padding(.vertical, 2)
+            // Deux grandes cartes côte à côte exactement comme sur la Photo de Référence 1
+            HStack(spacing: 12) {
+                // Carte Gauche : SYSTEM ICON APPEARANCE (Dark | Light | Tinted)
+                systemAppearanceCard
+
+                // Carte Droite : CLEAR COLORED ICONS (Glass & Colored Icons)
+                clearColoredIconsCard
+            }
+
+            // Choix directs avec aperçu visuel d'icônes : Couleur de base macOS & Transparent Cristal
+            HStack(spacing: 10) {
+                baseMacOSCard
+                transparentCrystalCard
             }
 
             // Palette de couleur directe lorsque le mode Teinté est actif
@@ -155,15 +139,6 @@ struct IconAppearanceShowcaseView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // Deux grandes cartes côte à côte exactement comme sur la Photo de Référence 1
-            HStack(spacing: 12) {
-                // Carte Gauche : SYSTEM ICON APPEARANCE (Dark | Light | Tinted)
-                systemAppearanceCard
-
-                // Carte Droite : CLEAR COLORED ICONS (Glass & Colored Icons)
-                clearColoredIconsCard
-            }
-
             if let feedbackMessage {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
@@ -175,6 +150,92 @@ struct IconAppearanceShowcaseView: View {
                 .transition(.opacity)
             }
         }
+    }
+
+    private var baseMacOSCard: some View {
+        let isSelected = (activeStyle == .original || activeStyle == .system)
+        return Button {
+            selectMode(.original)
+        } label: {
+            HStack(spacing: 10) {
+                HStack(spacing: 5) {
+                    CustomAppIconView(kind: .finder, style: .classicApple, size: 32)
+                    CustomAppIconView(kind: .safari, style: .classicApple, size: 32)
+                    CustomAppIconView(kind: .photos, style: .classicApple, size: 32)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Couleur de base macOS")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text("Icônes Apple d'origine en 512×512")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.10), lineWidth: isSelected ? 1.5 : 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var transparentCrystalCard: some View {
+        let isSelected = (activeStyle == .transparent)
+        return Button {
+            selectMode(.transparent)
+        } label: {
+            HStack(spacing: 10) {
+                HStack(spacing: 5) {
+                    CustomAppIconView(kind: .keynote, style: .transparent, size: 32)
+                    CustomAppIconView(kind: .weather, style: .transparent, size: 32)
+                    CustomAppIconView(kind: .photos, style: .transparent, size: 32)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Transparent Cristal")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text("Verre transparent sur toutes vos apps")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.10), lineWidth: isSelected ? 1.5 : 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func showFeedback(_ text: String) {

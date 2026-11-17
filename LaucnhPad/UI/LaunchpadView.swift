@@ -146,11 +146,20 @@ struct LaunchpadRootView: View {
                     }
                 }
                 if let folder = vm.overlayFolder {
+                    let anchor = folderAnchor(for: folder.id, in: size)
                     FolderOverlayView(vm: vm, store: store, folder: folder, grid: layout.grid, rootSize: size,
                                       showLabels: showLabels, showRunning: showRunning, reduceMotion: reduceMotion)
                         .frame(width: size.width, height: size.height)
                         .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
-                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                        .transition(
+                            reduceMotion
+                                ? .opacity
+                                : .asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.22, anchor: anchor)),
+                                    removal: .opacity.combined(with: .scale(scale: 0.26, anchor: anchor))
+                                )
+                        )
+                        .zIndex(250)
                 }
                 LaunchpadOverlays(vm: vm)
                     .frame(width: size.width, height: size.height)
@@ -207,6 +216,15 @@ struct LaunchpadRootView: View {
         }
         .onChange(of: vm.focusToken, initial: true) { _, _ in focusSearch() }
         .onChange(of: backgroundStyle) { _, _ in wallpaper.refresh() }
+    }
+
+    private func folderAnchor(for folderID: String, in size: CGSize) -> UnitPoint {
+        guard size.width > 0, size.height > 0, let placed = vm.placedItem(for: folderID) else {
+            return .center
+        }
+        let x = min(max((vm.gridOrigin.x + placed.center.x) / size.width, 0.08), 0.92)
+        let y = min(max((vm.gridOrigin.y + placed.center.y) / size.height, 0.08), 0.92)
+        return UnitPoint(x: x, y: y)
     }
 
     private func focusSearch() {
@@ -340,6 +358,10 @@ struct LaunchpadRootView: View {
                 tint: activeTintColor
             )
                 .offset(x: layout.gridOrigin.x, y: layout.gridOrigin.y)
+                .scaleEffect(vm.overlayFolder != nil ? 0.93 : 1.0)
+                .blur(radius: vm.overlayFolder != nil ? 12 : 0)
+                .opacity(vm.overlayFolder != nil ? 0.35 : 1.0)
+                .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: vm.overlayFolder != nil)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: iconScale)
             if vm.displayItems.isEmpty {
                 emptyState
@@ -1149,6 +1171,16 @@ struct ItemContextMenu: View {
                         }
                     }
                 }
+                Menu("Apparence (Clair / Sombre)") {
+                    ForEach(WidgetAppearanceMode.allCases) { mode in
+                        Button("\(config.musicAppearance == mode ? "✓ " : "")\(mode.title)") {
+                            var updated = config
+                            updated.musicAppearance = mode
+                            WidgetManager.shared.updateMusicAppearance(for: config.kind, appearance: mode)
+                            store.updateWidgetConfig(updated)
+                        }
+                    }
+                }
             } else if config.kind == .weather {
                 Menu("Thème météo (18 thèmes)") {
                     ForEach(WeatherWidgetTheme.allCases) { wTheme in
@@ -1529,6 +1561,7 @@ struct WidgetGalleryModal: View {
     @State private var searchText: String = ""
     @State private var selectedCardID: String = "weather-darkPremium"
     @State private var selectedSize: WidgetSize = .medium
+    @State private var selectedMusicAppearance: WidgetAppearanceMode = WidgetManager.shared.widgets.first(where: { $0.kind == .vinylPlayer })?.musicAppearance ?? .light
     @State private var hoveredCardID: String? = nil
     @State private var isCollectionsExpanded: Bool = true
 
@@ -1846,9 +1879,24 @@ struct WidgetGalleryModal: View {
     private func galleryGridCard(_ card: GalleryCardItem) -> some View {
         let isSelected = (selectedCardID == card.id)
         let isHovered = (hoveredCardID == card.id)
+        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
+        let isActiveOnBoard: Bool = {
+            guard let existing = existingInCategory else { return false }
+            switch card.category {
+            case .music: return existing.musicStyle == card.config.musicStyle && existing.kind == card.config.kind
+            case .weather: return existing.weatherTheme == card.config.weatherTheme
+            case .clock: return existing.clockStyle == card.config.clockStyle
+            case .calendar: return existing.calendarStyle == card.config.calendarStyle
+            default: return existing.id == card.config.id
+            }
+        }()
+
         var effectiveConfig = card.config
         if isSelected, card.config.kind.allowedSizes.contains(selectedSize) {
             effectiveConfig.size = selectedSize
+        }
+        if card.category == .music {
+            effectiveConfig.musicAppearance = selectedMusicAppearance
         }
         let previewW = effectiveConfig.size.width
         let previewH = effectiveConfig.size.height
@@ -1861,16 +1909,29 @@ struct WidgetGalleryModal: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    WidgetHostView(config: effectiveConfig, isPreview: true)
-                        .scaleEffect(thumbScale)
-                        .frame(width: previewW * thumbScale, height: previewH * thumbScale)
-                        .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
-                        .allowsHitTesting(false)
-                        .animation(.spring(response: 0.38, dampingFraction: 0.76), value: effectiveConfig.size)
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        WidgetHostView(config: effectiveConfig, isPreview: true)
+                            .scaleEffect(thumbScale)
+                            .frame(width: previewW * thumbScale, height: previewH * thumbScale)
+                            .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
+                            .allowsHitTesting(false)
+                            .animation(.spring(response: 0.38, dampingFraction: 0.76), value: effectiveConfig.size)
+                            .animation(.easeInOut(duration: 0.22), value: effectiveConfig.musicAppearance)
+                    }
+                    .frame(height: boxSize * 0.86)
+                    .frame(maxWidth: .infinity)
+
+                    if isActiveOnBoard {
+                        Text("Actif")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.green.opacity(0.85), in: Capsule())
+                            .padding(4)
+                    }
                 }
-                .frame(height: boxSize * 0.86)
-                .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title)
@@ -1903,10 +1964,14 @@ struct WidgetGalleryModal: View {
     @ViewBuilder
     private var liveSizePreviewBanner: some View {
         let card = activeCard
+        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
         let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
         let previewConfig: CustomWidgetConfig = {
             var c = card.config
             c.size = chosenSize
+            if card.category == .music {
+                c.musicAppearance = selectedMusicAppearance
+            }
             return c
         }()
         let pw = previewConfig.size.width
@@ -1924,8 +1989,9 @@ struct WidgetGalleryModal: View {
             .frame(width: 256, height: 132)
             .animation(.spring(response: 0.40, dampingFraction: 0.78), value: chosenSize)
             .animation(.spring(response: 0.36, dampingFraction: 0.80), value: selectedCardID)
+            .animation(.easeInOut(duration: 0.22), value: selectedMusicAppearance)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text("Aperçu en direct • \(friendlySizeLabel(chosenSize))")
                     .font(.system(size: 11.5, weight: .bold))
                     .foregroundStyle(Color.cyan)
@@ -1936,6 +2002,46 @@ struct WidgetGalleryModal: View {
                 Text("Format \(Int(pw))×\(Int(ph)) pt • \(card.subtitle)")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.white.opacity(0.65))
+
+                if existingInCategory != nil {
+                    HStack(spacing: 5) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 10.5))
+                        Text("1 widget max par catégorie — remplacera le widget actuel")
+                            .font(.system(size: 10.5, weight: .medium))
+                    }
+                    .foregroundStyle(Color.orange.opacity(0.95))
+                    .padding(.top, 1)
+                }
+
+                if card.category == .music {
+                    HStack(spacing: 6) {
+                        Text("Thème :")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.70))
+                        ForEach(WidgetAppearanceMode.allCases) { mode in
+                            let chosen = selectedMusicAppearance == mode
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.20)) {
+                                    selectedMusicAppearance = mode
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: mode.icon)
+                                        .font(.system(size: 10, weight: .bold))
+                                    Text(mode.title)
+                                        .font(.system(size: 11, weight: chosen ? .bold : .medium))
+                                }
+                                .foregroundStyle(chosen ? .black : .white.opacity(0.88))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(chosen ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
             }
             Spacer()
         }
@@ -1943,7 +2049,11 @@ struct WidgetGalleryModal: View {
 
     private var bottomActionBar: some View {
         let card = activeCard
-        return HStack(spacing: 12) {
+        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
+        let actionLabel = existingInCategory == nil ? "Ajouter" : "Remplacer"
+        let actionIcon = existingInCategory == nil ? "plus.circle.fill" : "arrow.triangle.2.circlepath.circle.fill"
+
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.title)
                     .font(.system(size: 13.5, weight: .bold))
@@ -1954,9 +2064,10 @@ struct WidgetGalleryModal: View {
                     .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1)
             }
-            .frame(minWidth: 110, alignment: .leading)
+            .frame(minWidth: 80, alignment: .leading)
+            .layoutPriority(0)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
 
             if card.config.kind.allowedSizes.count > 1 {
                 HStack(spacing: 6) {
@@ -1975,7 +2086,7 @@ struct WidgetGalleryModal: View {
                                     .lineLimit(1)
                             }
                             .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 6.5)
                             .background(isChosen ? Color.white : Color.white.opacity(0.12), in: Capsule())
                             .fixedSize(horizontal: true, vertical: true)
@@ -1984,20 +2095,21 @@ struct WidgetGalleryModal: View {
                     }
                 }
                 .fixedSize(horizontal: true, vertical: true)
+                .layoutPriority(1)
             }
 
             Button {
                 addSelectedWidget()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: actionIcon)
                         .font(.system(size: 14, weight: .bold))
-                    Text("Ajouter")
+                    Text(actionLabel)
                         .font(.system(size: 13.5, weight: .bold))
                         .lineLimit(1)
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
                     LinearGradient(
@@ -2012,6 +2124,7 @@ struct WidgetGalleryModal: View {
                 .fixedSize(horizontal: true, vertical: true)
             }
             .buttonStyle(.plain)
+            .layoutPriority(1)
             .accessibilityLabel("Ajouter le widget \(card.title)")
         }
     }
@@ -2034,12 +2147,20 @@ struct WidgetGalleryModal: View {
             return
         }
         let card = activeCard
+        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
+        let hadExistingInCategory = existingInCategory != nil
         let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
         var newConfig = card.config
         newConfig.size = chosenSize
+        if card.category == .music {
+            newConfig.musicAppearance = selectedMusicAppearance
+        }
 
         let currentPage = vm.page
         WidgetManager.shared.updateMusicStyle(for: newConfig.kind, style: newConfig.musicStyle)
+        if card.category == .music {
+            WidgetManager.shared.updateMusicAppearance(for: newConfig.kind, appearance: selectedMusicAppearance)
+        }
         if newConfig.kind == .weather {
             WidgetManager.shared.updateWeatherTheme(newConfig.weatherTheme)
         } else if newConfig.kind == .calendar {
@@ -2057,6 +2178,14 @@ struct WidgetGalleryModal: View {
                 } else {
                     vm.setPage(currentPage)
                 }
+                let toastMessage = hadExistingInCategory
+                    ? "Le widget « \(card.title) » a remplacé le précédent sur le Launchpad"
+                    : "Le widget « \(card.title) » a bien été ajouté au Launchpad"
+                vm.showToast(toastMessage)
+                AppNotificationManager.shared.sendWidgetAddedNotification(
+                    widgetName: card.title,
+                    replacedExisting: hadExistingInCategory
+                )
             } else {
                 vm.showToast(loc("widget.resize_failed"))
             }

@@ -85,11 +85,51 @@ struct PremiumFolderIconView: View {
     var customColorHex: String? = nil
     var customSymbol: String? = nil
 
+    @AppStorage(PrefKey.iconStyle) private var iconStyleRaw = "original"
+    @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
+    @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var effectiveIconStyle: IconAppearanceStyle {
+        let parsed = IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
+        if tintedIcons && parsed == .original { return .tinted }
+        if parsed == .system {
+            return colorScheme == .dark ? .dark : .light
+        }
+        return parsed
+    }
+
+    private var activeThemeTint: Color {
+        switch tintedIconColor {
+        case "graphite": return Color(white: 0.76)
+        case "purple": return Color(red: 0.65, green: 0.42, blue: 1.0)
+        case "orange": return Color(red: 1.0, green: 0.56, blue: 0.14)
+        case "mint": return Color(red: 0.18, green: 0.85, blue: 0.68)
+        case "rose", "pink": return Color(red: 1.0, green: 0.32, blue: 0.56)
+        case "gold", "yellow": return Color(red: 0.98, green: 0.78, blue: 0.22)
+        case "red": return Color(red: 0.96, green: 0.28, blue: 0.30)
+        case "green": return Color(red: 0.22, green: 0.82, blue: 0.46)
+        case "teal": return Color(red: 0.18, green: 0.74, blue: 0.86)
+        case "indigo": return Color(red: 0.36, green: 0.38, blue: 0.96)
+        case "blue", "accent": return Color(red: 0.08, green: 0.54, blue: 0.98)
+        default: return Color(red: 0.08, green: 0.54, blue: 0.98)
+        }
+    }
+
+    private var glassMaterialScheme: ColorScheme {
+        switch effectiveIconStyle {
+        case .dark, .clearDark:
+            return .dark
+        default:
+            return .light
+        }
+    }
+
     private var customColor: Color {
         if let hex = customColorHex, !hex.isEmpty, let ns = NSColor(hexString: hex) {
             return Color(nsColor: ns)
         }
-        return Color(red: 0.12, green: 0.56, blue: 1.0)
+        return effectiveIconStyle == .tinted ? activeThemeTint : Color(red: 0.12, green: 0.56, blue: 1.0)
     }
 
     var body: some View {
@@ -104,7 +144,99 @@ struct PremiumFolderIconView: View {
         .frame(width: size, height: size)
     }
 
-    // MARK: - 1. Dossiers Grille Squircle (Photo de Référence 2 : Social, Extra, Work)
+    // MARK: - 1. Dossiers Grille Squircle translucides cohérents avec le thème d'icônes
+
+    @ViewBuilder
+    private func themeCoherentGlassBackground(shape: RoundedRectangle, isPureLightPreset: Bool = false) -> some View {
+        let iconTheme = effectiveIconStyle
+        let baseOpacity: Double = {
+            switch iconTheme {
+            case .transparent, .clearLiquid, .clearDark:
+                return 0.56
+            case .frostedGlass:
+                return 0.74
+            default:
+                return isPureLightPreset ? 0.76 : 0.78
+            }
+        }()
+
+        ZStack {
+            shape
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, glassMaterialScheme)
+                .opacity(baseOpacity)
+
+            switch iconTheme {
+            case .dark:
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.14).opacity(0.46), Color(white: 0.05).opacity(0.58)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            case .clearDark:
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.12).opacity(0.28), Color(white: 0.04).opacity(0.38)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            case .tinted:
+                shape.fill(
+                    LinearGradient(
+                        colors: [activeThemeTint.opacity(0.32), activeThemeTint.opacity(0.16)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            case .monochrome:
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.72).opacity(0.24), Color(white: 0.36).opacity(0.20)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            case .transparent, .clearLiquid, .frostedGlass:
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.20), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            case .light, .original, .classicApple, .system:
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isPureLightPreset ? 0.36 : 0.24),
+                            Color.white.opacity(isPureLightPreset ? 0.20 : 0.10)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            }
+
+            // Lueur spéculaire douce en diagonale pour l'effet verre translucide
+            LinearGradient(
+                stops: [
+                    .init(color: Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.16 : 0.28), location: 0.0),
+                    .init(color: Color.clear, location: 0.45),
+                    .init(color: Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.08 : 0.16), location: 1.0)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .clipShape(shape)
+
+            if let hex = customColorHex, !hex.isEmpty {
+                shape.fill(customColor.opacity(0.22))
+            }
+        }
+    }
 
     @ViewBuilder
     private func squircleGridFolderView(s: CGFloat) -> some View {
@@ -112,77 +244,24 @@ struct PremiumFolderIconView: View {
         let shape = RoundedRectangle(cornerRadius: cornerR, style: .continuous)
         let gap = s * 0.052
         let mini = (s * 0.72 - gap * 2) / 3
+        let iconTheme = effectiveIconStyle
 
         ZStack {
-            // Fond du dossier selon la variante (Frosted Glass "Social", Clear Glass "Extra", Pure White "Work")
             switch style {
-            case .frostedGlass:
-                ZStack {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.86).opacity(0.86),
-                                Color(white: 0.68).opacity(0.78),
-                                Color(white: 0.88).opacity(0.88)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    // Reflet spéculaire diagonal brillant identique au dossier "Social" de la Photo 2
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.65), location: 0.00),
-                            .init(color: Color.white.opacity(0.18), location: 0.28),
-                            .init(color: Color.black.opacity(0.12), location: 0.48),
-                            .init(color: Color.white.opacity(0.72), location: 0.72),
-                            .init(color: Color.white.opacity(0.25), location: 1.00)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .clipShape(shape)
-                }
-
-            case .clearGlass:
-                ZStack {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.75).opacity(0.45),
-                                Color(white: 0.55).opacity(0.38)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    if let hex = customColorHex, !hex.isEmpty {
-                        shape.fill(customColor.opacity(0.28))
-                    }
-                }
-
+            case .frostedGlass, .clearGlass:
+                themeCoherentGlassBackground(shape: shape, isPureLightPreset: false)
             case .pureWhite:
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white,
-                            Color(red: 0.94, green: 0.94, blue: 0.96)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
+                themeCoherentGlassBackground(shape: shape, isPureLightPreset: true)
             default:
-                shape.fill(Color.white.opacity(0.24))
+                themeCoherentGlassBackground(shape: shape, isPureLightPreset: false)
             }
 
-            // Mini-grille d'icônes (ou icône personnalisée si choisie)
+            // Mini-grille d'icônes (ou icône personnalisée si définie manuellement)
             if let symbol = customSymbol, !symbol.isEmpty {
                 VStack(spacing: s * 0.04) {
                     Image(systemName: symbol)
-                        .font(.system(size: s * 0.36, weight: .semibold))
-                        .foregroundStyle(style == .pureWhite ? customColor : .white)
+                        .font(.system(size: s * 0.34, weight: .semibold))
+                        .foregroundStyle(iconTheme == .tinted ? activeThemeTint : .white.opacity(0.92))
                         .shadow(color: .black.opacity(0.22), radius: 3, y: 1.5)
 
                     if !icons.isEmpty {
@@ -190,7 +269,7 @@ struct PremiumFolderIconView: View {
                             ForEach(0..<min(3, icons.count), id: \.self) { idx in
                                 Image(nsImage: icons[idx])
                                     .resizable()
-                                    .interpolation(.medium)
+                                    .interpolation(.high)
                                     .frame(width: mini * 0.82, height: mini * 0.82)
                             }
                         }
@@ -205,9 +284,9 @@ struct PremiumFolderIconView: View {
                                 if index < icons.count {
                                     Image(nsImage: icons[index])
                                         .resizable()
-                                        .interpolation(.medium)
+                                        .interpolation(.high)
                                         .frame(width: mini, height: mini)
-                                        .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
+                                        .shadow(color: .black.opacity(0.20), radius: 1.2, y: 0.8)
                                 } else {
                                     Color.clear.frame(width: mini, height: mini)
                                 }
@@ -217,22 +296,22 @@ struct PremiumFolderIconView: View {
                 }
             }
 
-            // Bordure blanche nette (comme sur Social, Extra, Work dans la Photo 2)
+            // Bordure verre subtile cohérente avec le thème actif
             shape.strokeBorder(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.92),
-                        Color.white.opacity(0.45),
-                        Color.white.opacity(0.75)
+                        (iconTheme == .tinted ? activeThemeTint.opacity(0.72) : Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.30 : 0.56)),
+                        Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.10 : 0.16),
+                        (iconTheme == .tinted ? activeThemeTint.opacity(0.45) : Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.18 : 0.32))
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
-                lineWidth: max(1.0, s * 0.016)
+                lineWidth: max(0.85, s * 0.013)
             )
         }
         .frame(width: s, height: s)
-        .shadow(color: .black.opacity(0.28), radius: s * 0.06, x: 0, y: s * 0.035)
+        .shadow(color: .black.opacity(iconTheme == .transparent || iconTheme == .clearLiquid ? 0.18 : 0.24), radius: s * 0.055, x: 0, y: s * 0.03)
     }
 
     // MARK: - 2. Dossiers à Onglet Designer (Photo de Référence 4 : Backup, Design, New projects, Work files, LaunchMe)

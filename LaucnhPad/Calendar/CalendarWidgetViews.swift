@@ -230,9 +230,10 @@ struct PremiumCalendarWidgetView: View {
 
     private func compactDateReferenceView(w: CGFloat, h: CGFloat) -> some View {
         let isWide = w > h * 1.35
+        let isTall = h > w * 1.15
+        let isLargeSquare = w >= 210 && h >= 210
 
         return ZStack {
-            // Fond bleu nuit profond satiné exactement comme sur la Photo de Référence 6
             LinearGradient(
                 colors: [
                     Color(red: 0.08, green: 0.11, blue: 0.18),
@@ -242,7 +243,6 @@ struct PremiumCalendarWidgetView: View {
                 endPoint: .bottomTrailing
             )
 
-            // Reflet supérieur subtil
             RadialGradient(
                 colors: [Color.white.opacity(0.07), Color.clear],
                 center: .top,
@@ -251,7 +251,6 @@ struct PremiumCalendarWidgetView: View {
             )
 
             if isWide {
-                // Version Moyenne (2×1) : Date compacte Référence 6 à gauche + Événements du jour à droite
                 HStack(spacing: 16) {
                     VStack(spacing: 2) {
                         HStack(spacing: 6) {
@@ -281,8 +280,43 @@ struct PremiumCalendarWidgetView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, 16)
+            } else if isTall || isLargeSquare {
+                let headerSize: CGFloat = min(w * 0.115, 19)
+                let daySize: CGFloat = min(w * 0.34, h * 0.24)
+                let eventLimit = isTall ? (w < 190 ? 3 : 4) : 3
+
+                VStack(alignment: .leading, spacing: isTall ? 10 : 8) {
+                    VStack(spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(shortWeekdayString(for: currentDate).uppercased())
+                                .font(.system(size: headerSize, weight: .bold))
+                                .foregroundStyle(Color(red: 1.00, green: 0.16, blue: 0.14))
+                            Text(shortMonthString(for: currentDate).uppercased())
+                                .font(.system(size: headerSize, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        Text(dayNumberString(for: currentDate))
+                            .font(.system(size: daySize, weight: .bold))
+                            .foregroundStyle(.white)
+                            .tracking(-1.5)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+
+                    Rectangle()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 1)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(calendarService.events.prefix(eventLimit)) { ev in
+                            eventCompactRow(ev)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(w < 190 ? 11 : 16)
             } else {
-                // Version Carrée / Verticale : Reproduction exacte de la Photo de Référence 6
                 let headerFontSize = min(w, h) * 0.165
                 let dayFontSize = min(w, h) * 0.56
 
@@ -319,12 +353,14 @@ struct PremiumCalendarWidgetView: View {
         let cal = Calendar.current
         let todayDay = cal.component(.day, from: currentDate)
         let activeDotIndex = (todayDay - 1) % 21
+        let isTall = h > w * 1.15
+        let effectiveH = isTall ? min(w * 1.05, h * 0.48) : h
         let dotSpacingX = w * 0.088
-        let dotSpacingY = h * 0.115
-        let dotSize = min(w, h) * 0.048
+        let dotSpacingY = isTall ? min(dotSpacingX * 1.15, effectiveH * 0.13) : effectiveH * 0.115
+        let dotSize = min(w, effectiveH) * 0.048
+        let bannerH = isTall ? min(h * 0.16, 46) : h * 0.26
 
         return ZStack(alignment: .top) {
-            // Corps pierre chaude comme sur la Photo 2
             LinearGradient(
                 colors: [
                     Color(red: 0.60, green: 0.57, blue: 0.55),
@@ -334,56 +370,83 @@ struct PremiumCalendarWidgetView: View {
                 endPoint: .bottom
             )
 
-            // Bandeau supérieur rouge carmin vif
-            HStack {
-                Text(shortWeekdayString(for: currentDate).uppercased())
-                    .font(.system(size: min(w, h) * 0.085, weight: .heavy))
-                    .foregroundStyle(.white.opacity(0.92))
-                Spacer()
-                Text("\(shortMonthString(for: currentDate).uppercased()) \(dayNumberString(for: currentDate))")
-                    .font(.system(size: min(w, h) * 0.085, weight: .heavy))
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, w * 0.10)
-            .frame(height: h * 0.26)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 1.00, green: 0.14, blue: 0.28),
-                        Color(red: 0.96, green: 0.10, blue: 0.22)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
+            VStack(spacing: 0) {
+                HStack {
+                    Text(shortWeekdayString(for: currentDate).uppercased())
+                        .font(.system(size: min(w, effectiveH) * 0.085, weight: .heavy))
+                        .foregroundStyle(.white.opacity(0.92))
+                    Spacer()
+                    Text("\(shortMonthString(for: currentDate).uppercased()) \(dayNumberString(for: currentDate))")
+                        .font(.system(size: min(w, effectiveH) * 0.085, weight: .heavy))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, w * 0.10)
+                .frame(height: bannerH)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 1.00, green: 0.14, blue: 0.28),
+                            Color(red: 0.96, green: 0.10, blue: 0.22)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-            )
 
-            // Grille matricielle 7 × 3 avec le point du jour en rouge lumineux
-            VStack(spacing: dotSpacingY) {
-                ForEach(0..<3, id: \.self) { row in
-                    HStack(spacing: dotSpacingX) {
-                        ForEach(0..<7, id: \.self) { col in
-                            let idx = row * 7 + col
-                            let isEdgeBlank = (row == 0 && col < 2) || (row == 2 && col > 4)
-                            if isEdgeBlank {
-                                Circle()
-                                    .fill(Color.clear)
-                                    .frame(width: dotSize, height: dotSize)
-                            } else if idx == activeDotIndex || (row == 1 && col == 4) {
-                                Circle()
-                                    .fill(Color(red: 1.00, green: 0.16, blue: 0.16))
-                                    .frame(width: dotSize * 1.65, height: dotSize * 1.65)
-                                    .shadow(color: Color.red.opacity(0.65), radius: 4)
-                            } else {
-                                Circle()
-                                    .fill(Color(red: 0.13, green: 0.12, blue: 0.11))
-                                    .frame(width: dotSize, height: dotSize)
+                VStack(spacing: dotSpacingY) {
+                    ForEach(0..<3, id: \.self) { row in
+                        HStack(spacing: dotSpacingX) {
+                            ForEach(0..<7, id: \.self) { col in
+                                let idx = row * 7 + col
+                                let isEdgeBlank = (row == 0 && col < 2) || (row == 2 && col > 4)
+                                if isEdgeBlank {
+                                    Circle()
+                                        .fill(Color.clear)
+                                        .frame(width: dotSize, height: dotSize)
+                                } else if idx == activeDotIndex || (row == 1 && col == 4) {
+                                    Circle()
+                                        .fill(Color(red: 1.00, green: 0.16, blue: 0.16))
+                                        .frame(width: dotSize * 1.65, height: dotSize * 1.65)
+                                        .shadow(color: Color.red.opacity(0.65), radius: 4)
+                                } else {
+                                    Circle()
+                                        .fill(Color(red: 0.13, green: 0.12, blue: 0.11))
+                                        .frame(width: dotSize, height: dotSize)
+                                }
                             }
                         }
                     }
                 }
+                .padding(.top, isTall ? 14 : 0)
+                .frame(maxHeight: isTall ? nil : .infinity)
+
+                if isTall {
+                    Spacer(minLength: 10)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(calendarService.events.prefix(w < 190 ? 3 : 4)) { ev in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color(red: 1.00, green: 0.16, blue: 0.16))
+                                    .frame(width: 5, height: 5)
+                                Text(ev.title)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.08))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                                Text(Self.timeFmt.string(from: ev.startDate))
+                                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Color(red: 0.18, green: 0.16, blue: 0.15).opacity(0.72))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color.white.opacity(0.28), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 12)
+                }
             }
-            .frame(maxHeight: .infinity)
-            .offset(y: h * 0.12)
         }
     }
 
@@ -393,7 +456,9 @@ struct PremiumCalendarWidgetView: View {
         let cal = Calendar.current
         let targetMonthDate = cal.date(byAdding: .month, value: displayedMonthOffset, to: currentDate) ?? currentDate
         let days = generateMonthGrid(for: targetMonthDate)
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 185) && !isTall
+        let isNarrow = w < 190
 
         return ZStack {
             LinearGradient(
@@ -405,8 +470,7 @@ struct PremiumCalendarWidgetView: View {
                 endPoint: .bottom
             )
 
-            VStack(spacing: isCompact ? 3 : 6) {
-                // En-tête avec navigation < Mois Année >
+            VStack(spacing: isNarrow ? 4 : (isCompact ? 3 : 6)) {
                 HStack {
                     Button {
                         withAnimation(AppleDesignSystem.Springs.snappy) {
@@ -414,24 +478,25 @@ struct PremiumCalendarWidgetView: View {
                         }
                     } label: {
                         Text(monthYearTitle(for: targetMonthDate))
-                            .font(.system(size: isCompact ? 10.5 : 12.5, weight: .bold))
+                            .font(.system(size: isNarrow ? 10 : (isCompact ? 10.5 : 12.5), weight: .bold))
                             .foregroundStyle(displayedMonthOffset == 0 ? Color(red: 1.0, green: 0.24, blue: 0.20) : .white)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                     .buttonStyle(.plain)
 
-                    Spacer()
+                    Spacer(minLength: 4)
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: isNarrow ? 4 : 6) {
                         Button {
                             withAnimation(AppleDesignSystem.Springs.snappy) {
                                 displayedMonthOffset -= 1
                             }
                         } label: {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: isCompact ? 8.5 : 10, weight: .bold))
+                                .font(.system(size: isNarrow ? 8 : 10, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.75))
-                                .frame(width: 18, height: 18)
+                                .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
                                 .background(Color.white.opacity(0.08), in: Circle())
                         }
                         .buttonStyle(.plain)
@@ -442,29 +507,28 @@ struct PremiumCalendarWidgetView: View {
                             }
                         } label: {
                             Image(systemName: "chevron.right")
-                                .font(.system(size: isCompact ? 8.5 : 10, weight: .bold))
+                                .font(.system(size: isNarrow ? 8 : 10, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.75))
-                                .frame(width: 18, height: 18)
+                                .frame(width: isNarrow ? 16 : 18, height: isNarrow ? 16 : 18)
                                 .background(Color.white.opacity(0.08), in: Circle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                // Jours de la semaine (L M M J V S D)
                 let symbols = ["L", "M", "M", "J", "V", "S", "D"]
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { idx in
                         Text(symbols[idx])
-                            .font(.system(size: isCompact ? 7.5 : 8.5, weight: .bold))
+                            .font(.system(size: isNarrow ? 7.5 : 8.5, weight: .bold))
                             .foregroundStyle(idx >= 5 ? .white.opacity(0.40) : .white.opacity(0.60))
                             .frame(maxWidth: .infinity)
                     }
                 }
 
-                // Grille des jours
                 let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
-                LazyVGrid(columns: columns, spacing: isCompact ? 1.5 : 3) {
+                let cellH: CGFloat = isNarrow ? 15 : (isCompact ? 15 : 19)
+                LazyVGrid(columns: columns, spacing: isNarrow ? 1.5 : (isCompact ? 1.5 : 3)) {
                     ForEach(Array(days.enumerated()), id: \.offset) { _, dayItem in
                         if let dayNum = dayItem.day {
                             let isToday = dayItem.isToday
@@ -472,34 +536,51 @@ struct PremiumCalendarWidgetView: View {
                                 if isToday {
                                     Circle()
                                         .fill(Color(red: 1.00, green: 0.18, blue: 0.16))
-                                        .frame(width: isCompact ? 15 : 19, height: isCompact ? 15 : 19)
+                                        .frame(width: cellH, height: cellH)
                                 }
                                 VStack(spacing: 0.5) {
                                     Text("\(dayNum)")
-                                        .font(.system(size: isCompact ? 8.5 : 10, weight: isToday ? .bold : .medium, design: .rounded))
+                                        .font(.system(size: isNarrow ? 8.0 : (isCompact ? 8.5 : 10), weight: isToday ? .bold : .medium, design: .rounded))
                                         .foregroundStyle(isToday ? .white : (dayItem.hasEvent ? .white : .white.opacity(0.78)))
-                                    if dayItem.hasEvent && !isToday && !isCompact {
+                                    if dayItem.hasEvent && !isToday && !isCompact && !isNarrow {
                                         Circle()
                                             .fill(Color.cyan)
                                             .frame(width: 3, height: 3)
                                     }
                                 }
                             }
-                            .frame(height: isCompact ? 15 : 19)
+                            .frame(height: cellH)
                         } else {
-                            Color.clear.frame(height: isCompact ? 15 : 19)
+                            Color.clear.frame(height: cellH)
                         }
                     }
                 }
+
+                if isTall {
+                    Divider().background(Color.white.opacity(0.12))
+                        .padding(.vertical, 2)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(calendarService.events.prefix(isNarrow ? 3 : 4)) { ev in
+                            eventCompactRow(ev)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
             }
-            .padding(isCompact ? 9 : 13)
+            .padding(isNarrow ? 8 : (isCompact ? 9 : 13))
         }
     }
 
     // MARK: - 4. Prochains Événements
 
     private func upcomingEventsView(w: CGFloat, h: CGFloat) -> some View {
+        let isTall = h > w * 1.15
         let isCompact = h < 165
+        let isNarrow = w < 190
+        let eventCount = isTall ? (h > 380 ? 7 : 5) : (isCompact ? 2 : 4)
+
         return ZStack {
             LinearGradient(
                 colors: [Color(red: 0.08, green: 0.10, blue: 0.16), Color(red: 0.04, green: 0.05, blue: 0.09)],
@@ -508,40 +589,46 @@ struct PremiumCalendarWidgetView: View {
             )
 
             VStack(alignment: .leading, spacing: isCompact ? 5 : 8) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(shortWeekdayString(for: currentDate).uppercased())
-                        .font(.system(size: isCompact ? 11 : 13, weight: .heavy))
+                        .font(.system(size: isNarrow ? 10 : (isCompact ? 11 : 13), weight: .heavy))
                         .foregroundStyle(Color(red: 1.0, green: 0.20, blue: 0.18))
                     Text("\(dayNumberString(for: currentDate)) \(shortMonthString(for: currentDate))")
-                        .font(.system(size: isCompact ? 11 : 13, weight: .bold))
+                        .font(.system(size: isNarrow ? 10 : (isCompact ? 11 : 13), weight: .bold))
                         .foregroundStyle(.white)
-                    Spacer()
-                    Text("\(calendarService.events.count) évén.")
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.08), in: Capsule())
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    if !isNarrow {
+                        Text("\(calendarService.events.count) évén.")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.08), in: Capsule())
+                    }
                 }
 
                 Divider().background(Color.white.opacity(0.12))
 
                 VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
-                    ForEach(calendarService.events.prefix(isCompact ? 2 : 4)) { ev in
+                    ForEach(calendarService.events.prefix(eventCount)) { ev in
                         eventCompactRow(ev)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(isCompact ? 10 : 14)
+            .padding(isNarrow ? 9 : (isCompact ? 10 : 14))
         }
     }
 
     // MARK: - 5. Vue Hebdomadaire (7 Jours + Événements)
 
     private func weeklyCalendarView(w: CGFloat, h: CGFloat) -> some View {
+        let isTall = h > w * 1.15
         let isCompact = h < 165
+        let isNarrow = w < 190
+        let eventCount = isTall ? (h > 380 ? 6 : 5) : (isCompact ? 2 : 3)
         let cal = Calendar.current
         let weekDays: [(offset: Int, letter: String, num: String, isToday: Bool)] = (-1...5).map { offset in
             let d = cal.date(byAdding: .day, value: offset, to: currentDate) ?? currentDate
@@ -557,11 +644,18 @@ struct PremiumCalendarWidgetView: View {
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: isCompact ? 6 : 10) {
-                // Bandeau des 7 jours
-                HStack(spacing: 3) {
+            VStack(alignment: .leading, spacing: isCompact ? 5 : 9) {
+                if isTall {
+                    Text(monthYearTitle(for: currentDate))
+                        .font(.system(size: isNarrow ? 11 : 13, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: isNarrow ? 1 : 3) {
                     ForEach(weekDays, id: \.offset) { item in
                         let isSelected = (selectedDayOffset == item.offset)
+                        let circleDim: CGFloat = isNarrow ? 16 : (isCompact ? 18 : 22)
                         Button {
                             withAnimation(AppleDesignSystem.Springs.snappy) {
                                 selectedDayOffset = item.offset
@@ -569,12 +663,12 @@ struct PremiumCalendarWidgetView: View {
                         } label: {
                             VStack(spacing: 2) {
                                 Text(item.letter)
-                                    .font(.system(size: isCompact ? 7.5 : 8.5, weight: .bold))
+                                    .font(.system(size: isNarrow ? 7.0 : (isCompact ? 7.5 : 8.5), weight: .bold))
                                     .foregroundStyle(isSelected ? .white : .white.opacity(0.50))
                                 Text(item.num)
-                                    .font(.system(size: isCompact ? 9.5 : 11, weight: .bold, design: .rounded))
+                                    .font(.system(size: isNarrow ? 8.5 : (isCompact ? 9.5 : 11), weight: .bold, design: .rounded))
                                     .foregroundStyle(.white)
-                                    .frame(width: isCompact ? 18 : 22, height: isCompact ? 18 : 22)
+                                    .frame(width: circleDim, height: circleDim)
                                     .background(
                                         Circle()
                                             .fill(
@@ -591,42 +685,47 @@ struct PremiumCalendarWidgetView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
-                    ForEach(calendarService.events.prefix(isCompact ? 2 : 3)) { ev in
+                    ForEach(calendarService.events.prefix(eventCount)) { ev in
                         eventCompactRow(ev)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(isCompact ? 10 : 14)
+            .padding(isNarrow ? 8 : (isCompact ? 10 : 14))
         }
     }
 
     // MARK: - 6. Présentation Agenda Chronologique
 
     private func agendaTimelineView(w: CGFloat, h: CGFloat) -> some View {
+        let isTall = h > w * 1.15
         let isCompact = h < 165
+        let isNarrow = w < 190
+        let eventCount = isTall ? (h > 380 ? 7 : 5) : (isCompact ? 2 : 3)
+
         return ZStack {
             Color(red: 0.06, green: 0.08, blue: 0.12)
 
             VStack(alignment: .leading, spacing: isCompact ? 5 : 8) {
-                HStack {
-                    HStack(spacing: 5) {
+                HStack(spacing: 4) {
+                    HStack(spacing: 4) {
                         Circle()
                             .fill(Color(red: 1.0, green: 0.18, blue: 0.16))
-                            .frame(width: 7, height: 7)
-                        Text("AGENDA DU JOUR")
-                            .font(.system(size: isCompact ? 9 : 10, weight: .heavy))
-                            .tracking(0.8)
+                            .frame(width: 6, height: 6)
+                        Text(isNarrow ? "AGENDA" : "AGENDA DU JOUR")
+                            .font(.system(size: isNarrow ? 8.5 : (isCompact ? 9 : 10), weight: .heavy))
+                            .tracking(0.6)
                             .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
                     }
-                    Spacer()
+                    Spacer(minLength: 2)
                     Text("\(shortWeekdayString(for: currentDate)) \(dayNumberString(for: currentDate))")
-                        .font(.system(size: isCompact ? 9.5 : 11, weight: .bold))
+                        .font(.system(size: isNarrow ? 9 : (isCompact ? 9.5 : 11), weight: .bold))
                         .foregroundStyle(Color(red: 1.0, green: 0.25, blue: 0.22))
+                        .lineLimit(1)
                 }
 
-                // Ligne rouge d'heure actuelle ("Maintenant")
                 HStack(spacing: 6) {
                     Text(Self.timeFmt.string(from: currentDate))
                         .font(.system(size: 8.5, weight: .bold, design: .monospaced))
@@ -636,14 +735,14 @@ struct PremiumCalendarWidgetView: View {
                 }
 
                 VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
-                    ForEach(calendarService.events.prefix(isCompact ? 2 : 3)) { ev in
+                    ForEach(calendarService.events.prefix(eventCount)) { ev in
                         eventCompactRow(ev)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(isCompact ? 10 : 14)
+            .padding(isNarrow ? 9 : (isCompact ? 10 : 14))
         }
     }
 
@@ -687,14 +786,12 @@ struct PremiumCalendarWidgetView: View {
 
     private static let weekdayFmt: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "EEE"
         return f
     }()
 
     private static let monthFmt: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "MMM"
         return f
     }()
@@ -711,12 +808,18 @@ struct PremiumCalendarWidgetView: View {
         return f
     }()
 
+    private var activeAppLocale: Locale {
+        Locale(identifier: LocalizationManager.activeLanguageCode == "fr" ? "fr_FR" : "en_US")
+    }
+
     private func shortWeekdayString(for date: Date) -> String {
-        Self.weekdayFmt.string(from: date)
+        Self.weekdayFmt.locale = activeAppLocale
+        return Self.weekdayFmt.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func shortMonthString(for date: Date) -> String {
-        Self.monthFmt.string(from: date)
+        Self.monthFmt.locale = activeAppLocale
+        return Self.monthFmt.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func dayNumberString(for date: Date) -> String {
@@ -724,7 +827,7 @@ struct PremiumCalendarWidgetView: View {
     }
 
     private func monthYearTitle(for date: Date) -> String {
-        Self.monthYearFmt.locale = LocalizationManager.shared.effectiveLocale
+        Self.monthYearFmt.locale = activeAppLocale
         return Self.monthYearFmt.string(from: date).capitalized
     }
 

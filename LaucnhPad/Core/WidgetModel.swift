@@ -3,6 +3,30 @@ import SwiftUI
 
 // MARK: - Types et Modèles de Widgets Personnalisables
 
+nonisolated enum WidgetCategoryGroup: String, Sendable, Equatable {
+    case music, weather, calendar, clock, system, quickNote
+
+    var displayName: String {
+        switch self {
+        case .music: return "Musique"
+        case .weather: return "Météo"
+        case .calendar: return "Calendrier"
+        case .clock: return "Horloge"
+        case .system: return "Système"
+        case .quickNote: return "Note rapide"
+        }
+    }
+}
+
+nonisolated enum WidgetAppearanceMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case light = "light"
+    case dark = "dark"
+
+    var id: String { rawValue }
+    var title: String { self == .light ? "Clair" : "Sombre" }
+    var icon: String { self == .light ? "sun.max.fill" : "moon.fill" }
+}
+
 nonisolated enum WidgetKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case vinylPlayer      // Lecteur style Disque Vinyle (inspiré de la référence)
     case mediaWide        // Lecteur Multimédia Full Cover / Éditorial
@@ -13,6 +37,17 @@ nonisolated enum WidgetKind: String, Codable, CaseIterable, Identifiable, Sendab
     case quickNote        // Note rapide / To-do list
 
     var id: String { rawValue }
+
+    var categoryGroup: WidgetCategoryGroup {
+        switch self {
+        case .vinylPlayer, .mediaWide: return .music
+        case .weather: return .weather
+        case .calendar: return .calendar
+        case .clock: return .clock
+        case .system: return .system
+        case .quickNote: return .quickNote
+        }
+    }
 
     var title: String {
         let key = "widget.\(rawValue).title"
@@ -178,6 +213,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
 
     // Thèmes & Styles Visuels par Catégorie
     var musicStyle: MusicWidgetStyle
+    var musicAppearance: WidgetAppearanceMode
     var weatherTheme: WeatherWidgetTheme
     var calendarStyle: CalendarWidgetStyle
     var clockStyle: ClockWidgetStyle
@@ -216,6 +252,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
         size: WidgetSize? = nil,
         order: Int = 0,
         musicStyle: MusicWidgetStyle? = nil,
+        musicAppearance: WidgetAppearanceMode = .light,
         weatherTheme: WeatherWidgetTheme = .appleMinimal,
         calendarStyle: CalendarWidgetStyle = .compactDate,
         clockStyle: ClockWidgetStyle = .appleAnalog,
@@ -245,6 +282,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
         self.size = size ?? kind.defaultSize
         self.order = order
         self.musicStyle = musicStyle ?? (kind == .vinylPlayer ? .vinylSplatterWide : .fullBleedPill)
+        self.musicAppearance = musicAppearance
         self.weatherTheme = weatherTheme
         self.calendarStyle = calendarStyle
         self.clockStyle = clockStyle
@@ -271,7 +309,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
 
     enum CodingKeys: String, CodingKey {
         case id, kind, isEnabled, size, order
-        case musicStyle, weatherTheme, calendarStyle, clockStyle
+        case musicStyle, musicAppearance, weatherTheme, calendarStyle, clockStyle
         case weatherCity, weatherUnit, weatherTemp, weatherCondition, weatherFeelsLike
         case musicTrack, musicArtist, musicAlbum, musicIsPlaying, musicElapsedSeconds, musicTotalSeconds
         case clockFormat24h, clockShowGreeting, clockShowSeconds, clockShowDate, clockFontDesign, clockAccentColor, clockTimezones
@@ -287,6 +325,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
         self.size = try c.decodeIfPresent(WidgetSize.self, forKey: .size) ?? decodedKind.defaultSize
         self.order = try c.decodeIfPresent(Int.self, forKey: .order) ?? 0
         self.musicStyle = try c.decodeIfPresent(MusicWidgetStyle.self, forKey: .musicStyle) ?? (decodedKind == .vinylPlayer ? .vinylSplatterWide : .fullBleedPill)
+        self.musicAppearance = try c.decodeIfPresent(WidgetAppearanceMode.self, forKey: .musicAppearance) ?? .light
         self.weatherTheme = try c.decodeIfPresent(WeatherWidgetTheme.self, forKey: .weatherTheme) ?? .appleMinimal
         self.calendarStyle = try c.decodeIfPresent(CalendarWidgetStyle.self, forKey: .calendarStyle) ?? .compactDate
         self.clockStyle = try c.decodeIfPresent(ClockWidgetStyle.self, forKey: .clockStyle) ?? .appleAnalog

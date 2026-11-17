@@ -411,6 +411,34 @@ struct ReferenceMusicWidgetView: View {
         isPlaying && !reduceMotion && isWindowVisible
     }
 
+    private var isDarkMusic: Bool {
+        config.musicAppearance == .dark
+    }
+
+    private var cardTitleColor: Color {
+        isDarkMusic ? Color.white.opacity(0.96) : Color(white: 0.08)
+    }
+
+    private var cardSubtitleColor: Color {
+        isDarkMusic ? Color.white.opacity(0.68) : Color(white: 0.36)
+    }
+
+    private var cardTimestampColor: Color {
+        isDarkMusic ? Color.white.opacity(0.76) : Color(white: 0.20)
+    }
+
+    private var cardControlColor: Color {
+        isDarkMusic ? Color.white.opacity(0.95) : Color(white: 0.12)
+    }
+
+    private var cardSeekTrackColor: Color {
+        isDarkMusic ? Color.white.opacity(0.20) : Color.black.opacity(0.13)
+    }
+
+    private var cardSeekFillColor: Color {
+        isDarkMusic ? Color.white.opacity(0.92) : Color(white: 0.12)
+    }
+
     var body: some View {
         let w = targetSize?.width ?? config.size.width
         let h = targetSize?.height ?? config.size.height
@@ -485,18 +513,11 @@ struct ReferenceMusicWidgetView: View {
         let btnSize = min(64, max(44, min(width, height) * 0.34))
 
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.12, green: 0.13, blue: 0.18).opacity(0.92),
-                    Color(red: 0.07, green: 0.08, blue: 0.12).opacity(0.96)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            musicCardBackground
 
             RadialGradient(
                 colors: [
-                    (isSpotify ? Color(red: 0.11, green: 0.73, blue: 0.33) : Color(red: 0.98, green: 0.22, blue: 0.38)).opacity(0.24),
+                    (isSpotify ? Color(red: 0.11, green: 0.73, blue: 0.33) : Color(red: 0.98, green: 0.22, blue: 0.38)).opacity(isDarkMusic ? 0.28 : 0.18),
                     Color.clear
                 ],
                 center: .center,
@@ -534,11 +555,14 @@ struct ReferenceMusicWidgetView: View {
                 VStack(spacing: 2) {
                     Text("Lancer \(platform)")
                         .font(.system(size: min(14, max(11.5, width * 0.055)), weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(cardTitleColor)
+                        .lineLimit(1)
                     if height > 125 {
                         Text("Appuyez pour démarrer la musique")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.62))
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(cardSubtitleColor)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
                     }
                 }
             }
@@ -580,12 +604,12 @@ struct ReferenceMusicWidgetView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(displayArtist)
                             .font(.system(size: isCompact ? 9.5 : 11.5, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(isDarkMusic ? .white : Color(white: 0.08))
                             .lineLimit(1)
 
                         Text(displayAlbum)
                             .font(.system(size: isCompact ? 8.0 : 9.5, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.80))
+                            .foregroundStyle(isDarkMusic ? .white.opacity(0.80) : Color(white: 0.35))
                             .lineLimit(1)
                     }
 
@@ -599,7 +623,7 @@ struct ReferenceMusicWidgetView: View {
                 .padding(.vertical, isCompact ? 5 : 6)
                 .background(
                     RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
-                        .fill(Color.black.opacity(0.56))
+                        .fill(isDarkMusic ? Color.black.opacity(0.56) : Color.white.opacity(0.78))
                         .background(
                             .ultraThinMaterial,
                             in: RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
@@ -607,7 +631,7 @@ struct ReferenceMusicWidgetView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
+                        .strokeBorder(Color.white.opacity(isDarkMusic ? 0.14 : 0.45), lineWidth: 0.7)
                 )
 
                 Spacer(minLength: 4)
@@ -645,34 +669,32 @@ struct ReferenceMusicWidgetView: View {
     @ViewBuilder
     private func vinylSplatterLayout(width w: CGFloat, height h: CGFloat) -> some View {
         let isWide = w > h * 1.25
-        let isTall = h > w * 1.18
+        let isTall = h > w * 1.15
+        let isLargeSquare = w >= 210 && h >= 210
 
         ZStack {
-            // Fond de carte givrée gris-clair translucide fidèle à la Photo 3
-            frostedLightCardBackground
+            musicCardBackground
 
             if isWide {
-                // Format Large Horizontal (Photo 3 Haut-Droite) :
-                // Vinyle marbré complet à gauche, Titre + Artiste + Boutons à droite, Barre de progression sur toute la largeur en bas !
                 let discSize = min(h * 0.68, w * 0.44)
                 VStack(spacing: 0) {
                     HStack(alignment: .center, spacing: 12) {
                         spinningDiscView(size: discSize, variant: .cyanSplatter)
-                            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                            .shadow(color: .black.opacity(isDarkMusic ? 0.40 : 0.18), radius: 8, y: 4)
 
                         VStack(spacing: 4) {
                             Text(displayTitle)
                                 .font(.system(size: min(16, h * 0.115), weight: .bold))
-                                .foregroundStyle(Color(white: 0.08))
+                                .foregroundStyle(cardTitleColor)
                                 .lineLimit(1)
 
                             Text(displayArtist)
                                 .font(.system(size: min(11.5, h * 0.08), weight: .medium))
-                                .foregroundStyle(Color(white: 0.35))
+                                .foregroundStyle(cardSubtitleColor)
                                 .lineLimit(1)
 
                             transportButtonsRow(
-                                color: Color(white: 0.12),
+                                color: cardControlColor,
                                 iconSize: min(14, h * 0.095),
                                 spacing: 22
                             )
@@ -683,88 +705,83 @@ struct ReferenceMusicWidgetView: View {
                     .frame(maxHeight: .infinity)
 
                     progressSection(
-                        textColor: Color(white: 0.20),
-                        trackColor: Color.black.opacity(0.12),
-                        fillColor: Color(white: 0.12),
+                        textColor: cardTimestampColor,
+                        trackColor: cardSeekTrackColor,
+                        fillColor: cardSeekFillColor,
                         isCompact: h < 135
                     )
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-            } else if isTall {
-                // Format Tall avec Vinyle Marbré
+            } else if isTall || isLargeSquare {
                 vinylTallInternal(width: w, height: h, variant: .cyanSplatter)
             } else {
-                // Format Carré / Petit (Photo 3 Haut-Gauche) :
-                // Le disque vinyle marbré déborde du bord supérieur (coupé à mi-hauteur en haut !)
-                let discSize = w * 0.84
+                let discSize = w * 0.80
                 let isCompact = h < 145
 
                 ZStack(alignment: .bottom) {
-                    // Demi-disque vinyle en haut
                     spinningDiscView(size: discSize, variant: .cyanSplatter)
-                        .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-                        .position(x: w / 2, y: discSize * 0.04)
+                        .shadow(color: .black.opacity(isDarkMusic ? 0.40 : 0.18), radius: 8, y: 4)
+                        .position(x: w / 2, y: discSize * 0.08)
 
-                    // Infos & Contrôles dans la moitié inférieure
                     VStack(spacing: isCompact ? 2.5 : 4) {
                         VStack(spacing: 1) {
                             Text(displayTitle)
-                                .font(.system(size: isCompact ? 12 : 14, weight: .bold))
-                                .foregroundStyle(Color(white: 0.08))
+                                .font(.system(size: isCompact ? 11.5 : 13.5, weight: .bold))
+                                .foregroundStyle(cardTitleColor)
                                 .lineLimit(1)
 
                             Text(displayArtist)
                                 .font(.system(size: isCompact ? 8.5 : 10, weight: .medium))
-                                .foregroundStyle(Color(white: 0.36))
+                                .foregroundStyle(cardSubtitleColor)
                                 .lineLimit(1)
                         }
 
                         progressSection(
-                            textColor: Color(white: 0.18),
-                            trackColor: Color.black.opacity(0.14),
-                            fillColor: Color(white: 0.12),
+                            textColor: cardTimestampColor,
+                            trackColor: cardSeekTrackColor,
+                            fillColor: cardSeekFillColor,
                             isCompact: true
                         )
 
                         transportButtonsRow(
-                            color: Color(white: 0.12),
-                            iconSize: isCompact ? 11 : 13,
-                            spacing: isCompact ? 20 : 26
+                            color: cardControlColor,
+                            iconSize: isCompact ? 10.5 : 12.5,
+                            spacing: isCompact ? 18 : 24
                         )
                     }
-                    .padding(.horizontal, isCompact ? 10 : 14)
-                    .padding(.bottom, isCompact ? 8 : 11)
+                    .padding(.horizontal, isCompact ? 10 : 12)
+                    .padding(.bottom, isCompact ? 7 : 10)
                 }
             }
         }
     }
 
-    // MARK: - 3. Vinyle Blanc Studio (Photo 3 Col 2 Haut)
+    // MARK: - 3. Vinyle Blanc Studio
 
     @ViewBuilder
     private func vinylWhiteGroovedLayout(width w: CGFloat, height h: CGFloat) -> some View {
         let isWide = w > h * 1.25
         ZStack {
-            frostedLightCardBackground
+            musicCardBackground
 
             if isWide {
                 let discSize = min(h * 0.68, w * 0.44)
                 VStack(spacing: 0) {
                     HStack(alignment: .center, spacing: 12) {
                         spinningDiscView(size: discSize, variant: .whiteGrooved)
-                            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                            .shadow(color: .black.opacity(isDarkMusic ? 0.38 : 0.15), radius: 8, y: 4)
 
                         VStack(spacing: 4) {
                             Text(displayTitle)
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Color(white: 0.08))
+                                .font(.system(size: min(16, h * 0.115), weight: .bold))
+                                .foregroundStyle(cardTitleColor)
                                 .lineLimit(1)
                             Text(displayArtist)
-                                .font(.system(size: 10.5, weight: .medium))
-                                .foregroundStyle(Color(white: 0.36))
+                                .font(.system(size: min(11.5, h * 0.08), weight: .medium))
+                                .foregroundStyle(cardSubtitleColor)
                                 .lineLimit(1)
-                            transportButtonsRow(color: Color(white: 0.12), iconSize: 13.5, spacing: 22)
+                            transportButtonsRow(color: cardControlColor, iconSize: 13.5, spacing: 22)
                                 .padding(.top, 4)
                         }
                         .frame(maxWidth: .infinity)
@@ -772,9 +789,9 @@ struct ReferenceMusicWidgetView: View {
                     .frame(maxHeight: .infinity)
 
                     progressSection(
-                        textColor: Color(white: 0.18),
-                        trackColor: Color.black.opacity(0.14),
-                        fillColor: Color(white: 0.12),
+                        textColor: cardTimestampColor,
+                        trackColor: cardSeekTrackColor,
+                        fillColor: cardSeekFillColor,
                         isCompact: h < 135
                     )
                 }
@@ -788,60 +805,62 @@ struct ReferenceMusicWidgetView: View {
 
     @ViewBuilder
     private func vinylTallInternal(width w: CGFloat, height h: CGFloat, variant: ReferenceVinylDiscView.DiscVariant) -> some View {
-        let isSmall = h < 200
-        let discSize = isSmall ? min(w * 0.52, h * 0.44) : min(w * 0.84, h * 0.54)
+        let isSmall = h < 195
+        let isNarrowVertical = h > w * 1.15 && w < 210
+        let discSize = isSmall
+            ? min(w * 0.48, h * 0.42)
+            : (isNarrowVertical ? min(w * 0.78, h * 0.44) : min(w * 0.78, h * 0.52))
 
-        VStack(spacing: isSmall ? 4 : 10) {
+        VStack(spacing: isSmall ? 3 : (isNarrowVertical ? 8 : 10)) {
             Spacer(minLength: 2)
 
             spinningDiscView(size: discSize, variant: variant)
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+                .shadow(color: .black.opacity(isDarkMusic ? 0.42 : 0.18), radius: 10, y: 5)
 
             Spacer(minLength: 2)
 
             VStack(spacing: isSmall ? 1 : 2) {
                 Text(displayTitle)
-                    .font(.system(size: isSmall ? 12.5 : 16, weight: .bold))
-                    .foregroundStyle(Color(white: 0.08))
+                    .font(.system(size: isSmall ? 12 : (isNarrowVertical ? 14 : 16), weight: .bold))
+                    .foregroundStyle(cardTitleColor)
                     .lineLimit(1)
 
                 Text(displayArtist)
-                    .font(.system(size: isSmall ? 9 : 11, weight: .medium))
-                    .foregroundStyle(Color(white: 0.36))
+                    .font(.system(size: isSmall ? 8.5 : (isNarrowVertical ? 10.5 : 11.5), weight: .medium))
+                    .foregroundStyle(cardSubtitleColor)
                     .lineLimit(1)
             }
 
             progressSection(
-                textColor: Color(white: 0.18),
-                trackColor: Color.black.opacity(0.14),
-                fillColor: Color(white: 0.12),
-                isCompact: isSmall
+                textColor: cardTimestampColor,
+                trackColor: cardSeekTrackColor,
+                fillColor: cardSeekFillColor,
+                isCompact: isSmall || isNarrowVertical
             )
 
             transportButtonsRow(
-                color: Color(white: 0.12),
-                iconSize: isSmall ? 11.5 : 14,
-                spacing: isSmall ? 20 : 28
+                color: cardControlColor,
+                iconSize: isSmall ? 11 : (isNarrowVertical ? 13 : 14),
+                spacing: isSmall ? 18 : (isNarrowVertical ? 18 : 28)
             )
-            .padding(.bottom, isSmall ? 4 : 8)
+            .padding(.bottom, isSmall ? 3 : 8)
         }
-        .padding(.horizontal, isSmall ? 10 : 16)
+        .padding(.horizontal, isSmall ? 10 : (isNarrowVertical ? 11 : 16))
         .padding(.vertical, isSmall ? 6 : 10)
     }
 
-    // MARK: - 4. Cadre Éditorial Clair (Photo 3 Col 3 Haut, Col 3 Bas & Bas-Droite-Bas)
+    // MARK: - 4. Cadre Éditorial
 
     @ViewBuilder
     private func framedEditorialLayout(width w: CGFloat, height h: CGFloat) -> some View {
         let isWide = w > h * 1.25
-        let isTall = h > w * 1.18
+        let isTall = h > w * 1.15
         let isCompact = h < 155 && !isWide
 
         ZStack {
-            frostedLightCardBackground
+            musicCardBackground
 
             if isWide {
-                // Photo 3 Bas-Droite-Bas : Pochette encadrée à gauche + Titre, Artiste, Contrôles à droite
                 let coverSize = min(h - 20, w * 0.42)
                 HStack(spacing: 14) {
                     artworkView(width: coverSize, height: coverSize, showSignature: false)
@@ -852,23 +871,23 @@ struct ReferenceMusicWidgetView: View {
                         VStack(spacing: 1.5) {
                             Text(displayTitle)
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Color(white: 0.08))
+                                .foregroundStyle(cardTitleColor)
                                 .lineLimit(1)
                             Text(displayArtist)
                                 .font(.system(size: 10.5, weight: .medium))
-                                .foregroundStyle(Color(white: 0.36))
+                                .foregroundStyle(cardSubtitleColor)
                                 .lineLimit(1)
                         }
 
                         progressSection(
-                            textColor: Color(white: 0.18),
-                            trackColor: Color.black.opacity(0.14),
-                            fillColor: Color(white: 0.12),
+                            textColor: cardTimestampColor,
+                            trackColor: cardSeekTrackColor,
+                            fillColor: cardSeekFillColor,
                             isCompact: true
                         )
 
                         transportButtonsRow(
-                            color: Color(white: 0.12),
+                            color: cardControlColor,
                             iconSize: 13,
                             spacing: 22
                         )
@@ -877,11 +896,11 @@ struct ReferenceMusicWidgetView: View {
                 }
                 .padding(10)
             } else {
-                // Photo 3 Col 3 Haut (Carré) & Col 3 Bas (Vertical) :
-                // Pochette encadrée en haut + Infos & Contrôles centrés en bas
                 let pad: CGFloat = isCompact ? 8 : 11
                 let coverW = max(40, w - pad * 2)
-                let coverH = max(36, h * (isTall ? 0.62 : 0.48))
+                let coverH = isTall
+                    ? min(coverW * 1.12, h * 0.54)
+                    : max(36, h * 0.46)
 
                 VStack(spacing: isCompact ? 3 : 6) {
                     artworkView(width: coverW, height: coverH, showSignature: isTall)
@@ -892,27 +911,27 @@ struct ReferenceMusicWidgetView: View {
 
                     VStack(spacing: 1) {
                         Text(displayTitle)
-                            .font(.system(size: isCompact ? 11.5 : (isTall ? 15.5 : 13.5), weight: .bold))
-                            .foregroundStyle(Color(white: 0.08))
+                            .font(.system(size: isCompact ? 11.5 : (isTall ? 14.5 : 13.5), weight: .bold))
+                            .foregroundStyle(cardTitleColor)
                             .lineLimit(1)
 
                         Text(displayArtist)
-                            .font(.system(size: isCompact ? 8.5 : (isTall ? 10.5 : 9.5), weight: .medium))
-                            .foregroundStyle(Color(white: 0.36))
+                            .font(.system(size: isCompact ? 8.5 : (isTall ? 10 : 9.5), weight: .medium))
+                            .foregroundStyle(cardSubtitleColor)
                             .lineLimit(1)
                     }
 
                     progressSection(
-                        textColor: Color(white: 0.18),
-                        trackColor: Color.black.opacity(0.14),
-                        fillColor: Color(white: 0.12),
-                        isCompact: isCompact
+                        textColor: cardTimestampColor,
+                        trackColor: cardSeekTrackColor,
+                        fillColor: cardSeekFillColor,
+                        isCompact: isCompact || (isTall && w < 200)
                     )
 
                     transportButtonsRow(
-                        color: Color(white: 0.12),
+                        color: cardControlColor,
                         iconSize: isCompact ? 10.5 : 13,
-                        spacing: isCompact ? 18 : 26
+                        spacing: isCompact || (isTall && w < 200) ? 18 : 26
                     )
                 }
                 .padding(pad)
@@ -922,29 +941,51 @@ struct ReferenceMusicWidgetView: View {
 
     // MARK: - Sous-composants Partagés (Barre 1:20 / 2:27, Boutons, Pochette, Vinyle Animé)
 
-    private var frostedLightCardBackground: some View {
+    private var musicCardBackground: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.90, green: 0.91, blue: 0.92).opacity(0.94),
-                    Color(red: 0.83, green: 0.84, blue: 0.86).opacity(0.92),
-                    Color(red: 0.92, green: 0.93, blue: 0.94).opacity(0.95)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            if isDarkMusic {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.13, green: 0.14, blue: 0.18).opacity(0.94),
+                        Color(red: 0.08, green: 0.09, blue: 0.12).opacity(0.95),
+                        Color(red: 0.11, green: 0.12, blue: 0.16).opacity(0.94)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
 
-            // Reflet de verre diagonal subtil comme sur la Photo 3
-            LinearGradient(
-                stops: [
-                    .init(color: Color.white.opacity(0.45), location: 0.0),
-                    .init(color: Color.clear, location: 0.45),
-                    .init(color: Color.white.opacity(0.35), location: 0.78),
-                    .init(color: Color.clear, location: 1.0)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(0.12), location: 0.0),
+                        .init(color: Color.clear, location: 0.45),
+                        .init(color: Color.white.opacity(0.06), location: 0.80),
+                        .init(color: Color.clear, location: 1.0)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.90, green: 0.91, blue: 0.92).opacity(0.94),
+                        Color(red: 0.83, green: 0.84, blue: 0.86).opacity(0.92),
+                        Color(red: 0.92, green: 0.93, blue: 0.94).opacity(0.95)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(0.45), location: 0.0),
+                        .init(color: Color.clear, location: 0.45),
+                        .init(color: Color.white.opacity(0.35), location: 0.78),
+                        .init(color: Color.clear, location: 1.0)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
         }
     }
 

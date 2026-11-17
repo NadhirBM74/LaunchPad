@@ -198,10 +198,11 @@ struct PremiumClockWidgetView: View {
         }
     }
 
-    // MARK: - 1. Apple Analog Blurred Numerals (Reproduction 1:1 de la Photo de Référence 7)
+    // MARK: - 1. Apple Analog Blurred Numerals (Adaptatif Carré, Horizontal, Vertical)
 
     private func style1AppleAnalogReference(w: CGFloat, h: CGFloat) -> some View {
-        let minDim = min(w, h)
+        let isTall = h > w * 1.15
+        let isWide = w > h * 1.35
         let cal = Calendar.current
         let hour = cal.component(.hour, from: currentDate) % 12
         let minute = cal.component(.minute, from: currentDate)
@@ -211,109 +212,139 @@ struct PremiumClockWidgetView: View {
         let minuteAngle = Double(minute) * 6.0 + Double(second) * 0.1
         let secondAngle = Double(second) * 6.0
 
-        let numeralSize = minDim * 0.44
-
         return ZStack {
-            // Fond noir pur profond (Photo 7)
             Color(red: 0.02, green: 0.02, blue: 0.03)
 
-            // 1. Grands chiffres blancs "12", "3", "6", "9" sur les bords avec flou gaussien optique (Photo 7)
+            if isTall {
+                let dialDim = min(w - 16, h * 0.52)
+                VStack(spacing: 10) {
+                    Spacer(minLength: 4)
+                    analogReferenceDial(size: dialDim, hourAngle: hourAngle, minuteAngle: minuteAngle, secondAngle: secondAngle, showPill: false)
+                    Spacer(minLength: 2)
+                    VStack(spacing: 4) {
+                        Text(shortDigitalTimeString)
+                            .font(.system(size: min(w * 0.24, 34), weight: .bold, design: fontDesign))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.7)
+                            .lineLimit(1)
+                        if config.clockShowDate {
+                            Text(referencePillDateString.uppercased())
+                                .font(.system(size: min(w * 0.085, 11.5), weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color(red: 0.20, green: 0.20, blue: 0.22).opacity(0.92)))
+                        }
+                    }
+                    Spacer(minLength: 6)
+                }
+                .padding(10)
+            } else if isWide {
+                let dialDim = min(h - 14, w * 0.48)
+                HStack(spacing: 12) {
+                    analogReferenceDial(size: dialDim, hourAngle: hourAngle, minuteAngle: minuteAngle, secondAngle: secondAngle, showPill: false)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(digitalTimeString)
+                            .font(.system(size: min(h * 0.28, 36), weight: .bold, design: fontDesign))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.65)
+                            .lineLimit(1)
+                        if config.clockShowDate {
+                            Text(fullDateString)
+                                .font(.system(size: min(h * 0.11, 13), weight: .medium, design: fontDesign))
+                                .foregroundStyle(.white.opacity(0.68))
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 14)
+            } else {
+                analogReferenceDial(size: min(w, h), hourAngle: hourAngle, minuteAngle: minuteAngle, secondAngle: secondAngle, showPill: config.clockShowDate)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func analogReferenceDial(size minDim: CGFloat, hourAngle: Double, minuteAngle: Double, secondAngle: Double, showPill: Bool) -> some View {
+        let numeralSize = minDim * 0.44
+        ZStack {
             ZStack {
-                // 12 en haut (légèrement coupé par le bord supérieur)
                 Text("12")
                     .font(.system(size: numeralSize, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
-                    .position(x: w / 2, y: minDim * 0.12)
-
-                // 3 à droite (légèrement coupé par le bord droit)
+                    .position(x: minDim / 2, y: minDim * 0.14)
                 Text("3")
                     .font(.system(size: numeralSize, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
-                    .position(x: w - minDim * 0.10, y: h / 2)
-
-                // 6 en bas (légèrement coupé par le bord inférieur)
+                    .position(x: minDim - minDim * 0.12, y: minDim / 2)
                 Text("6")
                     .font(.system(size: numeralSize, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
-                    .position(x: w / 2, y: h - minDim * 0.10)
-
-                // 9 à gauche (légèrement coupé par le bord gauche)
+                    .position(x: minDim / 2, y: minDim - minDim * 0.12)
                 Text("9")
                     .font(.system(size: numeralSize, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
-                    .position(x: minDim * 0.10, y: h / 2)
+                    .position(x: minDim * 0.12, y: minDim / 2)
             }
-            .blur(radius: max(2.2, minDim * 0.022))
+            .blur(radius: max(2.0, minDim * 0.022))
 
-            // 2. Pilule de date gris anthracite ("Sat, Sep 12") juste sous le centre (au-dessus du 6) comme sur la Photo 7
-            if config.clockShowDate {
+            if showPill {
                 Text(referencePillDateString)
                     .font(.system(size: max(8.5, minDim * 0.068), weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
                     .padding(.horizontal, minDim * 0.065)
                     .padding(.vertical, minDim * 0.026)
-                    .background(
-                        Capsule()
-                            .fill(Color(red: 0.20, green: 0.20, blue: 0.22).opacity(0.92))
-                    )
-                    .position(x: w / 2, y: h * 0.61)
+                    .background(Capsule().fill(Color(red: 0.20, green: 0.20, blue: 0.22).opacity(0.92)))
+                    .position(x: minDim / 2, y: minDim * 0.63)
             }
 
-            // 3. Aiguilles analogiques nettes au premier plan (Aiguille avec fente noire + Aiguille avec fente rouge + Trotteuse rouge)
             ZStack {
-                // Aiguille des minutes (longue capsule blanche avec fente noire interne comme sur la Photo 7)
                 ZStack {
-                    Capsule()
-                        .fill(Color.white)
-                        .frame(width: minDim * 0.068, height: minDim * 0.38)
-                    Capsule()
-                        .fill(Color.black)
-                        .frame(width: minDim * 0.026, height: minDim * 0.20)
-                        .offset(y: -minDim * 0.05)
+                    Capsule().fill(Color.white).frame(width: minDim * 0.068, height: minDim * 0.38)
+                    Capsule().fill(Color.black).frame(width: minDim * 0.026, height: minDim * 0.20).offset(y: -minDim * 0.05)
                 }
                 .offset(y: -minDim * 0.15)
                 .rotationEffect(.degrees(minuteAngle))
                 .shadow(color: .black.opacity(0.55), radius: 3, y: 1.5)
 
-                // Aiguille des heures (capsule blanche avec fente rouge vif comme sur la Photo 7)
                 ZStack {
-                    Capsule()
-                        .fill(Color.white)
-                        .frame(width: minDim * 0.072, height: minDim * 0.27)
-                    Capsule()
-                        .fill(accentColor)
-                        .frame(width: minDim * 0.032, height: minDim * 0.12)
-                        .offset(y: -minDim * 0.04)
+                    Capsule().fill(Color.white).frame(width: minDim * 0.072, height: minDim * 0.27)
+                    Capsule().fill(accentColor).frame(width: minDim * 0.032, height: minDim * 0.12).offset(y: -minDim * 0.04)
                 }
                 .offset(y: -minDim * 0.09)
                 .rotationEffect(.degrees(hourAngle))
                 .shadow(color: .black.opacity(0.55), radius: 3, y: 1.5)
 
-                // Trotteuse des secondes rouge fine (Photo 7)
                 if config.clockShowSeconds {
                     Capsule()
                         .fill(accentColor)
                         .frame(width: max(1.5, minDim * 0.013), height: minDim * 0.48)
                         .offset(y: -minDim * 0.16)
                         .rotationEffect(.degrees(secondAngle))
-
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: minDim * 0.045, height: minDim * 0.045)
+                    Circle().fill(accentColor).frame(width: minDim * 0.045, height: minDim * 0.045)
                 } else {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: minDim * 0.042, height: minDim * 0.042)
+                    Circle().fill(Color.white).frame(width: minDim * 0.042, height: minDim * 0.042)
                 }
             }
-            .position(x: w / 2, y: h / 2)
+            .position(x: minDim / 2, y: minDim / 2)
         }
+        .frame(width: minDim, height: minDim)
     }
 
     // MARK: - 2. Apple Digital Minimal
 
     private func style2AppleDigital(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+        let dispS = cal.component(.second, from: currentDate)
+
         return ZStack {
             LinearGradient(
                 colors: [Color(red: 0.08, green: 0.09, blue: 0.14), Color(red: 0.04, green: 0.04, blue: 0.07)],
@@ -327,30 +358,51 @@ struct PremiumClockWidgetView: View {
                     Text(greetingTitle)
                         .font(.system(size: isCompact ? 9.5 : 11, weight: .semibold, design: fontDesign))
                         .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3.5)
                 .background(Color.white.opacity(0.08), in: Capsule())
 
-                Spacer()
+                Spacer(minLength: 4)
 
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 34 : 46, weight: .bold, design: fontDesign))
-                    .foregroundStyle(.white)
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.65)
-                    .lineLimit(1)
+                if isTall {
+                    VStack(alignment: .leading, spacing: -min(w * 0.06, 8)) {
+                        Text(String(format: "%02d", dispH))
+                            .font(.system(size: min(w * 0.44, 64), weight: .bold, design: fontDesign))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                        Text(String(format: "%02d", dispM))
+                            .font(.system(size: min(w * 0.44, 64), weight: .semibold, design: fontDesign))
+                            .foregroundStyle(accentColor)
+                            .monospacedDigit()
+                    }
+                    if config.clockShowSeconds {
+                        Text(String(format: ":%02d", dispS))
+                            .font(.system(size: min(w * 0.13, 18), weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.65))
+                            .padding(.top, 4)
+                    }
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 34 : 46, weight: .bold, design: fontDesign))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                }
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 if config.clockShowDate {
                     Text(fullDateString)
                         .font(.system(size: isCompact ? 10 : 12, weight: .medium, design: fontDesign))
                         .foregroundStyle(.white.opacity(0.68))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 11 : 16)
         }
     }
 
@@ -362,34 +414,49 @@ struct PremiumClockWidgetView: View {
         let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
         let dispM = cal.component(.minute, from: currentDate)
         let dispS = cal.component(.second, from: currentDate)
+        let isTall = h > w * 1.15
         let isWide = w > h * 1.35
-        let showSec = isWide && config.clockShowSeconds
+        let showSec = (isWide || (isTall && h > 340)) && config.clockShowSeconds
 
         return ZStack {
             Color(red: 0.07, green: 0.07, blue: 0.08)
 
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    flipTile(value: String(format: "%02d", dispH), label: "HR", h: h)
-                    flipTile(value: String(format: "%02d", dispM), label: "MIN", h: h)
-                    if showSec {
-                        flipTile(value: String(format: "%02d", dispS), label: "SEC", h: h)
+            VStack(spacing: isTall ? 8 : 8) {
+                if isTall {
+                    let rowCount: CGFloat = showSec ? 3.0 : 2.0
+                    let tileH = min((h - 62 - CGFloat(rowCount - 1) * 8) / rowCount, 108)
+                    VStack(spacing: 8) {
+                        flipTile(value: String(format: "%02d", dispH), label: "HR", tileH: tileH)
+                        flipTile(value: String(format: "%02d", dispM), label: "MIN", tileH: tileH)
+                        if showSec {
+                            flipTile(value: String(format: "%02d", dispS), label: "SEC", tileH: tileH)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        flipTile(value: String(format: "%02d", dispH), label: "HR", h: h)
+                        flipTile(value: String(format: "%02d", dispM), label: "MIN", h: h)
+                        if showSec {
+                            flipTile(value: String(format: "%02d", dispS), label: "SEC", h: h)
+                        }
                     }
                 }
 
                 if config.clockShowDate {
                     Text(referencePillDateString.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: isTall ? 10 : 9, weight: .bold, design: .monospaced))
                         .tracking(1.2)
                         .foregroundStyle(accentColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
-            .padding(12)
+            .padding(w < 170 ? 10 : 12)
         }
     }
 
-    private func flipTile(value: String, label: String, h: CGFloat) -> some View {
-        let tileH = min(h * 0.62, 92)
+    private func flipTile(value: String, label: String, h: CGFloat = 150, tileH overrideH: CGFloat? = nil) -> some View {
+        let tileH = overrideH ?? min(h * 0.62, 92)
         return ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(
@@ -408,8 +475,8 @@ struct PremiumClockWidgetView: View {
                 .font(.system(size: tileH * 0.56, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .monospacedDigit()
+                .minimumScaleFactor(0.65)
 
-            // Ligne de charnière centrale du volet mécanique
             Rectangle()
                 .fill(Color.black.opacity(0.75))
                 .frame(height: 1.8)
@@ -422,8 +489,15 @@ struct PremiumClockWidgetView: View {
     // MARK: - 4. Retro Digital Vintage
 
     private func style4RetroDigital(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
         let lcdGreen = Color(red: 0.48, green: 0.96, blue: 0.58)
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+        let dispS = cal.component(.second, from: currentDate)
+
         return ZStack {
             Color(red: 0.12, green: 0.13, blue: 0.15)
 
@@ -447,14 +521,37 @@ struct PremiumClockWidgetView: View {
 
                 Spacer()
 
-                ZStack {
-                    Text(config.clockShowSeconds ? "88:88:88" : "88:88")
-                        .font(.system(size: isCompact ? 26 : 36, weight: .black, design: .monospaced))
-                        .foregroundStyle(lcdGreen.opacity(0.08))
-                    Text(digitalTimeString)
-                        .font(.system(size: isCompact ? 26 : 36, weight: .black, design: .monospaced))
-                        .foregroundStyle(lcdGreen)
-                        .shadow(color: lcdGreen.opacity(0.55), radius: 6)
+                if isTall {
+                    VStack(spacing: 2) {
+                        Text(String(format: "%02d", dispH))
+                            .font(.system(size: min(w * 0.36, 52), weight: .black, design: .monospaced))
+                            .foregroundStyle(lcdGreen)
+                            .shadow(color: lcdGreen.opacity(0.55), radius: 6)
+                        Text(String(format: "%02d", dispM))
+                            .font(.system(size: min(w * 0.36, 52), weight: .black, design: .monospaced))
+                            .foregroundStyle(lcdGreen.opacity(0.88))
+                            .shadow(color: lcdGreen.opacity(0.45), radius: 5)
+                        if config.clockShowSeconds {
+                            Text(String(format: ":%02d SEC", dispS))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(lcdGreen.opacity(0.75))
+                                .padding(.top, 2)
+                        }
+                    }
+                } else {
+                    ZStack {
+                        Text(config.clockShowSeconds ? "88:88:88" : "88:88")
+                            .font(.system(size: isCompact ? 26 : 36, weight: .black, design: .monospaced))
+                            .foregroundStyle(lcdGreen.opacity(0.08))
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                        Text(digitalTimeString)
+                            .font(.system(size: isCompact ? 26 : 36, weight: .black, design: .monospaced))
+                            .foregroundStyle(lcdGreen)
+                            .shadow(color: lcdGreen.opacity(0.55), radius: 6)
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer()
@@ -463,6 +560,7 @@ struct PremiumClockWidgetView: View {
                     Text(referencePillDateString.uppercased())
                         .font(.system(size: 8.5, weight: .bold, design: .monospaced))
                         .foregroundStyle(lcdGreen.opacity(0.85))
+                        .lineLimit(1)
                 }
             }
             .padding(16)
@@ -472,7 +570,13 @@ struct PremiumClockWidgetView: View {
     // MARK: - 5. Liquid Glass Clock
 
     private func style5LiquidGlass(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+
         return ZStack {
             LinearGradient(
                 colors: [
@@ -490,18 +594,25 @@ struct PremiumClockWidgetView: View {
                 .frame(width: min(w, h) * 0.65, height: min(w, h) * 0.65)
                 .blur(radius: 22)
 
-            VStack(spacing: 4) {
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 34 : 46, weight: .heavy, design: fontDesign))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.white, .white.opacity(0.80)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+            VStack(spacing: isTall ? 10 : 4) {
+                if isTall {
+                    VStack(spacing: -6) {
+                        Text(String(format: "%02d", dispH))
+                        Text(String(format: "%02d", dispM))
+                    }
+                    .font(.system(size: min(w * 0.42, 62), weight: .heavy, design: fontDesign))
+                    .foregroundStyle(LinearGradient(colors: [.white, .white.opacity(0.82)], startPoint: .top, endPoint: .bottom))
                     .monospacedDigit()
                     .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 34 : 46, weight: .heavy, design: fontDesign))
+                        .foregroundStyle(LinearGradient(colors: [.white, .white.opacity(0.80)], startPoint: .top, endPoint: .bottom))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                        .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
+                }
 
                 if config.clockShowDate {
                     Text(referencePillDateString)
@@ -519,7 +630,13 @@ struct PremiumClockWidgetView: View {
     // MARK: - 6. Minimal White
 
     private func style6MinimalWhite(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+
         return ZStack {
             LinearGradient(
                 colors: [Color.white, Color(red: 0.94, green: 0.95, blue: 0.97)],
@@ -527,20 +644,32 @@ struct PremiumClockWidgetView: View {
                 endPoint: .bottom
             )
 
-            VStack(spacing: 4) {
+            VStack(spacing: isTall ? 10 : 4) {
                 if config.clockShowDate {
                     Text(referencePillDateString.uppercased())
                         .font(.system(size: isCompact ? 8.5 : 10, weight: .bold, design: fontDesign))
                         .tracking(1.2)
                         .foregroundStyle(accentColor)
+                        .lineLimit(1)
                 }
 
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 36 : 48, weight: .bold, design: fontDesign))
-                    .foregroundStyle(Color(white: 0.08))
+                if isTall {
+                    VStack(spacing: -8) {
+                        Text(String(format: "%02d", dispH))
+                            .foregroundStyle(Color(white: 0.08))
+                        Text(String(format: "%02d", dispM))
+                            .foregroundStyle(accentColor)
+                    }
+                    .font(.system(size: min(w * 0.44, 64), weight: .bold, design: fontDesign))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.65)
-                    .lineLimit(1)
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 36 : 48, weight: .bold, design: fontDesign))
+                        .foregroundStyle(Color(white: 0.08))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                }
             }
             .padding(12)
         }
@@ -549,7 +678,8 @@ struct PremiumClockWidgetView: View {
     // MARK: - 7. Dark Premium Chronograph
 
     private func style7DarkPremiumChrono(w: CGFloat, h: CGFloat) -> some View {
-        let dialSize = min(w, h) * 0.84
+        let isTall = h > w * 1.15
+        let dialSize = isTall ? min(w * 0.84, h * 0.50) : min(w, h) * 0.84
         return ZStack {
             RadialGradient(
                 colors: [Color(red: 0.13, green: 0.14, blue: 0.17), Color(red: 0.04, green: 0.04, blue: 0.06)],
@@ -558,14 +688,44 @@ struct PremiumClockWidgetView: View {
                 endRadius: max(w, h) * 0.65
             )
 
-            AnalogClockFace(date: currentDate, size: dialSize)
+            if isTall {
+                VStack(spacing: 12) {
+                    Spacer(minLength: 4)
+                    AnalogClockFace(date: currentDate, size: dialSize)
+                    Spacer(minLength: 2)
+                    VStack(spacing: 3) {
+                        Text(digitalTimeString)
+                            .font(.system(size: min(w * 0.22, 30), weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.7)
+                            .lineLimit(1)
+                        if config.clockShowDate {
+                            Text(fullDateString)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.62))
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                }
+                .padding(10)
+            } else {
+                AnalogClockFace(date: currentDate, size: dialSize)
+            }
         }
     }
 
     // MARK: - 8. Neon Clock
 
     private func style8NeonClock(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+
         return ZStack {
             Color(red: 0.03, green: 0.02, blue: 0.07)
 
@@ -574,13 +734,27 @@ struct PremiumClockWidgetView: View {
                 .shadow(color: accentColor, radius: 8)
                 .padding(8)
 
-            VStack(spacing: 4) {
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 32 : 44, weight: .black, design: .rounded))
+            VStack(spacing: isTall ? 10 : 4) {
+                if isTall {
+                    VStack(spacing: -6) {
+                        Text(String(format: "%02d", dispH))
+                        Text(String(format: "%02d", dispM))
+                    }
+                    .font(.system(size: min(w * 0.42, 60), weight: .black, design: .rounded))
                     .foregroundStyle(.white)
                     .shadow(color: accentColor, radius: 10)
                     .shadow(color: accentColor.opacity(0.8), radius: 20)
                     .monospacedDigit()
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 32 : 44, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .shadow(color: accentColor, radius: 10)
+                        .shadow(color: accentColor.opacity(0.8), radius: 20)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                }
 
                 if config.clockShowDate {
                     Text(referencePillDateString.uppercased())
@@ -588,6 +762,7 @@ struct PremiumClockWidgetView: View {
                         .tracking(1.4)
                         .foregroundStyle(accentColor)
                         .shadow(color: accentColor.opacity(0.8), radius: 6)
+                        .lineLimit(1)
                 }
             }
             .padding(14)
@@ -601,36 +776,70 @@ struct PremiumClockWidgetView: View {
         let rawH = cal.component(.hour, from: currentDate)
         let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
         let dispM = cal.component(.minute, from: currentDate)
-        let numSize = min(w, h) * 0.44
+        let isTall = h > w * 1.15
+        let isCompactSide = w < 185 && !isTall
+        let numSize = isTall ? min(w * 0.42, h * 0.24) : min(w, h) * (isCompactSide ? 0.36 : 0.42)
 
         return ZStack {
             Color(red: 0.05, green: 0.06, blue: 0.09)
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: -numSize * 0.16) {
-                    Text(String(format: "%02d", dispH))
-                        .font(.system(size: numSize, weight: .black, design: fontDesign))
-                        .foregroundStyle(.white)
-                    Text(String(format: "%02d", dispM))
-                        .font(.system(size: numSize, weight: .thin, design: fontDesign))
-                        .foregroundStyle(accentColor)
-                }
-
-                if config.clockShowDate {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(shortWeekday(for: currentDate).uppercased())
-                            .font(.system(size: 11, weight: .heavy))
-                            .foregroundStyle(accentColor)
-                        Text("\(Calendar.current.component(.day, from: currentDate))")
-                            .font(.system(size: 22, weight: .bold))
+            if isTall {
+                VStack(spacing: 12) {
+                    Spacer(minLength: 4)
+                    VStack(spacing: -numSize * 0.16) {
+                        Text(String(format: "%02d", dispH))
+                            .font(.system(size: numSize, weight: .black, design: fontDesign))
                             .foregroundStyle(.white)
-                        Text(shortMonth(for: currentDate).uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.55))
+                        Text(String(format: "%02d", dispM))
+                            .font(.system(size: numSize, weight: .thin, design: fontDesign))
+                            .foregroundStyle(accentColor)
+                    }
+                    if config.clockShowDate {
+                        HStack(spacing: 6) {
+                            Text(shortWeekday(for: currentDate).uppercased())
+                                .font(.system(size: 11, weight: .heavy))
+                                .foregroundStyle(accentColor)
+                            Text("\(Calendar.current.component(.day, from: currentDate))")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white)
+                            Text(shortMonth(for: currentDate).uppercased())
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.08), in: Capsule())
+                    }
+                    Spacer(minLength: 4)
+                }
+                .padding(12)
+            } else {
+                HStack(spacing: isCompactSide ? 8 : 12) {
+                    VStack(alignment: .leading, spacing: -numSize * 0.16) {
+                        Text(String(format: "%02d", dispH))
+                            .font(.system(size: numSize, weight: .black, design: fontDesign))
+                            .foregroundStyle(.white)
+                        Text(String(format: "%02d", dispM))
+                            .font(.system(size: numSize, weight: .thin, design: fontDesign))
+                            .foregroundStyle(accentColor)
+                    }
+
+                    if config.clockShowDate {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(shortWeekday(for: currentDate).uppercased())
+                                .font(.system(size: isCompactSide ? 9 : 11, weight: .heavy))
+                                .foregroundStyle(accentColor)
+                            Text("\(Calendar.current.component(.day, from: currentDate))")
+                                .font(.system(size: isCompactSide ? 18 : 22, weight: .bold))
+                                .foregroundStyle(.white)
+                            Text(shortMonth(for: currentDate).uppercased())
+                                .font(.system(size: isCompactSide ? 8.5 : 10, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
                     }
                 }
+                .padding(10)
             }
-            .padding(12)
         }
     }
 
@@ -684,7 +893,13 @@ struct PremiumClockWidgetView: View {
     // MARK: - 11. Gradient Clock
 
     private func style11GradientClock(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+
         return ZStack {
             LinearGradient(
                 colors: [
@@ -696,17 +911,31 @@ struct PremiumClockWidgetView: View {
                 endPoint: .bottomTrailing
             )
 
-            VStack(spacing: 4) {
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 34 : 46, weight: .black, design: fontDesign))
+            VStack(spacing: isTall ? 10 : 4) {
+                if isTall {
+                    VStack(spacing: -6) {
+                        Text(String(format: "%02d", dispH))
+                        Text(String(format: "%02d", dispM))
+                    }
+                    .font(.system(size: min(w * 0.42, 62), weight: .black, design: fontDesign))
                     .foregroundStyle(.white)
                     .monospacedDigit()
                     .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 34 : 46, weight: .black, design: fontDesign))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+                }
 
                 if config.clockShowDate {
                     Text(referencePillDateString)
                         .font(.system(size: isCompact ? 10 : 12, weight: .bold, design: fontDesign))
                         .foregroundStyle(.white.opacity(0.90))
+                        .lineLimit(1)
                 }
             }
             .padding(12)
@@ -716,25 +945,42 @@ struct PremiumClockWidgetView: View {
     // MARK: - 12. World Clock (Horloge Mondiale Multi-Fuseaux)
 
     private func style12WorldClock(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
         let zones = config.clockTimezones.isEmpty
-            ? ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London"]
+            ? ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London", "America/Los_Angeles", "Australia/Sydney"]
             : config.clockTimezones
+        let maxCount = isTall ? (h > 350 ? 6 : 5) : (isCompact ? 3 : 4)
 
         return ZStack {
             Color(red: 0.06, green: 0.07, blue: 0.11)
 
-            VStack(spacing: isCompact ? 4 : 6) {
-                ForEach(Array(zones.prefix(isCompact ? 3 : 4).enumerated()), id: \.offset) { _, tzID in
+            VStack(spacing: isTall ? 8 : (isCompact ? 4 : 6)) {
+                if isTall {
+                    HStack {
+                        Text(shortDigitalTimeString)
+                            .font(.system(size: min(w * 0.18, 24), weight: .bold, design: fontDesign))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                        Spacer()
+                        Text("FUSEAUX")
+                            .font(.system(size: 8.5, weight: .heavy))
+                            .tracking(0.8)
+                            .foregroundStyle(accentColor)
+                    }
+                    .padding(.horizontal, 4)
+                }
+
+                ForEach(Array(zones.prefix(maxCount).enumerated()), id: \.offset) { _, tzID in
                     let info = worldClockInfo(for: tzID)
                     HStack {
                         HStack(spacing: 5) {
                             Image(systemName: info.isDaylight ? "sun.max.fill" : "moon.fill")
-                                .font(.system(size: isCompact ? 9 : 10))
+                                .font(.system(size: isCompact ? 8.5 : 10))
                                 .foregroundStyle(info.isDaylight ? Color.yellow : Color.indigo)
                             VStack(alignment: .leading, spacing: 0) {
                                 Text(info.city)
-                                    .font(.system(size: isCompact ? 10 : 11.5, weight: .bold))
+                                    .font(.system(size: isCompact ? 9.5 : 11, weight: .bold))
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
                                 Text(info.offsetLabel)
@@ -742,16 +988,19 @@ struct PremiumClockWidgetView: View {
                                     .foregroundStyle(.white.opacity(0.50))
                             }
                         }
-                        Spacer()
+                        Spacer(minLength: 4)
                         Text(info.timeString)
-                            .font(.system(size: isCompact ? 12 : 14.5, weight: .bold, design: .rounded))
+                            .font(.system(size: isCompact ? 11 : 13.5, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                             .monospacedDigit()
+                            .lineLimit(1)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, isCompact ? 3.5 : 5)
                     .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
+
+                if isTall { Spacer(minLength: 0) }
             }
             .padding(isCompact ? 8 : 12)
         }
@@ -760,8 +1009,13 @@ struct PremiumClockWidgetView: View {
     // MARK: - 13. Weather Clock (Horloge associée à la météo)
 
     private func style13WeatherClock(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
         let weather = RichWeatherData.from(config: config)
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
 
         return ZStack {
             LinearGradient(
@@ -770,29 +1024,53 @@ struct PremiumClockWidgetView: View {
                 endPoint: .bottomTrailing
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: isTall ? 8 : 4) {
                 HStack {
                     Label(weather.city, systemImage: "location.fill")
-                        .font(.system(size: isCompact ? 9.5 : 11, weight: .bold))
+                        .font(.system(size: isCompact ? 9 : 11, weight: .bold))
                         .foregroundStyle(.cyan)
-                    Spacer()
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
                     HStack(spacing: 4) {
                         Image(systemName: weather.filledSymbol)
                             .symbolRenderingMode(.multicolor)
                         Text("\(weather.temp)°")
-                            .font(.system(size: isCompact ? 12 : 14, weight: .bold))
+                            .font(.system(size: isCompact ? 11.5 : 14, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }
 
                 Spacer()
 
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 30 : 40, weight: .bold, design: fontDesign))
-                    .foregroundStyle(.white)
+                if isTall {
+                    VStack(alignment: .leading, spacing: -6) {
+                        Text(String(format: "%02d", dispH))
+                            .foregroundStyle(.white)
+                        Text(String(format: "%02d", dispM))
+                            .foregroundStyle(.cyan)
+                    }
+                    .font(.system(size: min(w * 0.40, 56), weight: .bold, design: fontDesign))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
+
+                    HStack(spacing: 8) {
+                        Text("↑\(weather.high)° ↓\(weather.low)°")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.75))
+                        Spacer()
+                        Text("\(weather.humidity)%")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.cyan)
+                    }
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 28 : 40, weight: .bold, design: fontDesign))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+                }
+
+                Spacer()
 
                 if config.clockShowDate {
                     Text("\(referencePillDateString) • \(weather.conditionDisplay)")
@@ -801,18 +1079,24 @@ struct PremiumClockWidgetView: View {
                         .lineLimit(1)
                 }
             }
-            .padding(isCompact ? 11 : 15)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - 14. Calendar Clock (Horloge associée à la date et au calendrier)
 
     private func style14CalendarClock(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 165) && !isTall
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+
         return ZStack {
             Color(red: 0.06, green: 0.08, blue: 0.13)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: isTall ? 8 : 4) {
                 HStack {
                     HStack(spacing: 4) {
                         Text(shortWeekday(for: currentDate))
@@ -820,7 +1104,8 @@ struct PremiumClockWidgetView: View {
                         Text("\(Calendar.current.component(.day, from: currentDate)) \(shortMonth(for: currentDate))")
                             .foregroundStyle(.white)
                     }
-                    .font(.system(size: isCompact ? 11 : 13, weight: .bold))
+                    .font(.system(size: isCompact ? 10.5 : 13, weight: .bold))
+                    .lineLimit(1)
 
                     Spacer()
 
@@ -831,52 +1116,97 @@ struct PremiumClockWidgetView: View {
 
                 Spacer()
 
-                Text(digitalTimeString)
-                    .font(.system(size: isCompact ? 30 : 40, weight: .bold, design: fontDesign))
-                    .foregroundStyle(.white)
+                if isTall {
+                    VStack(alignment: .leading, spacing: -6) {
+                        Text(String(format: "%02d", dispH))
+                            .foregroundStyle(.white)
+                        Text(String(format: "%02d", dispM))
+                            .foregroundStyle(Color(red: 1.0, green: 0.25, blue: 0.22))
+                    }
+                    .font(.system(size: min(w * 0.40, 56), weight: .bold, design: fontDesign))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
 
-                if let nextEvent = CalendarEventService.shared.events.first {
-                    HStack(spacing: 5) {
-                        Circle().fill(Color.green).frame(width: 5, height: 5)
-                        Text(nextEvent.title)
-                            .font(.system(size: isCompact ? 8.5 : 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
+                    Spacer()
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(CalendarEventService.shared.events.prefix(3)) { ev in
+                            HStack(spacing: 5) {
+                                Circle().fill(Color.green).frame(width: 5, height: 5)
+                                Text(ev.title)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.82))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        }
+                    }
+                } else {
+                    Text(digitalTimeString)
+                        .font(.system(size: isCompact ? 28 : 40, weight: .bold, design: fontDesign))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.55)
+                        .lineLimit(1)
+
+                    if let nextEvent = CalendarEventService.shared.events.first {
+                        HStack(spacing: 5) {
+                            Circle().fill(Color.green).frame(width: 5, height: 5)
+                            Text(nextEvent.title)
+                                .font(.system(size: isCompact ? 8.5 : 10, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .lineLimit(1)
+                        }
                     }
                 }
             }
-            .padding(isCompact ? 11 : 15)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - 15. Fullscreen StandBy Clock
 
     private func style15FullscreenClock(w: CGFloat, h: CGFloat) -> some View {
+        let isTall = h > w * 1.15
+        let cal = Calendar.current
+        let rawH = cal.component(.hour, from: currentDate)
+        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+        let dispM = cal.component(.minute, from: currentDate)
+
         return ZStack {
             Color.black
 
-            VStack(spacing: 0) {
-                Text(shortDigitalTimeString)
-                    .font(.system(size: min(w * 0.42, h * 0.68), weight: .heavy, design: fontDesign))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [accentColor, Color.white],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+            VStack(spacing: isTall ? 4 : 0) {
+                if isTall {
+                    VStack(spacing: -min(w * 0.08, 12)) {
+                        Text(String(format: "%02d", dispH))
+                        Text(String(format: "%02d", dispM))
+                    }
+                    .font(.system(size: min(w * 0.56, h * 0.34), weight: .heavy, design: fontDesign))
+                    .foregroundStyle(LinearGradient(colors: [accentColor, Color.white], startPoint: .top, endPoint: .bottom))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
+                } else {
+                    Text(shortDigitalTimeString)
+                        .font(.system(size: min(w * 0.42, h * 0.68), weight: .heavy, design: fontDesign))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [accentColor, Color.white],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                }
 
                 if config.clockShowDate {
                     Text(referencePillDateString.uppercased())
                         .font(.system(size: max(9, min(w, h) * 0.075), weight: .bold, design: .rounded))
                         .tracking(1.6)
                         .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
                 }
             }
             .padding(8)
@@ -899,8 +1229,7 @@ struct PremiumClockWidgetView: View {
     }()
     private static let pillDateFmt: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "EEE, MMM d"
+        f.dateFormat = "EEE d MMM"
         return f
     }()
     private static let fullDateFmt: DateFormatter = {
@@ -909,6 +1238,10 @@ struct PremiumClockWidgetView: View {
         f.timeStyle = .none
         return f
     }()
+
+    private var activeAppLocale: Locale {
+        Locale(identifier: LocalizationManager.activeLanguageCode == "fr" ? "fr_FR" : "en_US")
+    }
 
     private var shortDigitalTimeString: String {
         (config.clockFormat24h ? Self.fmt24 : Self.fmt12).string(from: currentDate)
@@ -922,11 +1255,12 @@ struct PremiumClockWidgetView: View {
     }
 
     private var referencePillDateString: String {
-        Self.pillDateFmt.string(from: currentDate)
+        Self.pillDateFmt.locale = activeAppLocale
+        return Self.pillDateFmt.string(from: currentDate).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private var fullDateString: String {
-        Self.fullDateFmt.locale = LocalizationManager.shared.effectiveLocale
+        Self.fullDateFmt.locale = activeAppLocale
         return Self.fullDateFmt.string(from: currentDate).capitalized
     }
 
@@ -939,16 +1273,16 @@ struct PremiumClockWidgetView: View {
 
     private func shortWeekday(for date: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = activeAppLocale
         f.dateFormat = "EEE"
-        return f.string(from: date)
+        return f.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func shortMonth(for date: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = activeAppLocale
         f.dateFormat = "MMM"
-        return f.string(from: date)
+        return f.string(from: date).replacingOccurrences(of: ".", with: "").capitalized
     }
 
     private func worldClockInfo(for tzID: String) -> (city: String, timeString: String, offsetLabel: String, isDaylight: Bool) {

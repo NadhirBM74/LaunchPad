@@ -1870,18 +1870,7 @@ public enum CustomAppIconRenderer {
             }
         }
 
-        // 2. Si l'utilisateur a choisi un style vectoriel ou unifié et que l'application fait partie de notre pack vectoriel (sauf en mode Original ou Automatique macOS)
-        if style != .original && style != .system,
-           let customKind = CustomAppIconKind.match(path: path, bundleID: bundleID, name: name) {
-            let view = CustomAppIconView(kind: customKind, style: style, tintColor: tintColor, size: logicalPointSize)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2.0 // 256pt × 2.0 = 512×512 pixels physiques Retina !
-            if let cgImage = renderer.cgImage {
-                return wrapCGImageAsRetinaNSImage(cgImage)
-            }
-        }
-
-        // 3. Pour toutes les applications (tierces ou en mode Original / Automatique / Sombre / Clair / Teinté / Monochrome / Transparent / Verre) :
+        // 2. Conservation intégrale des vrais logos Apple & applications tierces en 512×512 Retina :
         // Extraction haute résolution (1024×1024 ou 512×512) directement depuis Assets.car / .icns / IconServices,
         // normalisation géométrique sans double-squircle, et application du filtre de style en 512×512.
         let nsTint = NSColor(tintColor).usingColorSpace(.sRGB) ?? NSColor.systemBlue

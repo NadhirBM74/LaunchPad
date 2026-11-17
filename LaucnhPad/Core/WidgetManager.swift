@@ -56,6 +56,13 @@ final class WidgetManager: ObservableObject {
                 copy.order = decoded.count
                 decoded.append(copy)
             }
+            // Garantir au plus 1 widget activé par catégorie
+            var seenEnabledCategories = Set<WidgetCategoryGroup>()
+            for idx in decoded.indices where decoded[idx].isEnabled {
+                if !seenEnabledCategories.insert(decoded[idx].kind.categoryGroup).inserted {
+                    decoded[idx].isEnabled = false
+                }
+            }
             self.widgets = decoded
         } else {
             self.widgets = Self.defaultWidgets()
@@ -81,12 +88,20 @@ final class WidgetManager: ObservableObject {
     // MARK: - Actions Utilisateur
 
     func toggleWidget(_ kind: WidgetKind) {
+        let shouldEnable: Bool
         if let idx = widgets.firstIndex(where: { $0.kind == kind }) {
-            widgets[idx].isEnabled.toggle()
+            shouldEnable = !widgets[idx].isEnabled
+            widgets[idx].isEnabled = shouldEnable
         } else {
+            shouldEnable = true
             var newConfig = CustomWidgetConfig(kind: kind, isEnabled: true)
             newConfig.order = widgets.count
             widgets.append(newConfig)
+        }
+        if shouldEnable {
+            for idx in widgets.indices where widgets[idx].kind != kind && widgets[idx].kind.categoryGroup == kind.categoryGroup {
+                widgets[idx].isEnabled = false
+            }
         }
         normalizeOrders()
         saveWidgets()
@@ -152,6 +167,12 @@ final class WidgetManager: ObservableObject {
     func updateMusicStyle(for kind: WidgetKind, style: MusicWidgetStyle) {
         guard let idx = widgets.firstIndex(where: { $0.kind == kind }) else { return }
         widgets[idx].musicStyle = style
+        saveWidgets()
+    }
+
+    func updateMusicAppearance(for kind: WidgetKind, appearance: WidgetAppearanceMode) {
+        guard let idx = widgets.firstIndex(where: { $0.kind == kind }) else { return }
+        widgets[idx].musicAppearance = appearance
         saveWidgets()
     }
 

@@ -501,6 +501,12 @@ final class LaunchpadViewModel: ObservableObject {
 
     func setAppeared(_ value: Bool) {
         appeared = value
+        if !value {
+            if showWidgetGallery { showWidgetGallery = false }
+            if CustomIconManager.shared.activePickerAppID != nil {
+                CustomIconManager.shared.activePickerAppID = nil
+            }
+        }
         let target: Double = value ? 1 : 0
         if Prefs.reduceMotion {
             setPresentation(target)
@@ -570,6 +576,8 @@ final class LaunchpadViewModel: ObservableObject {
         openFolderID = nil
         folderFaded = false
         folderSnapshot = nil
+        showWidgetGallery = false
+        CustomIconManager.shared.activePickerAppID = nil
         selection.removeAll()
         keyboardIndex = nil
         dialog = nil
@@ -791,7 +799,7 @@ final class LaunchpadViewModel: ObservableObject {
     private func performOpenFolder(_ id: String) {
         folderSnapshot = store.visibleFolder(id)
         keyboardIndex = nil
-        withAnimation(motion(.spring(response: 0.36, dampingFraction: 0.86))) {
+        withAnimation(motion(.spring(response: 0.38, dampingFraction: 0.84))) {
             openFolderID = id
             folderFaded = false
         }

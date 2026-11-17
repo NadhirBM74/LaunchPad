@@ -576,9 +576,9 @@ struct VinylPlayerWidgetView: View {
         return Self.demoTracks[idx]
     }
 
-    /// Adaptation automatique au thème de l'application (Clair vs Sombre)
+    /// Apparence Clair ou Sombre choisie dans le menu du widget
     private var isLightTheme: Bool {
-        backgroundStyle == .light
+        config.musicAppearance == .light
     }
 
     private var track: NowPlayingTrack {
@@ -692,7 +692,7 @@ struct VinylPlayerWidgetView: View {
             }
         }
         .frame(width: w, height: h)
-        .animation(.easeInOut(duration: 0.25), value: backgroundStyle)
+        .animation(.easeInOut(duration: 0.25), value: config.musicAppearance)
         .onAppear {
             musicManager.refreshNowPlaying()
             updateExtractedAccentColor(from: track.displayImage)
@@ -1612,7 +1612,7 @@ struct VinylPlayerWidgetView: View {
                     shape.strokeBorder(Color.black.opacity(0.06), lineWidth: 0.8)
                 )
                 .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 5)
-        } else if backgroundStyle == .dark {
+        } else {
             // Thème Sombre : Carte carbone profond élégante et contrastée
             shape
                 .fill(
@@ -1639,41 +1639,6 @@ struct VinylPlayerWidgetView: View {
                     )
                 )
                 .shadow(color: .black.opacity(0.45), radius: 14, x: 0, y: 7)
-        } else {
-            // Thème Verre / Liquid Glass : Verre sombre translucide avec biseau lumineux
-            shape
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    shape.fill(Color(red: 0.08, green: 0.09, blue: 0.13).opacity(widgetManager.glassOpacity * 0.82))
-                )
-                .overlay(
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.18),
-                                Color.white.opacity(0.03),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .center
-                        )
-                    )
-                )
-                .overlay(
-                    shape.strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                widgetManager.glowColor == .none ? Color.white.opacity(0.45) : widgetManager.glowColor.primaryColor.opacity(0.60),
-                                Color.white.opacity(0.14),
-                                Color.white.opacity(0.20)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.0
-                    )
-                )
-                .shadow(color: .black.opacity(0.38), radius: 14, x: 0, y: 7)
         }
     }
 
@@ -3240,10 +3205,11 @@ struct SystemWidgetView: View {
     // MARK: - Format Carré / Petit (1x1 ou 180x180) - Double Anneaux d'Activité
     private var smallSystemView: some View {
         GeometryReader { geo in
+            let minSide = min(geo.size.width, geo.size.height)
             let isCompact = geo.size.height < 175 || geo.size.width < 175
-            let ringSize: CGFloat = isCompact ? 50 : 64
-            let ringSpacing: CGFloat = isCompact ? 10 : 16
-            let pad: CGFloat = isCompact ? 10 : 14
+            let ringSize: CGFloat = isCompact ? min(50, max(36, (minSide - 24) * 0.44)) : 64
+            let ringSpacing: CGFloat = isCompact ? 8 : 16
+            let pad: CGFloat = isCompact ? 8 : 14
 
             VStack(spacing: isCompact ? 8 : 12) {
                 // Anneaux CPU et RAM côte à côte

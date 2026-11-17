@@ -12,6 +12,7 @@ nonisolated struct FolderData: Codable, Hashable, Identifiable, Sendable {
     var colorHex: String?
     var iconSymbol: String?
     var keepWhenEmpty: Bool
+    var pinToLastPage: Bool
 
     init(
         id: String,
@@ -21,7 +22,8 @@ nonisolated struct FolderData: Codable, Hashable, Identifiable, Sendable {
         style: FolderVisualStyle = .frostedGlass,
         colorHex: String? = nil,
         iconSymbol: String? = nil,
-        keepWhenEmpty: Bool = false
+        keepWhenEmpty: Bool = false,
+        pinToLastPage: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -31,10 +33,11 @@ nonisolated struct FolderData: Codable, Hashable, Identifiable, Sendable {
         self.colorHex = colorHex
         self.iconSymbol = iconSymbol
         self.keepWhenEmpty = keepWhenEmpty
+        self.pinToLastPage = pinToLastPage
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, apps, isLocked, style, colorHex, iconSymbol, keepWhenEmpty
+        case id, name, apps, isLocked, style, colorHex, iconSymbol, keepWhenEmpty, pinToLastPage
     }
 
     init(from decoder: Decoder) throws {
@@ -47,6 +50,7 @@ nonisolated struct FolderData: Codable, Hashable, Identifiable, Sendable {
         colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex)
         iconSymbol = try container.decodeIfPresent(String.self, forKey: .iconSymbol)
         keepWhenEmpty = try container.decodeIfPresent(Bool.self, forKey: .keepWhenEmpty) ?? false
+        pinToLastPage = try container.decodeIfPresent(Bool.self, forKey: .pinToLastPage) ?? false
     }
 
     static func newID() -> String { "folder:" + UUID().uuidString }
@@ -249,12 +253,20 @@ final class LaunchpadStore: ObservableObject {
                 }
                 updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
             } else {
-                updated.append(contentsOf: buildDefaultCategorizedItems(from: fresh))
+                // Première initialisation : range d'abord les apps tierces, puis les dossiers Apple sur la dernière page.
+                let categorized = buildDefaultCategorizedItems(from: fresh)
+                updated.append(contentsOf: categorized)
             }
             hasLayoutFile = true
         } else {
             fresh.sort { displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending }
-            updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
+            let freshItems = fresh.map { LayoutItem.app($0.id) }
+            // Insérer les nouvelles applications avant les éventuels dossiers Apple épinglés en dernière page.
+            if let firstPinnedIdx = updated.firstIndex(where: { $0.folder?.pinToLastPage == true }) {
+                updated.insert(contentsOf: freshItems, at: firstPinnedIdx)
+            } else {
+                updated.append(contentsOf: freshItems)
+            }
         }
 
         if isSubsequentScan && !fresh.isEmpty {
@@ -319,7 +331,8 @@ final class LaunchpadStore: ObservableObject {
     }
 
     private func computeVisibleItems(from list: [LayoutItem]) -> [LayoutItem] {
-        list.compactMap { item in
+        var seenWidgetCategories = Set<WidgetCategoryGroup>()
+        return list.compactMap { item in
             switch item {
             case .app(let id):
                 return isVisibleApp(id) ? item : nil
@@ -329,7 +342,8 @@ final class LaunchpadStore: ObservableObject {
                 folder.apps = apps
                 return .folder(folder)
             case .widget(let config):
-                return config.isEnabled ? item : nil
+                guard config.isEnabled else { return nil }
+                return seenWidgetCategories.insert(config.kind.categoryGroup).inserted ? item : nil
             }
         }
     }
@@ -356,18 +370,27 @@ final class LaunchpadStore: ObservableObject {
         let others = visibleItems.filter { $0.id != id }
         let destination = max(0, min(target, others.count))
         var copy = items
-        let moving = copy.remove(at: from)
+        var moving = copy.remove(at: from)
+        let insertionIndex: Int
         if destination == others.count {
             if let last = others.last, let index = copy.firstIndex(where: { $0.id == last.id }) {
-                copy.insert(moving, at: index + 1)
+                insertionIndex = index + 1
             } else {
-                copy.append(moving)
+                insertionIndex = copy.count
             }
         } else if let index = copy.firstIndex(where: { $0.id == others[destination].id }) {
-            copy.insert(moving, at: index)
+            insertionIndex = index
         } else {
-            copy.append(moving)
+            insertionIndex = copy.count
         }
+        if case .folder(var movingFolder) = moving, movingFolder.pinToLastPage {
+            // Si l'utilisateur sort manuellement un dossier Apple avant le groupe épinglé, on retire l'épinglage automatique.
+            if let firstPinned = copy.firstIndex(where: { $0.folder?.pinToLastPage == true }), insertionIndex < firstPinned {
+                movingFolder.pinToLastPage = false
+                moving = .folder(movingFolder)
+            }
+        }
+        copy.insert(moving, at: insertionIndex)
         if copy != items { commit(copy) }
     }
 
@@ -828,9 +851,17 @@ final class LaunchpadStore: ObservableObject {
         for app in apps {
             let bid = app.normalizedBundleID ?? ""
             let isUtilitiesPath = app.id.contains("/Utilities/")
-            let isSystemApple = bid.hasPrefix("com.apple.") || app.id.hasPrefix("/System/Applications")
+            // Seules les véritables applications Apple (com.apple.*, hors web apps Safari) entrent dans les dossiers Apple.
+            let isSystemApple = bid.hasPrefix("com.apple.")
+                && !bid.hasPrefix("com.apple.Safari.WebApp")
+                && !bid.hasPrefix("com.apple.WebApp")
 
-            if utilityIDs.contains(bid) || (isSystemApple && isUtilitiesPath) {
+            guard isSystemApple else {
+                otherApps.append(app)
+                continue
+            }
+
+            if utilityIDs.contains(bid) || isUtilitiesPath {
                 utilitiesApps.append(app)
             } else if productivityIDs.contains(bid) {
                 productivityApps.append(app)
@@ -840,10 +871,8 @@ final class LaunchpadStore: ObservableObject {
                 internetApps.append(app)
             } else if gameIDs.contains(bid) {
                 gamesApps.append(app)
-            } else if isSystemApple {
-                utilitiesApps.append(app)
             } else {
-                otherApps.append(app)
+                utilitiesApps.append(app)
             }
         }
 
@@ -855,26 +884,30 @@ final class LaunchpadStore: ObservableObject {
 
         var result: [LayoutItem] = []
 
-        let folderSpecs: [(String, FolderVisualStyle, String, [AppInfo])] = [
-            (internetName, .frostedGlass, "globe", internetApps),
-            (productivityName, .clearGlass, "doc.text.fill", productivityApps),
-            (mediaName, .silkSand, "music.note", mediaApps),
-            (utilitiesName, .matteOnyx, "wrench.and.screwdriver.fill", utilitiesApps),
-            (gamesName, .obsidianWaves, "gamecontroller.fill", gamesApps)
+        // 1. Toutes les applications externes d'abord (remplissent les premières pages).
+        result.append(contentsOf: sortedIDs(otherApps).map { .app($0) })
+
+        // 2. Tous les dossiers Apple regroupés ensuite sur la dernière page (verre translucide cohérent avec le thème).
+        let folderSpecs: [(String, FolderVisualStyle, [AppInfo])] = [
+            (internetName, .frostedGlass, internetApps),
+            (productivityName, .frostedGlass, productivityApps),
+            (mediaName, .frostedGlass, mediaApps),
+            (utilitiesName, .frostedGlass, utilitiesApps),
+            (gamesName, .frostedGlass, gamesApps)
         ]
 
-        for (name, style, symbol, groupApps) in folderSpecs where !groupApps.isEmpty {
+        for (name, style, groupApps) in folderSpecs where !groupApps.isEmpty {
             let folder = FolderData(
                 id: UUID().uuidString,
                 name: name,
                 apps: sortedIDs(groupApps),
                 style: style,
-                iconSymbol: symbol
+                iconSymbol: nil,
+                pinToLastPage: true
             )
             result.append(.folder(folder))
         }
 
-        result.append(contentsOf: sortedIDs(otherApps).map { .app($0) })
         return result
     }
 
@@ -1023,6 +1056,10 @@ final class LaunchpadStore: ObservableObject {
         return result
     }
 
+    func widget(in category: WidgetCategoryGroup) -> CustomWidgetConfig? {
+        items.compactMap(\.widget).first { $0.kind.categoryGroup == category }
+    }
+
     @discardableResult
     func addWidget(
         _ config: CustomWidgetConfig,
@@ -1037,25 +1074,33 @@ final class LaunchpadStore: ObservableObject {
         var enabledConfig = config
         enabledConfig.isEnabled = true
         let newItem = LayoutItem.widget(enabledConfig)
+        let targetCategory = enabledConfig.kind.categoryGroup
+
+        // Un seul widget maximum par catégorie (Musique, Météo, Calendrier, Horloge, etc.)
+        let replacedKinds = items.compactMap(\.widget)
+            .filter { $0.kind.categoryGroup == targetCategory && $0.id != enabledConfig.id }
+            .map(\.kind)
+        let baseWithoutSameCategory = items.filter { item in
+            guard let existingWidget = item.widget else { return true }
+            return existingWidget.kind.categoryGroup != targetCategory
+        }
 
         let copy: [LayoutItem]
         if let targetPage {
             copy = insertItemOnPage(
                 newItem,
-                into: items,
+                into: baseWithoutSameCategory,
                 targetPage: targetPage,
                 columns: columns,
                 rows: rows
             )
         } else if let target = targetIndex {
-            var temp = items
-            temp.removeAll { $0.id == enabledConfig.id }
-            let visibleBase = computeVisibleItems(from: temp)
-            copy = insert(newItem, atVisibleIndex: min(max(0, target), visibleBase.count), in: temp, visibleBase: visibleBase)
+            let visibleBase = computeVisibleItems(from: baseWithoutSameCategory)
+            copy = insert(newItem, atVisibleIndex: min(max(0, target), visibleBase.count), in: baseWithoutSameCategory, visibleBase: visibleBase)
         } else {
             copy = insertItemOnPage(
                 newItem,
-                into: items,
+                into: baseWithoutSameCategory,
                 targetPage: 0,
                 columns: columns,
                 rows: rows
@@ -1063,7 +1108,13 @@ final class LaunchpadStore: ObservableObject {
         }
 
         if GridLayoutEngine.canLayout(items: computeVisibleItems(from: copy), columns: columns, rows: rows) {
+            for oldKind in replacedKinds where WidgetManager.shared.isEnabled(oldKind) {
+                WidgetManager.shared.toggleWidget(oldKind)
+            }
             WidgetManager.shared.updateSize(for: enabledConfig.kind, size: enabledConfig.size)
+            if enabledConfig.kind.categoryGroup == .music {
+                WidgetManager.shared.updateMusicAppearance(for: enabledConfig.kind, appearance: enabledConfig.musicAppearance)
+            }
             if !WidgetManager.shared.isEnabled(enabledConfig.kind) {
                 WidgetManager.shared.toggleWidget(enabledConfig.kind)
             }
@@ -1167,7 +1218,11 @@ final class LaunchpadStore: ObservableObject {
         guard let data = try? Data(contentsOf: layoutURL) else { return }
         do {
             let file = try JSONDecoder().decode(LayoutFile.self, from: data)
-            items = file.items
+            var seenCategories = Set<WidgetCategoryGroup>()
+            items = file.items.filter { item in
+                guard let w = item.widget else { return true }
+                return seenCategories.insert(w.kind.categoryGroup).inserted
+            }
             hidden = Set(file.hidden)
             customNames = file.customNames
             hasLayoutFile = true
@@ -1175,7 +1230,11 @@ final class LaunchpadStore: ObservableObject {
             // Si des widgets étaient activés dans WidgetManager mais ne sont pas encore dans la grille,
             // on les insère au début pour un accueil fluide sans bug de superposition.
             if LicenseManager.shared.isPro && !items.contains(where: { $0.isWidget }) {
-                let enabledConfigs = WidgetManager.shared.widgets.filter { $0.isEnabled }.sorted { $0.order < $1.order }
+                var insertedCategories = Set<WidgetCategoryGroup>()
+                let enabledConfigs = WidgetManager.shared.widgets
+                    .filter { $0.isEnabled }
+                    .sorted { $0.order < $1.order }
+                    .filter { insertedCategories.insert($0.kind.categoryGroup).inserted }
                 if !enabledConfigs.isEmpty {
                     items.insert(contentsOf: enabledConfigs.map { LayoutItem.widget($0) }, at: 0)
                 }

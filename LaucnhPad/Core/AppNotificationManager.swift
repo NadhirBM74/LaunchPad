@@ -17,6 +17,7 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         case newApps = "new_apps"
         case tip = "tip"
         case updateAvailable = "update_available"
+        case widgetAdded = "widget_added"
         case adminDiagnostic = "admin_diagnostic"
         case custom = "custom"
     }
@@ -239,7 +240,20 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         )
     }
 
-    /// 7. Notification de diagnostic administrateur
+    /// 7. Notification de confirmation d'ajout / mise à jour de widget
+    public func sendWidgetAddedNotification(widgetName: String, replacedExisting: Bool = false) {
+        sendNotification(
+            identifier: "launchpad.widget.added.\(Date().timeIntervalSince1970)",
+            title: replacedExisting ? "Widget mis à jour ✨" : "Widget ajouté ✅",
+            subtitle: widgetName,
+            body: replacedExisting
+                ? "Le widget « \(widgetName) » a bien remplacé le précédent sur votre LaunchPad."
+                : "Le widget « \(widgetName) » a bien été ajouté au LaunchPad.",
+            type: .widgetAdded
+        )
+    }
+
+    /// 8. Notification de diagnostic administrateur
     public func sendAdminDiagnosticNotification() {
         sendNotification(
             identifier: "launchpad.admin.diagnostic",
@@ -272,7 +286,7 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
 
         Task { @MainActor in
             switch type {
-            case .welcome, .tip, .newApps:
+            case .welcome, .tip, .newApps, .widgetAdded:
                 NotificationCenter.default.post(name: .requestOpenLaunchpad, object: nil)
             case .proActivated, .trialStarted, .trialExpired:
                 NotificationCenter.default.post(name: .openSettingsTab, object: SettingsPanel.SettingsTab.license)

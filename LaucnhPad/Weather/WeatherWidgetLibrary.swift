@@ -311,9 +311,10 @@ struct PremiumWeatherWidgetView: View {
     // MARK: - Thème 1 : Apple Minimal (Photo 5 Col 1 Haut/Bas & Col 3 Haut)
 
     private func theme1AppleMinimal(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165 && w < 200
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         let isWide = w > h * 1.25
-        let pad: CGFloat = isCompact ? 12 : 16
+        let pad: CGFloat = isCompact ? 11 : (isTall && w < 200 ? 12 : 16)
 
         return ZStack {
             darkObsidianStreakBackground(w: w, h: h)
@@ -325,9 +326,11 @@ struct PremiumWeatherWidgetView: View {
                             Text(data.city)
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
                             Text(data.conditionDisplay)
                                 .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(.white.opacity(0.65))
+                                .lineLimit(1)
                         }
                         Spacer()
                         Image(systemName: data.outlineSymbol)
@@ -337,26 +340,19 @@ struct PremiumWeatherWidgetView: View {
                 } else {
                     VStack(alignment: .leading, spacing: isCompact ? 4 : 8) {
                         HStack {
-                            if !isCompact {
-                                Image(systemName: data.outlineSymbol)
-                                    .font(.system(size: 26, weight: .light))
-                                    .foregroundStyle(.white)
-                            }
                             Spacer()
-                            if isCompact {
-                                Image(systemName: data.outlineSymbol)
-                                    .font(.system(size: 22, weight: .light))
-                                    .foregroundStyle(.white)
-                            }
+                            Image(systemName: data.outlineSymbol)
+                                .font(.system(size: isCompact ? 20 : 25, weight: .light))
+                                .foregroundStyle(.white)
                         }
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(data.city)
-                                .font(.system(size: isCompact ? 12.5 : 15, weight: .medium))
+                                .font(.system(size: isCompact ? 12 : 15, weight: .medium))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                             Text(data.conditionDisplay)
-                                .font(.system(size: isCompact ? 10.5 : 12.5, weight: .regular))
+                                .font(.system(size: isCompact ? 10 : 12.5, weight: .regular))
                                 .foregroundStyle(.white.opacity(0.65))
                                 .lineLimit(1)
                         }
@@ -366,7 +362,7 @@ struct PremiumWeatherWidgetView: View {
                 Spacer(minLength: 4)
 
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 40 : 54, weight: .regular, design: .default))
+                    .font(.system(size: isCompact ? 38 : (isTall ? 46 : 54), weight: .regular, design: .default))
                     .foregroundStyle(.white)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
@@ -375,8 +371,30 @@ struct PremiumWeatherWidgetView: View {
                     Text("↑\(data.high)°")
                     Text("↓\(data.low)°")
                 }
-                .font(.system(size: isCompact ? 10.5 : 12.5, weight: .medium))
+                .font(.system(size: isCompact ? 10 : 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.62))
+
+                if isTall {
+                    Divider().background(Color.white.opacity(0.14)).padding(.vertical, 8)
+                    VStack(spacing: 5) {
+                        ForEach(Array(data.daily.prefix(3).enumerated()), id: \.offset) { _, d in
+                            HStack(spacing: 6) {
+                                Text(d.day)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.72))
+                                    .frame(width: 28, alignment: .leading)
+                                Image(systemName: d.symbol)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                Spacer()
+                                Text("\(d.low)° / \(d.high)°")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
+                }
             }
             .padding(pad)
         }
@@ -385,7 +403,8 @@ struct PremiumWeatherWidgetView: View {
     // MARK: - Thème 2 : Glassmorphism
 
     private func theme2Glassmorphism(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165 && w < 200
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             LinearGradient(
                 colors: [
@@ -405,90 +424,121 @@ struct PremiumWeatherWidgetView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(data.city)
-                            .font(.system(size: isCompact ? 12.5 : 15, weight: .bold))
+                            .font(.system(size: isCompact ? 12 : 14.5, weight: .bold))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                         Text(data.conditionDisplay)
-                            .font(.system(size: isCompact ? 10 : 12, weight: .medium))
+                            .font(.system(size: isCompact ? 9.5 : 11.5, weight: .medium))
                             .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
                     }
                     Spacer()
-                    GlowingSunCloudBadge(size: isCompact ? 30 : 40)
+                    GlowingSunCloudBadge(size: isCompact ? 26 : 36)
                 }
 
                 Spacer(minLength: 2)
 
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 36 : 48, weight: .bold, design: .rounded))
+                    .font(.system(size: isCompact ? 34 : (isTall ? 44 : 48), weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                HStack(spacing: 6) {
+                if isTall {
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { _, hItem in
+                            HStack {
+                                Text(hItem.time)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.75))
+                                Spacer()
+                                Image(systemName: hItem.symbol)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.white)
+                                Text("\(hItem.temp)°")
+                                    .font(.system(size: 10.5, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                HStack(spacing: 5) {
                     glassMetricPill(icon: "drop.fill", text: "\(data.humidity)%", color: .cyan)
                     glassMetricPill(icon: "wind", text: data.windSpeed, color: .mint)
                 }
             }
-            .padding(isCompact ? 11 : 15)
+            .padding(isCompact ? 10 : 14)
         }
     }
 
-    // MARK: - Thème 3 : Dark Premium Forecast (Photo 5 Col 2, Col 3 Milieu, Col 6 Haut/Milieu)
+    // MARK: - Thème 3 : Dark Premium Forecast
 
     private func theme3DarkPremium(w: CGFloat, h: CGFloat) -> some View {
-        let isTall = h > 220
-        let isCompact = h < 165 && w < 200
-        let rowCount = isTall ? 6 : 4
+        let isTall = h > w * 1.15 || h > 220
+        let isCompact = h < 165 || w < 210
+        let isNarrow = w < 210
+        let rowCount = isTall ? 5 : 4
 
         return ZStack {
             darkObsidianStreakBackground(w: w, h: h)
 
             VStack(alignment: .leading, spacing: isCompact ? 4 : 7) {
-                // En-tête : Nuage + 69° à gauche, New York H:87° L:69° à droite
                 HStack(alignment: .center) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 4) {
                         Image(systemName: data.filledSymbol)
-                            .font(.system(size: isCompact ? 13 : 16))
+                            .font(.system(size: isCompact ? 12 : 16))
                             .symbolRenderingMode(.multicolor)
                         Text("\(data.temp)°")
-                            .font(.system(size: isCompact ? 16 : 20, weight: .bold))
+                            .font(.system(size: isCompact ? 15.5 : 20, weight: .bold))
                             .foregroundStyle(.white)
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 0.5) {
                         Text(data.city)
-                            .font(.system(size: isCompact ? 9.5 : 11, weight: .semibold))
+                            .font(.system(size: isCompact ? 9 : 11, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Text("H:\(data.high)° L:\(data.low)°")
-                            .font(.system(size: isCompact ? 8 : 9, weight: .medium))
+                            .font(.system(size: isCompact ? 7.5 : 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
                     }
                 }
 
-                // Si format Tall ou Grand : Barre lever/coucher du soleil + 3 pilules de métriques (Photo 5 Col 6)
                 if isTall {
-                    HStack {
+                    HStack(spacing: 4) {
                         Label(data.sunset, systemImage: "sunset.fill")
-                            .font(.system(size: 8.5, weight: .medium))
+                            .font(.system(size: isNarrow ? 7.5 : 8.5, weight: .medium))
                             .foregroundStyle(.orange)
+                            .lineLimit(1)
                         Rectangle()
                             .fill(LinearGradient(colors: [.orange.opacity(0.5), .yellow.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
                             .frame(height: 1.5)
                         Label(data.sunrise, systemImage: "sunrise.fill")
-                            .font(.system(size: 8.5, weight: .medium))
+                            .font(.system(size: isNarrow ? 7.5 : 8.5, weight: .medium))
                             .foregroundStyle(.yellow)
+                            .lineLimit(1)
                     }
                     .padding(.vertical, 2)
 
-                    HStack(spacing: 4) {
-                        darkMetricPill(icon: "drop.fill", text: "\(data.humidity)%", color: .cyan)
-                        darkMetricPill(icon: "wind", text: data.windSpeed, color: .white.opacity(0.8))
-                        darkMetricPill(icon: "umbrella.fill", text: "\(data.precipProb)%", color: .blue)
+                    if isNarrow {
+                        HStack(spacing: 4) {
+                            darkMetricPill(icon: "drop.fill", text: "\(data.humidity)%", color: .cyan)
+                            darkMetricPill(icon: "umbrella.fill", text: "\(data.precipProb)%", color: .blue)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            darkMetricPill(icon: "drop.fill", text: "\(data.humidity)%", color: .cyan)
+                            darkMetricPill(icon: "wind", text: data.windSpeed, color: .white.opacity(0.8))
+                            darkMetricPill(icon: "umbrella.fill", text: "\(data.precipProb)%", color: .blue)
+                        }
                     }
                 }
 
                 Spacer(minLength: 1)
 
-                // Liste des jours avec barres thermiques orange/jaune (Photo 5 Col 2 & 3 & 6)
-                VStack(spacing: isCompact ? 3.5 : 5.5) {
+                VStack(spacing: isCompact ? 4 : 5.5) {
                     ForEach(Array(data.daily.prefix(rowCount).enumerated()), id: \.offset) { _, d in
                         dailyTemperatureBarRow(
                             day: d.day,
@@ -497,23 +547,23 @@ struct PremiumWeatherWidgetView: View {
                             high: d.high,
                             barStart: d.barStart,
                             barEnd: d.barEnd,
-                            isCompact: isCompact
+                            isCompact: isCompact || isNarrow
                         )
                     }
                 }
             }
-            .padding(isCompact ? 10 : 14)
+            .padding(isCompact ? 9 : 14)
         }
     }
 
-    // MARK: - Thème 4 : Light Minimal Horizon (Photo 5 Col 6 Bas)
+    // MARK: - Thème 4 : Light Minimal Horizon
 
     private func theme4LightMinimal(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             Color(red: 0.96, green: 0.97, blue: 0.99)
 
-            // Soleil rouge-orangé posé sur l'horizon à droite
             Circle()
                 .fill(
                     RadialGradient(
@@ -528,9 +578,8 @@ struct PremiumWeatherWidgetView: View {
                     )
                 )
                 .frame(width: min(w, h) * 0.42, height: min(w, h) * 0.42)
-                .offset(x: w * 0.22, y: h * 0.04 + (animateWeather ? -3 : 3))
+                .offset(x: w * 0.22, y: h * (isTall ? 0.14 : 0.04) + (animateWeather ? -3 : 3))
 
-            // Dôme blanc givré en courbe au premier plan (Photo 5 Col 6 Bas)
             HorizonDomeShape()
                 .fill(
                     LinearGradient(
@@ -544,38 +593,64 @@ struct PremiumWeatherWidgetView: View {
                 )
                 .shadow(color: .black.opacity(0.05), radius: 6, y: -2)
 
-            // En-tête minimaliste en haut
-            VStack {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Evening")
+                        Text(data.city)
                             .font(.system(size: isCompact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(Color(white: 0.12))
+                            .lineLimit(1)
                         Text(data.conditionDisplay)
                             .font(.system(size: isCompact ? 9.5 : 11, weight: .regular))
                             .foregroundStyle(Color(white: 0.45))
+                            .lineLimit(1)
                     }
                     Spacer()
                     Text("\(data.temp)°")
-                        .font(.system(size: isCompact ? 14 : 16, weight: .bold))
+                        .font(.system(size: isCompact ? 14 : (isTall ? 24 : 16), weight: .bold))
                         .foregroundStyle(Color(white: 0.12))
                 }
+                if isTall {
+                    Text("↑\(data.high)°  ↓\(data.low)° • Ressenti \(data.feelsLike)°")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color(white: 0.35))
+                        .lineLimit(1)
+                }
                 Spacer()
+                if isTall {
+                    HStack(spacing: 0) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { idx, hItem in
+                            if idx > 0 { Spacer(minLength: 2) }
+                            VStack(spacing: 2) {
+                                Text(hItem.time)
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(Color(white: 0.40))
+                                Image(systemName: hItem.symbol)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color(white: 0.18))
+                                Text("\(hItem.temp)°")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color(white: 0.12))
+                            }
+                        }
+                    }
+                    .padding(.bottom, 4)
+                }
             }
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 11 : 16)
         }
     }
 
-    // MARK: - Thème 5 : Gradient Pastel & Sky (Photo 5 Col 4 Haut Rose & Col 3 Bas Bleu)
+    // MARK: - Thème 5 : Gradient Pastel & Sky
 
     private func theme5GradientPastel(w: CGFloat, h: CGFloat) -> some View {
         let isWide = w > h * 1.25
-        let isCompact = h < 165 && !isWide
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 180) && !isWide && !isTall
         let hourCount = isWide ? 5 : 3
 
         return ZStack {
             if isWide {
-                // Photo 5 Col 3 Bas : Bleu acier doux
                 LinearGradient(
                     colors: [
                         Color(red: 0.40, green: 0.56, blue: 0.70),
@@ -585,7 +660,6 @@ struct PremiumWeatherWidgetView: View {
                     endPoint: .bottom
                 )
             } else {
-                // Photo 5 Col 4 Haut : Rose lilas pastel lumineux
                 LinearGradient(
                     colors: [
                         Color(red: 0.97, green: 0.78, blue: 1.00),
@@ -599,18 +673,20 @@ struct PremiumWeatherWidgetView: View {
             let fgColor = isWide ? Color.white : Color(white: 0.08)
             let subColor = isWide ? Color.white.opacity(0.75) : Color(white: 0.25)
 
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: isTall ? 8 : 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("+\(data.temp)°")
-                            .font(.system(size: isCompact ? 28 : 36, weight: .bold))
+                            .font(.system(size: isCompact ? 26 : 36, weight: .bold))
                             .foregroundStyle(fgColor)
-                        Text("H: +\(data.high)° L: +\(data.low)°")
-                            .font(.system(size: isCompact ? 9 : 10.5, weight: .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        Text("H:\(data.high)° L:\(data.low)°")
+                            .font(.system(size: isCompact ? 8.5 : 10.5, weight: .medium))
                             .foregroundStyle(subColor)
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    // Sphère solaire 3D orange doré (Photo 5 Col 4 Haut & Col 3 Bas)
+                    Spacer(minLength: 4)
                     Circle()
                         .fill(
                             RadialGradient(
@@ -620,34 +696,62 @@ struct PremiumWeatherWidgetView: View {
                                 ],
                                 center: UnitPoint(x: 0.35, y: 0.35),
                                 startRadius: 2,
-                                endRadius: isCompact ? 18 : 24
+                                endRadius: isCompact ? 16 : 24
                             )
                         )
-                        .frame(width: isCompact ? 34 : 44, height: isCompact ? 34 : 44)
+                        .frame(width: isCompact ? 32 : 42, height: isCompact ? 32 : 42)
                         .shadow(color: Color.orange.opacity(0.55), radius: 8)
+                }
+
+                if isTall {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(data.city) • \(data.conditionDisplay)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(fgColor)
+                            .lineLimit(1)
+                        VStack(spacing: 4) {
+                            ForEach(Array(data.daily.prefix(3).enumerated()), id: \.offset) { _, d in
+                                HStack {
+                                    Text(d.day)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(subColor)
+                                        .frame(width: 28, alignment: .leading)
+                                    Image(systemName: d.symbol)
+                                        .font(.system(size: 10.5))
+                                        .foregroundStyle(fgColor)
+                                    Spacer()
+                                    Text("\(d.low)° / \(d.high)°")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(fgColor)
+                                }
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.white.opacity(0.28), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .padding(.top, 4)
                 }
 
                 Spacer(minLength: 4)
 
-                // Rangée de prévisions horaires en bas (19:00 +76°, 22:00 +75°, 02:00 +64°)
                 HStack(spacing: 0) {
                     ForEach(Array(data.hourly.prefix(hourCount).enumerated()), id: \.offset) { idx, hItem in
                         if idx > 0 { Spacer(minLength: 2) }
-                        VStack(spacing: isCompact ? 2 : 3) {
+                        VStack(spacing: isCompact ? 1.5 : 3) {
                             Image(systemName: hItem.symbol)
-                                .font(.system(size: isCompact ? 11 : 13, weight: .regular))
+                                .font(.system(size: isCompact ? 10 : 12.5, weight: .regular))
                                 .foregroundStyle(fgColor.opacity(0.85))
                             Text(hItem.time)
-                                .font(.system(size: isCompact ? 8.5 : 9.5, weight: .bold))
+                                .font(.system(size: isCompact ? 8 : 9.5, weight: .bold))
                                 .foregroundStyle(fgColor)
                             Text("+\(hItem.temp)°")
-                                .font(.system(size: isCompact ? 8 : 9, weight: .medium))
+                                .font(.system(size: isCompact ? 7.5 : 9, weight: .medium))
                                 .foregroundStyle(subColor)
                         }
                     }
                 }
             }
-            .padding(isCompact ? 11 : 15)
+            .padding(isCompact ? 10 : 14)
         }
     }
 
@@ -777,14 +881,13 @@ struct PremiumWeatherWidgetView: View {
 
     private func theme7DynamicSky(w: CGFloat, h: CGFloat) -> some View {
         let isWide = w > h * 1.25
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
 
         return ZStack {
             if isWide {
-                // Photo 5 Col 7 Haut : Ciel nocturne sombre + dôme gris-ardoise + soleil rouge
                 Color(red: 0.08, green: 0.09, blue: 0.11)
             } else {
-                // Photo 5 Col 5 Bas : Ciel crépusculaire violet -> corail orangé
                 LinearGradient(
                     colors: [
                         Color(red: 0.53, green: 0.43, blue: 0.68),
@@ -795,7 +898,6 @@ struct PremiumWeatherWidgetView: View {
                 )
             }
 
-            // Soleil rouge incandescent à droite
             Circle()
                 .fill(
                     RadialGradient(
@@ -810,9 +912,8 @@ struct PremiumWeatherWidgetView: View {
                 )
                 .frame(width: min(w, h) * 0.36, height: min(w, h) * 0.36)
                 .shadow(color: Color(red: 1.0, green: 0.25, blue: 0.05).opacity(0.6), radius: 12)
-                .offset(x: w * 0.20, y: h * 0.04)
+                .offset(x: w * 0.20, y: h * (isTall ? 0.14 : 0.04))
 
-            // Colline courbe au premier plan
             HorizonDomeShape()
                 .fill(
                     isWide
@@ -824,25 +925,51 @@ struct PremiumWeatherWidgetView: View {
                         .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
                 )
 
-            // En-tête : Evening / Drizzle + 69°
-            VStack {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Evening")
+                        Text(data.city)
                             .font(.system(size: isCompact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                         Text(data.conditionDisplay)
                             .font(.system(size: isCompact ? 9.5 : 11, weight: .regular))
                             .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
                     }
                     Spacer()
                     Text("\(data.temp)°")
-                        .font(.system(size: isCompact ? 14 : 16, weight: .bold))
+                        .font(.system(size: isCompact ? 14 : (isTall ? 24 : 16), weight: .bold))
                         .foregroundStyle(.white)
                 }
+                if isTall {
+                    Text("↑\(data.high)°  ↓\(data.low)° • Ressenti \(data.feelsLike)°")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
                 Spacer()
+                if isTall {
+                    HStack(spacing: 0) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { idx, hItem in
+                            if idx > 0 { Spacer(minLength: 2) }
+                            VStack(spacing: 2) {
+                                Text(hItem.time)
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.72))
+                                Image(systemName: hItem.symbol)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white)
+                                Text("\(hItem.temp)°")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 4)
+                }
             }
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 11 : 16)
         }
     }
 
@@ -934,7 +1061,8 @@ struct PremiumWeatherWidgetView: View {
     // MARK: - Thème 9 : Neon Nocturne
 
     private func theme9NeonNocturne(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             Color(red: 0.03, green: 0.02, blue: 0.08)
             RadialGradient(
@@ -944,16 +1072,17 @@ struct PremiumWeatherWidgetView: View {
                 endRadius: max(w, h) * 0.75
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(data.city.uppercased())
                         .font(.system(size: isCompact ? 10 : 12, weight: .heavy, design: .monospaced))
                         .tracking(1.2)
                         .foregroundStyle(Color.cyan)
+                        .lineLimit(1)
                         .shadow(color: .cyan.opacity(0.8), radius: 6)
                     Spacer()
                     Image(systemName: data.outlineSymbol)
-                        .font(.system(size: isCompact ? 18 : 22, weight: .semibold))
+                        .font(.system(size: isCompact ? 17 : 22, weight: .semibold))
                         .foregroundStyle(Color(red: 1.0, green: 0.25, blue: 0.85))
                         .shadow(color: Color.pink.opacity(0.9), radius: 8)
                 }
@@ -961,28 +1090,50 @@ struct PremiumWeatherWidgetView: View {
                 Spacer()
 
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 38 : 50, weight: .black, design: .rounded))
+                    .font(.system(size: isCompact ? 36 : 48, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
                     .shadow(color: Color.cyan.opacity(0.85), radius: 10)
 
+                if isTall {
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { _, hItem in
+                            HStack {
+                                Text(hItem.time)
+                                    .foregroundStyle(Color.cyan.opacity(0.8))
+                                Spacer()
+                                Image(systemName: hItem.symbol)
+                                    .foregroundStyle(.white)
+                                Text("\(hItem.temp)°")
+                                    .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.88))
+                            }
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+
                 HStack {
                     Text(data.conditionDisplay.uppercased())
-                        .font(.system(size: isCompact ? 9.5 : 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.88))
-                    Spacer()
-                    Text("H:\(data.high)° L:\(data.low)°")
                         .font(.system(size: isCompact ? 9 : 10.5, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.88))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("H:\(data.high)° L:\(data.low)°")
+                        .font(.system(size: isCompact ? 8.5 : 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color.cyan.opacity(0.85))
+                        .lineLimit(1)
                 }
             }
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - Thème 10 : Liquid Glass
 
     private func theme10LiquidGlass(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             LinearGradient(
                 colors: [
@@ -999,46 +1150,68 @@ struct PremiumWeatherWidgetView: View {
                 HStack {
                     HStack(spacing: 4) {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 9.5, weight: .bold))
                         Text(data.city)
-                            .font(.system(size: isCompact ? 12 : 14, weight: .bold))
+                            .font(.system(size: isCompact ? 11.5 : 13.5, weight: .bold))
                             .lineLimit(1)
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 9)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.white.opacity(0.16), in: Capsule())
 
                     Spacer()
 
-                    GlowingSunCloudBadge(size: isCompact ? 28 : 36)
+                    GlowingSunCloudBadge(size: isCompact ? 26 : 34)
                 }
 
                 Spacer()
 
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(data.temp)°")
-                        .font(.system(size: isCompact ? 38 : 48, weight: .bold, design: .rounded))
+                        .font(.system(size: isCompact ? 34 : 46, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(data.conditionDisplay)
-                            .font(.system(size: isCompact ? 11 : 13, weight: .semibold))
+                            .font(.system(size: isCompact ? 10.5 : 13, weight: .semibold))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                         Text("↑\(data.high)° ↓\(data.low)°")
-                            .font(.system(size: isCompact ? 9.5 : 11, weight: .medium))
+                            .font(.system(size: isCompact ? 9 : 11, weight: .medium))
                             .foregroundStyle(.white.opacity(0.72))
                     }
                 }
+
+                if isTall {
+                    VStack(spacing: 5) {
+                        ForEach(Array(data.daily.prefix(3).enumerated()), id: \.offset) { _, d in
+                            HStack {
+                                Text(d.day)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.75))
+                                Spacer()
+                                Image(systemName: d.symbol)
+                                    .foregroundStyle(.white)
+                                Text("\(d.low)° / \(d.high)°")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    .padding(9)
+                    .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
             }
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - Thème 11 : Dashboard Pro
 
     private func theme11DashboardPro(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             LinearGradient(
                 colors: [Color(red: 0.09, green: 0.12, blue: 0.18), Color(red: 0.05, green: 0.07, blue: 0.11)],
@@ -1050,36 +1223,60 @@ struct PremiumWeatherWidgetView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(data.city)
-                            .font(.system(size: isCompact ? 12 : 14, weight: .bold))
+                            .font(.system(size: isCompact ? 11.5 : 14, weight: .bold))
                             .foregroundStyle(.white)
-                        Text("\(data.conditionDisplay) • Ressenti \(data.feelsLike)°")
+                            .lineLimit(1)
+                        Text("\(data.conditionDisplay) • \(data.feelsLike)°")
                             .font(.system(size: isCompact ? 8.5 : 10, weight: .medium))
                             .foregroundStyle(.white.opacity(0.65))
+                            .lineLimit(1)
                     }
                     Spacer()
                     Text("\(data.temp)°")
-                        .font(.system(size: isCompact ? 24 : 30, weight: .bold, design: .rounded))
+                        .font(.system(size: isCompact ? 22 : 28, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                 }
 
-                // Grille 2x2 de capteurs météo
                 HStack(spacing: 6) {
-                    miniDashboardCell(icon: "drop.fill", label: "HUMIDITÉ", val: "\(data.humidity)%", color: .cyan, compact: isCompact)
-                    miniDashboardCell(icon: "wind", label: "VENT", val: data.windSpeed, color: .mint, compact: isCompact)
+                    miniDashboardCell(icon: "drop.fill", label: "HUMIDITÉ", val: "\(data.humidity)%", color: .cyan, compact: isCompact || w < 190)
+                    miniDashboardCell(icon: "wind", label: "VENT", val: data.windSpeed, color: .mint, compact: isCompact || w < 190)
                 }
                 HStack(spacing: 6) {
-                    miniDashboardCell(icon: "sun.max.fill", label: "UV", val: "\(data.uvIndex) Mod.", color: .yellow, compact: isCompact)
-                    miniDashboardCell(icon: "umbrella.fill", label: "PLUIE", val: "\(data.precipProb)%", color: .blue, compact: isCompact)
+                    miniDashboardCell(icon: "sun.max.fill", label: "UV", val: "\(data.uvIndex) Mod.", color: .yellow, compact: isCompact || w < 190)
+                    miniDashboardCell(icon: "umbrella.fill", label: "PLUIE", val: "\(data.precipProb)%", color: .blue, compact: isCompact || w < 190)
+                }
+
+                if isTall {
+                    Spacer(minLength: 2)
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.daily.prefix(3).enumerated()), id: \.offset) { _, d in
+                            HStack {
+                                Text(d.day)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.70))
+                                Spacer()
+                                Image(systemName: d.symbol)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.white)
+                                Text("\(d.low)° / \(d.high)°")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
-            .padding(isCompact ? 10 : 14)
+            .padding(isCompact ? 9 : 13)
         }
     }
 
     // MARK: - Thème 12 : Compact Essential
 
     private func theme12CompactEssential(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             LinearGradient(
                 colors: [Color(red: 0.12, green: 0.14, blue: 0.20), Color(red: 0.06, green: 0.07, blue: 0.10)],
@@ -1092,6 +1289,7 @@ struct PremiumWeatherWidgetView: View {
                     Text(data.city)
                         .font(.system(size: isCompact ? 11.5 : 13.5, weight: .bold))
                         .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
                     Spacer()
                     Image(systemName: data.filledSymbol)
                         .symbolRenderingMode(.multicolor)
@@ -1101,67 +1299,115 @@ struct PremiumWeatherWidgetView: View {
                 Spacer(minLength: 0)
 
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 44 : 56, weight: .heavy, design: .rounded))
+                    .font(.system(size: isCompact ? 40 : 54, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
+
+                if isTall {
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { _, hItem in
+                            HStack {
+                                Text(hItem.time).foregroundStyle(.white.opacity(0.68))
+                                Spacer()
+                                Image(systemName: hItem.symbol).foregroundStyle(.white)
+                                Text("\(hItem.temp)°").foregroundStyle(.white).fontWeight(.bold)
+                            }
+                            .font(.system(size: 10))
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
 
                 Spacer(minLength: 0)
 
-                HStack {
+                HStack(spacing: 4) {
                     Text(data.conditionDisplay)
-                        .font(.system(size: isCompact ? 9.5 : 11, weight: .semibold))
+                        .font(.system(size: isCompact ? 9 : 11, weight: .semibold))
                         .foregroundStyle(.black)
-                        .padding(.horizontal, 8)
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
                         .padding(.vertical, 2.5)
                         .background(Color.white, in: Capsule())
-                    Spacer()
+                    Spacer(minLength: 2)
                     Text("H:\(data.high)° L:\(data.low)°")
-                        .font(.system(size: isCompact ? 9.5 : 11, weight: .semibold))
+                        .font(.system(size: isCompact ? 8.5 : 10.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
                 }
             }
-            .padding(isCompact ? 11 : 15)
+            .padding(isCompact ? 10 : 14)
         }
     }
 
     // MARK: - Thème 13 : Analog Weather Instrument
 
     private func theme13AnalogInstrument(w: CGFloat, h: CGFloat) -> some View {
-        let dialSize = min(w, h) * 0.78
+        let isTall = h > w * 1.15
+        let dialSize = isTall ? min(w * 0.80, h * 0.48) : min(w, h) * 0.78
         return ZStack {
             Color(red: 0.08, green: 0.09, blue: 0.11)
 
-            ZStack {
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 2)
-                    .frame(width: dialSize, height: dialSize)
+            VStack(spacing: isTall ? 12 : 0) {
+                if isTall { Spacer(minLength: 4) }
 
-                ForEach(0..<24, id: \.self) { i in
-                    Rectangle()
-                        .fill(i % 4 == 0 ? Color.orange : Color.white.opacity(0.32))
-                        .frame(width: 1.5, height: i % 4 == 0 ? 7 : 4)
-                        .offset(y: -dialSize / 2 + 5)
-                        .rotationEffect(.degrees(Double(i) * 15))
+                ZStack {
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 2)
+                        .frame(width: dialSize, height: dialSize)
+
+                    ForEach(0..<24, id: \.self) { i in
+                        Rectangle()
+                            .fill(i % 4 == 0 ? Color.orange : Color.white.opacity(0.32))
+                            .frame(width: 1.5, height: i % 4 == 0 ? 7 : 4)
+                            .offset(y: -dialSize / 2 + 5)
+                            .rotationEffect(.degrees(Double(i) * 15))
+                    }
+
+                    Circle()
+                        .trim(from: 0.15, to: 0.72)
+                        .stroke(
+                            AngularGradient(colors: [.cyan, .green, .yellow, .orange, .red], center: .center),
+                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        )
+                        .frame(width: dialSize * 0.80, height: dialSize * 0.80)
+                        .rotationEffect(.degrees(90))
+
+                    VStack(spacing: 1) {
+                        Text(data.city.uppercased())
+                            .font(.system(size: max(7, dialSize * 0.075), weight: .bold))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1)
+                        Text("\(data.temp)°")
+                            .font(.system(size: dialSize * 0.28, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("\(data.humidity)% RH")
+                            .font(.system(size: max(7.5, dialSize * 0.085), weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.orange)
+                    }
                 }
 
-                Circle()
-                    .trim(from: 0.15, to: 0.72)
-                    .stroke(
-                        AngularGradient(colors: [.cyan, .green, .yellow, .orange, .red], center: .center),
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                    )
-                    .frame(width: dialSize * 0.80, height: dialSize * 0.80)
-                    .rotationEffect(.degrees(90))
-
-                VStack(spacing: 1) {
-                    Text(data.city.uppercased())
-                        .font(.system(size: max(7.5, dialSize * 0.075), weight: .bold))
-                        .foregroundStyle(.white.opacity(0.6))
-                    Text("\(data.temp)°")
-                        .font(.system(size: dialSize * 0.28, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text("\(data.humidity)% RH")
-                        .font(.system(size: max(8, dialSize * 0.085), weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.orange)
+                if isTall {
+                    VStack(spacing: 5) {
+                        HStack {
+                            Text(data.conditionDisplay)
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Text("↑\(data.high)° ↓\(data.low)°")
+                                .foregroundStyle(.orange)
+                        }
+                        .font(.system(size: 10.5, weight: .semibold))
+                        HStack {
+                            Text("Vent \(data.windSpeed)")
+                            Spacer()
+                            Text("Pluie \(data.precipProb)%")
+                        }
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.68))
+                    }
+                    .padding(10)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(.horizontal, 10)
+                    Spacer(minLength: 4)
                 }
             }
         }
@@ -1170,7 +1416,8 @@ struct PremiumWeatherWidgetView: View {
     // MARK: - Thème 14 : Nature Landscape
 
     private func theme14NatureLandscape(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             LinearGradient(
                 colors: [
@@ -1182,45 +1429,62 @@ struct PremiumWeatherWidgetView: View {
                 endPoint: .bottom
             )
 
-            // Soleil doux
             Circle()
                 .fill(Color(red: 1.0, green: 0.90, blue: 0.65).opacity(0.85))
                 .frame(width: min(w, h) * 0.28, height: min(w, h) * 0.28)
-                .offset(x: w * 0.18, y: -h * 0.10)
+                .offset(x: w * 0.18, y: -h * (isTall ? 0.04 : 0.10))
 
-            // Montagnes superposées en bas
             VStack {
                 Spacer()
                 MountainRangeShape()
                     .fill(Color(red: 0.12, green: 0.24, blue: 0.30))
-                    .frame(height: h * 0.42)
+                    .frame(height: h * (isTall ? 0.36 : 0.42))
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(data.city)
-                        .font(.system(size: isCompact ? 12 : 14, weight: .bold))
+                        .font(.system(size: isCompact ? 11.5 : 14, weight: .bold))
+                        .lineLimit(1)
                     Spacer()
                     Text(data.conditionDisplay)
-                        .font(.system(size: isCompact ? 10 : 12, weight: .medium))
+                        .font(.system(size: isCompact ? 9.5 : 12, weight: .medium))
                         .opacity(0.85)
+                        .lineLimit(1)
                 }
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 34 : 44, weight: .bold, design: .rounded))
+                    .font(.system(size: isCompact ? 32 : 44, weight: .bold, design: .rounded))
                 Spacer()
+                if isTall {
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { _, hItem in
+                            HStack {
+                                Text(hItem.time).opacity(0.82)
+                                Spacer()
+                                Image(systemName: hItem.symbol)
+                                Text("\(hItem.temp)°").fontWeight(.bold)
+                            }
+                            .font(.system(size: 10))
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
                 Text("↑\(data.high)° ↓\(data.low)° • Vent \(data.windSpeed)")
-                    .font(.system(size: isCompact ? 9 : 10.5, weight: .medium))
+                    .font(.system(size: isCompact ? 8.5 : 10.5, weight: .medium))
                     .opacity(0.85)
+                    .lineLimit(1)
             }
             .foregroundStyle(.white)
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - Thème 15 : Aurora Borealis
 
     private func theme15AuroraBorealis(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             Color(red: 0.02, green: 0.05, blue: 0.10)
 
@@ -1236,11 +1500,12 @@ struct PremiumWeatherWidgetView: View {
             )
             .blur(radius: 10)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(data.city)
-                        .font(.system(size: isCompact ? 12.5 : 15, weight: .bold))
+                        .font(.system(size: isCompact ? 12 : 15, weight: .bold))
                         .foregroundStyle(.white)
+                        .lineLimit(1)
                     Spacer()
                     Image(systemName: "sparkles")
                         .foregroundStyle(Color(red: 0.25, green: 0.96, blue: 0.72))
@@ -1248,33 +1513,53 @@ struct PremiumWeatherWidgetView: View {
                 Text(data.conditionDisplay)
                     .font(.system(size: isCompact ? 10 : 12, weight: .medium))
                     .foregroundStyle(Color(red: 0.45, green: 0.96, blue: 0.80))
+                    .lineLimit(1)
 
                 Spacer()
 
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 38 : 50, weight: .light, design: .rounded))
+                    .font(.system(size: isCompact ? 36 : 48, weight: .light, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("H:\(data.high)° L:\(data.low)° • Humidité \(data.humidity)%")
-                    .font(.system(size: isCompact ? 9.5 : 11, weight: .medium))
+                if isTall {
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.daily.prefix(3).enumerated()), id: \.offset) { _, d in
+                            HStack {
+                                Text(d.day).foregroundStyle(.white.opacity(0.75))
+                                Spacer()
+                                Image(systemName: d.symbol).foregroundStyle(Color(red: 0.45, green: 0.96, blue: 0.80))
+                                Text("\(d.low)° / \(d.high)°").foregroundStyle(.white).fontWeight(.semibold)
+                            }
+                            .font(.system(size: 10))
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                Text("H:\(data.high)° L:\(data.low)° • \(data.humidity)%")
+                    .font(.system(size: isCompact ? 9 : 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.70))
+                    .lineLimit(1)
             }
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - Thème 16 : Monochrome Swiss
 
     private func theme16MonochromeSwiss(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             Color.black
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text(data.city.uppercased())
-                        .font(.system(size: isCompact ? 10 : 12, weight: .heavy))
+                        .font(.system(size: isCompact ? 9.5 : 12, weight: .heavy))
                         .tracking(1.5)
+                        .lineLimit(1)
                     Spacer()
                     Image(systemName: data.outlineSymbol)
                         .font(.system(size: isCompact ? 14 : 18, weight: .bold))
@@ -1286,8 +1571,23 @@ struct PremiumWeatherWidgetView: View {
                 Spacer()
 
                 Text("\(data.temp)°")
-                    .font(.system(size: isCompact ? 42 : 54, weight: .black))
+                    .font(.system(size: isCompact ? 40 : 54, weight: .black))
                     .tracking(-1.5)
+
+                if isTall {
+                    VStack(spacing: 4) {
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { _, hItem in
+                            HStack {
+                                Text(hItem.time)
+                                Spacer()
+                                Text("\(hItem.temp)°")
+                            }
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .opacity(0.82)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
 
                 Spacer()
 
@@ -1296,20 +1596,23 @@ struct PremiumWeatherWidgetView: View {
 
                 HStack {
                     Text(data.conditionDisplay.uppercased())
-                    Spacer()
-                    Text("\(data.low)° / \(data.high)°")
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("\(data.low)°/\(data.high)°")
+                        .lineLimit(1)
                 }
-                .font(.system(size: isCompact ? 9 : 10.5, weight: .bold, design: .monospaced))
+                .font(.system(size: isCompact ? 8.5 : 10.5, weight: .bold, design: .monospaced))
             }
             .foregroundStyle(.white)
-            .padding(isCompact ? 12 : 16)
+            .padding(isCompact ? 10 : 15)
         }
     }
 
     // MARK: - Thème 17 : Retro Weather Station
 
     private func theme17RetroStation(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         let lcdAmber = Color(red: 1.0, green: 0.72, blue: 0.18)
 
         return ZStack {
@@ -1326,7 +1629,8 @@ struct PremiumWeatherWidgetView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("WX-80 // \(data.city.uppercased())")
-                        .font(.system(size: isCompact ? 8.5 : 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: isCompact ? 8 : 10, weight: .bold, design: .monospaced))
+                        .lineLimit(1)
                     Spacer()
                     Circle().fill(lcdAmber).frame(width: 6, height: 6)
                 }
@@ -1335,10 +1639,28 @@ struct PremiumWeatherWidgetView: View {
 
                 HStack(alignment: .lastTextBaseline) {
                     Text("\(data.temp)°\(data.unit)")
-                        .font(.system(size: isCompact ? 32 : 42, weight: .bold, design: .monospaced))
+                        .font(.system(size: isCompact ? 30 : 42, weight: .bold, design: .monospaced))
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
                     Spacer()
                     Image(systemName: data.outlineSymbol)
                         .font(.system(size: isCompact ? 18 : 24, weight: .bold))
+                }
+
+                if isTall {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Rectangle().fill(lcdAmber.opacity(0.28)).frame(height: 1)
+                        ForEach(Array(data.hourly.prefix(3).enumerated()), id: \.offset) { _, hItem in
+                            HStack {
+                                Text(hItem.time)
+                                Spacer()
+                                Text("\(hItem.temp)°\(data.unit)")
+                            }
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        }
+                        Rectangle().fill(lcdAmber.opacity(0.28)).frame(height: 1)
+                    }
+                    .padding(.vertical, 4)
                 }
 
                 Spacer()
@@ -1346,59 +1668,79 @@ struct PremiumWeatherWidgetView: View {
                 HStack {
                     Text("RH:\(data.humidity)%")
                     Spacer()
-                    Text("HI:\(data.high)° LO:\(data.low)°")
+                    Text("H:\(data.high)° L:\(data.low)°")
                 }
-                .font(.system(size: isCompact ? 8.5 : 10, weight: .bold, design: .monospaced))
+                .font(.system(size: isCompact ? 8 : 10, weight: .bold, design: .monospaced))
                 .opacity(0.80)
             }
             .foregroundStyle(lcdAmber)
-            .padding(isCompact ? 16 : 20)
+            .padding(isCompact ? 14 : 18)
         }
     }
 
     // MARK: - Thème 18 : Dynamic Island Style
 
     private func theme18DynamicIsland(w: CGFloat, h: CGFloat) -> some View {
-        let isCompact = h < 165
+        let isTall = h > w * 1.15
+        let isCompact = (h < 165 || w < 190) && !isTall
         return ZStack {
             Color.black
 
             VStack(spacing: isCompact ? 6 : 10) {
-                // Capsule supérieure Dynamic Island
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Image(systemName: data.filledSymbol)
                         .symbolRenderingMode(.multicolor)
-                        .font(.system(size: isCompact ? 12 : 14))
+                        .font(.system(size: isCompact ? 11.5 : 14))
                     Text(data.city)
-                        .font(.system(size: isCompact ? 10.5 : 12, weight: .bold, design: .rounded))
+                        .font(.system(size: isCompact ? 10 : 12, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    Spacer()
+                    Spacer(minLength: 2)
                     Text("\(data.temp)°")
-                        .font(.system(size: isCompact ? 11.5 : 13, weight: .heavy, design: .rounded))
+                        .font(.system(size: isCompact ? 11 : 13, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color(red: 0.35, green: 0.86, blue: 1.0))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.horizontal, isCompact ? 9 : 12)
+                .padding(.vertical, 6)
                 .background(Color(white: 0.13), in: Capsule())
 
                 Spacer(minLength: 0)
 
-                // Affichage central
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(data.conditionDisplay)
-                            .font(.system(size: isCompact ? 16 : 20, weight: .bold, design: .rounded))
+                            .font(.system(size: isCompact ? 15 : 20, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                         Text("Ressenti \(data.feelsLike)° • Pluie \(data.precipProb)%")
-                            .font(.system(size: isCompact ? 9 : 10.5, weight: .medium, design: .rounded))
+                            .font(.system(size: isCompact ? 8.5 : 10.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 4)
 
-                // Barre thermique capsule
+                if isTall {
+                    VStack(spacing: 5) {
+                        ForEach(Array(data.daily.prefix(3).enumerated()), id: \.offset) { _, d in
+                            HStack {
+                                Text(d.day)
+                                    .foregroundStyle(.white.opacity(0.75))
+                                Spacer()
+                                Image(systemName: d.symbol)
+                                    .symbolRenderingMode(.multicolor)
+                                Text("\(d.low)° / \(d.high)°")
+                                    .foregroundStyle(.white)
+                                    .fontWeight(.bold)
+                            }
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                        }
+                    }
+                    .padding(8)
+                    .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
                 HStack(spacing: 6) {
                     Text("\(data.low)°")
                         .font(.system(size: 9.5, weight: .bold, design: .rounded))
@@ -1410,9 +1752,9 @@ struct PremiumWeatherWidgetView: View {
                         .font(.system(size: 9.5, weight: .bold, design: .rounded))
                         .foregroundStyle(.orange)
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 4)
             }
-            .padding(isCompact ? 10 : 14)
+            .padding(isCompact ? 9 : 14)
         }
     }
 
@@ -1427,22 +1769,23 @@ struct PremiumWeatherWidgetView: View {
         barEnd: CGFloat,
         isCompact: Bool
     ) -> some View {
-        HStack(spacing: isCompact ? 5 : 8) {
+        HStack(spacing: isCompact ? 3.5 : 8) {
             Text(day)
-                .font(.system(size: isCompact ? 9.5 : 11, weight: .medium))
+                .font(.system(size: isCompact ? 9 : 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.88))
-                .frame(width: isCompact ? 26 : 32, alignment: .leading)
+                .frame(width: isCompact ? 23 : 32, alignment: .leading)
+                .lineLimit(1)
 
             Image(systemName: symbol)
-                .font(.system(size: isCompact ? 9.5 : 11))
+                .font(.system(size: isCompact ? 9 : 11))
                 .foregroundStyle(.white.opacity(0.80))
-                .frame(width: 14)
+                .frame(width: isCompact ? 12 : 14)
 
             Text("\(low)°")
-                .font(.system(size: isCompact ? 9.5 : 10.5, weight: .medium))
+                .font(.system(size: isCompact ? 9 : 10.5, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
                 .monospacedDigit()
-                .frame(width: 22, alignment: .trailing)
+                .frame(width: isCompact ? 19 : 22, alignment: .trailing)
 
             GeometryReader { barGeo in
                 let bw = barGeo.size.width
@@ -1469,10 +1812,10 @@ struct PremiumWeatherWidgetView: View {
             .frame(height: 8)
 
             Text("\(high)°")
-                .font(.system(size: isCompact ? 9.5 : 10.5, weight: .semibold))
+                .font(.system(size: isCompact ? 9 : 10.5, weight: .semibold))
                 .foregroundStyle(.white)
                 .monospacedDigit()
-                .frame(width: 22, alignment: .trailing)
+                .frame(width: isCompact ? 19 : 22, alignment: .trailing)
         }
     }
 
@@ -1485,6 +1828,7 @@ struct PremiumWeatherWidgetView: View {
                 .font(.system(size: 8.5, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3.5)
@@ -1493,15 +1837,17 @@ struct PremiumWeatherWidgetView: View {
     }
 
     private func glassMetricPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3.5) {
             Image(systemName: icon)
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 8.5, weight: .bold))
                 .foregroundStyle(color)
             Text(text)
-                .font(.system(size: 9.5, weight: .semibold))
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .background(Color.white.opacity(0.14), in: Capsule())
     }

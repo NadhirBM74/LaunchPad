@@ -69,8 +69,16 @@ struct GridLayoutEngine {
         // Matrice plate des cases occupées pour la page courante: pageOccupied[row * cols + col]
         var pageOccupied = [Bool](repeating: false, count: totalSlots)
         var globalIndex = 0
+        var startedPinnedFolderPage = false
 
         for item in items {
+            if case .folder(let folder) = item, folder.pinToLastPage, !startedPinnedFolderPage {
+                startedPinnedFolderPage = true
+                if pageOccupied.contains(true) {
+                    currentPage += 1
+                    pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                }
+            }
             let (spanCols, spanRows) = item.span(columns: cols, rows: rws)
             var placedOnPage = false
 
@@ -91,9 +99,18 @@ struct GridLayoutEngine {
                     let boxHeight = CGFloat(spanRows) * metrics.cellHeight
                     let center = CGPoint(x: slotX + boxWidth / 2.0, y: slotY + boxHeight / 2.0)
 
-                    let frameSize = item.isWidget
-                        ? CGSize(width: max(40, boxWidth - 14), height: max(40, boxHeight - 14))
-                        : CGSize(width: metrics.cellWidth, height: metrics.tileHeight)
+                    let frameSize: CGSize
+                    if case .widget(let cfg) = item {
+                        if cfg.size == .small {
+                            // Tous les widgets au format Petit sont strictement carrés (ratio 1:1)
+                            let side = max(40, min(boxWidth, boxHeight) - 14)
+                            frameSize = CGSize(width: side, height: side)
+                        } else {
+                            frameSize = CGSize(width: max(40, boxWidth - 14), height: max(40, boxHeight - 14))
+                        }
+                    } else {
+                        frameSize = CGSize(width: metrics.cellWidth, height: metrics.tileHeight)
+                    }
 
                     let entry = PlacedItem(
                         item: item,
@@ -165,8 +182,16 @@ struct GridLayoutEngine {
 
         var currentPage = 0
         var pageOccupied = [Bool](repeating: false, count: totalSlots)
+        var startedPinnedFolderPage = false
 
         for item in items {
+            if case .folder(let folder) = item, folder.pinToLastPage, !startedPinnedFolderPage {
+                startedPinnedFolderPage = true
+                if pageOccupied.contains(true) {
+                    currentPage += 1
+                    pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                }
+            }
             let (spanCols, spanRows) = item.span(columns: cols, rows: rws)
             let safeCols = min(spanCols, cols)
             let safeRows = min(spanRows, rws)
@@ -213,8 +238,16 @@ struct GridLayoutEngine {
 
         var currentPage = 0
         var pageOccupied = [Bool](repeating: false, count: totalSlots)
+        var startedPinnedFolderPage = false
 
         for item in items {
+            if case .folder(let folder) = item, folder.pinToLastPage, !startedPinnedFolderPage {
+                startedPinnedFolderPage = true
+                if pageOccupied.contains(true) {
+                    currentPage += 1
+                    pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                }
+            }
             let (spanCols, spanRows) = item.span(columns: cols, rows: rws)
             var placed = false
 
