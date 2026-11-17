@@ -52,108 +52,6 @@ final class MusicVinylRotationTracker {
     }
 }
 
-// MARK: - Illustration "Red Velvet / Past Alone" Haute Fidélité (Fallback & Démo Photo 3)
-
-struct RedVelvetArtworkView: View {
-    var showParentalAndSignature: Bool = true
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            ZStack {
-                // Fond studio rouge-orangé intense fidèle à la pochette de la Photo 3
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.88, green: 0.20, blue: 0.03),
-                        Color(red: 0.76, green: 0.12, blue: 0.02),
-                        Color(red: 0.42, green: 0.06, blue: 0.01)
-                    ],
-                    startPoint: .topTrailing,
-                    endPoint: .bottomLeading
-                )
-
-                // Halo d'éclairage studio latéral chaud
-                RadialGradient(
-                    colors: [
-                        Color(red: 1.00, green: 0.34, blue: 0.06).opacity(0.85),
-                        Color.clear
-                    ],
-                    center: UnitPoint(x: 0.78, y: 0.35),
-                    startRadius: 4,
-                    endRadius: max(w, h) * 0.72
-                )
-
-                // Silhouette artistique stylisée en clair-obscur (portrait de profil pensé)
-                Canvas { context, size in
-                    let cw = size.width
-                    let ch = size.height
-
-                    // Épaules / veste texturée sombre à motifs ambrés
-                    var jacket = Path()
-                    jacket.move(to: CGPoint(x: 0, y: ch))
-                    jacket.addLine(to: CGPoint(x: 0, y: ch * 0.46))
-                    jacket.addQuadCurve(
-                        to: CGPoint(x: cw * 0.62, y: ch),
-                        control: CGPoint(x: cw * 0.38, y: ch * 0.56)
-                    )
-                    jacket.closeSubpath()
-                    context.fill(
-                        jacket,
-                        with: .linearGradient(
-                            Gradient(colors: [
-                                Color(red: 0.14, green: 0.08, blue: 0.04),
-                                Color(red: 0.06, green: 0.04, blue: 0.02)
-                            ]),
-                            startPoint: CGPoint(x: 0, y: ch * 0.5),
-                            endPoint: CGPoint(x: cw * 0.6, y: ch)
-                        )
-                    )
-
-                    // Portrait éclairé par la droite (tons ambre/cuivre chauds et ombres profondes)
-                    let headRect = CGRect(x: cw * 0.24, y: ch * 0.10, width: cw * 0.48, height: ch * 0.56)
-                    let headPath = Path(roundedRect: headRect, cornerRadius: cw * 0.22)
-                    context.fill(
-                        headPath,
-                        with: .linearGradient(
-                            Gradient(colors: [
-                                Color(red: 0.85, green: 0.45, blue: 0.18),
-                                Color(red: 0.38, green: 0.15, blue: 0.06),
-                                Color(red: 0.10, green: 0.05, blue: 0.03)
-                            ]),
-                            startPoint: CGPoint(x: cw * 0.72, y: ch * 0.28),
-                            endPoint: CGPoint(x: cw * 0.24, y: ch * 0.52)
-                        )
-                    )
-
-                    // Cheveux bouclés sombres au sommet
-                    for i in 0..<7 {
-                        let cx = cw * (0.28 + CGFloat(i) * 0.065)
-                        let cy = ch * (0.11 + CGFloat(i % 2) * 0.025)
-                        let r = cw * 0.09
-                        let curl = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 1.6))
-                        context.fill(curl, with: .color(Color(red: 0.09, green: 0.04, blue: 0.02)))
-                    }
-                }
-
-                // Signature néon vert "VEXLOR" en bas au centre comme sur la Photo 3
-                if showParentalAndSignature && min(w, h) > 95 {
-                    VStack {
-                        Spacer()
-                        Text("VEXLOR")
-                            .font(.system(size: min(w, h) * 0.065, weight: .black, design: .serif))
-                            .italic()
-                            .tracking(1.5)
-                            .foregroundStyle(Color(red: 0.18, green: 0.96, blue: 0.54))
-                            .shadow(color: Color.black.opacity(0.6), radius: 3, y: 1)
-                            .padding(.bottom, h * 0.05)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Disques Vinyles Haute Fidélité (Marbré Cyan Splatter & Blanc Microsillon)
 
 struct ReferenceVinylDiscView: View {
@@ -223,9 +121,23 @@ struct ReferenceVinylDiscView: View {
                         .frame(width: labelSize, height: labelSize)
                         .clipShape(Circle())
                 } else {
-                    RedVelvetArtworkView(showParentalAndSignature: false)
-                        .frame(width: labelSize, height: labelSize)
-                        .clipShape(Circle())
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: variant == .classicBlack
+                                        ? [Color(red: 0.22, green: 0.24, blue: 0.30), Color(red: 0.10, green: 0.11, blue: 0.15)]
+                                        : [Color(red: 0.18, green: 0.52, blue: 0.88), Color(red: 0.08, green: 0.28, blue: 0.62)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        Image(systemName: "music.note")
+                            .font(.system(size: max(10, labelSize * 0.38), weight: .bold))
+                            .foregroundStyle(.white.opacity(0.92))
+                    }
+                    .frame(width: labelSize, height: labelSize)
+                    .clipShape(Circle())
                 }
             }
             .overlay(
@@ -577,27 +489,41 @@ struct ReferenceMusicWidgetView: View {
         let isCompact = (h < 165 || w < 165) && config.size == .small
         let isTall = h > w * 1.15
         let pad: CGFloat = isCompact ? 10 : 14
+        let hasCoverArt = (track.artworkImage != nil)
+
+        let titleFG: Color = hasCoverArt ? .white : cardTitleColor
+        let timestampFG: Color = hasCoverArt ? .white.opacity(0.92) : cardTimestampColor
+        let seekTrack: Color = hasCoverArt ? .white.opacity(0.32) : cardSeekTrackColor
+        let seekFill: Color = hasCoverArt ? .white : cardSeekFillColor
+        let controlFG: Color = hasCoverArt ? .white : cardControlColor
 
         ZStack {
-            // 1. Pochette plein écran
-            artworkView(width: w, height: h, showSignature: !isCompact)
+            // 1. Pochette réelle si disponible, sinon fond givré propre (Clair ou Sombre) sans image factice
+            if let art = track.artworkImage {
+                Image(nsImage: art)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: w, height: h)
+                    .clipped()
 
-            // 2. Dégradé subtil en bas pour rendre le titre blanc et la barre 100% lisibles
-            LinearGradient(
-                stops: [
-                    .init(color: Color.black.opacity(0.10), location: 0.0),
-                    .init(color: Color.clear, location: 0.40),
-                    .init(color: Color.black.opacity(0.38), location: 0.72),
-                    .init(color: Color.black.opacity(0.72), location: 1.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.10), location: 0.0),
+                        .init(color: Color.clear, location: 0.40),
+                        .init(color: Color.black.opacity(0.38), location: 0.72),
+                        .init(color: Color.black.opacity(0.72), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            } else {
+                musicCardBackground
+            }
 
-            // 3. Contenu superposé : Pilule sombre en haut + Titre, Barre 1:20/2:27 et Contrôles en bas
+            // 2. Contenu : Pilule supérieure + Titre, Barre et Contrôles en bas
             VStack(alignment: .leading, spacing: 0) {
-                // Pilule supérieure sombre translucide ("Past Alone / Water (Deluxe)") exactement comme sur la Photo 3
                 HStack(spacing: isCompact ? 7 : 9) {
                     artworkThumbnail(size: isCompact ? 22 : 28, cornerRadius: isCompact ? 5 : 7)
 
@@ -623,7 +549,7 @@ struct ReferenceMusicWidgetView: View {
                 .padding(.vertical, isCompact ? 5 : 6)
                 .background(
                     RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
-                        .fill(isDarkMusic ? Color.black.opacity(0.56) : Color.white.opacity(0.78))
+                        .fill(isDarkMusic ? Color.black.opacity(hasCoverArt ? 0.56 : 0.34) : Color.white.opacity(0.78))
                         .background(
                             .ultraThinMaterial,
                             in: RoundedRectangle(cornerRadius: isCompact ? 10 : 12, style: .continuous)
@@ -636,23 +562,22 @@ struct ReferenceMusicWidgetView: View {
 
                 Spacer(minLength: 4)
 
-                // Bas : Titre "Red Velvet" aligné à gauche + Timestamps 1:20 / 2:27 + Barre blanche + Contrôles centrés
                 VStack(alignment: .leading, spacing: isCompact ? 3 : 5) {
                     Text(displayTitle)
                         .font(.system(size: isTall ? 20 : (isCompact ? 14 : 18), weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(titleFG)
                         .lineLimit(1)
-                        .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
+                        .shadow(color: hasCoverArt ? .black.opacity(0.45) : .clear, radius: 4, y: 1)
 
                     progressSection(
-                        textColor: .white.opacity(0.92),
-                        trackColor: .white.opacity(0.32),
-                        fillColor: .white,
+                        textColor: timestampFG,
+                        trackColor: seekTrack,
+                        fillColor: seekFill,
                         isCompact: isCompact
                     )
 
                     transportButtonsRow(
-                        color: .white,
+                        color: controlFG,
                         iconSize: isCompact ? 11.5 : 14,
                         spacing: isCompact ? 20 : 28
                     )
@@ -1013,9 +938,23 @@ struct ReferenceMusicWidgetView: View {
                 .frame(width: width, height: height)
                 .clipped()
         } else {
-            RedVelvetArtworkView(showParentalAndSignature: showSignature)
-                .frame(width: width, height: height)
-                .clipped()
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: isDarkMusic
+                                ? [Color(white: 0.18), Color(white: 0.11)]
+                                : [Color(red: 0.98, green: 0.25, blue: 0.42), Color(red: 0.84, green: 0.14, blue: 0.30)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Image(systemName: "music.note")
+                    .font(.system(size: max(18, min(width, height) * 0.36), weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+            .frame(width: width, height: height)
+            .clipped()
         }
     }
 
@@ -1029,9 +968,20 @@ struct ReferenceMusicWidgetView: View {
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
-            RedVelvetArtworkView(showParentalAndSignature: false)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            ZStack {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red: 0.98, green: 0.25, blue: 0.42), Color(red: 0.84, green: 0.14, blue: 0.30)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Image(systemName: "music.note")
+                    .font(.system(size: max(10, size * 0.46), weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: size, height: size)
         }
     }
 

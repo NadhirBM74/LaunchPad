@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.1.9",
-  "name": "LaunchPad v1.1.9",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.9",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.1.9\n\n- 📁 **Dossiers Remplis Sans Débordement** : Les dossiers contenant de nombreuses applications restent parfaitement cadrés et défilent avec fluidité sans jamais chevaucher le titre ni dépasser de la fenêtre.\n- 👤 **Profil Compte Apple dans la Licence** : Votre photo de profil et votre prénom macOS sont automatiquement intégrés dans l'onglet Licence pour une présentation personnalisée.\n- 🛡️ **Sceau Vérifié à Rotation Périphérique** : Seuls les pics extérieurs du badge officiel tournent en douceur (bleu pour Pro, jaune pour Essai), tandis que la coche centrale reste fixe.\n- 📱 **Dossiers Apple Toujours en Dernière Page** : Par défaut et dès la mise à jour, les dossiers contenant uniquement les applications Apple sont regroupés proprement sur la dernière page du LaunchPad.",
+  "tag_name": "v1.2.0",
+  "name": "LaunchPad v1.2.0",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.0",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.0\n\n- 🎵 **Lecteur Musique Épuré Sans Illustration Factice** : Suppression complète de l'image de fond générique pour laisser place à une véritable carte givrée Clair ou Sombre lorsque la pochette d'album n'est pas disponible.\n- 💎 **Icônes Transparentes Véritables en Verre Liquide** : Nouveau moteur de détourage bilinéaire 4 coins avec détection de contours qui supprime réellement les fonds unis ou dégradés tout en préservant les logos en haute définition.\n- ✨ **Finitions Liquid Glass Affinées** : Contours spéculaires dégradés plus fins et transparence cristalline harmonieuse sur l'ensemble des icônes.",
   "assets": [
     {
-      "name": "LaunchPad-v1.1.9.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.9/LaunchPad-v1.1.9.zip"
+      "name": "LaunchPad-v1.2.0.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.0/LaunchPad-v1.2.0.zip"
     },
     {
-      "name": "LaunchPad-v1.1.9.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.9/LaunchPad-v1.1.9.dmg"
+      "name": "LaunchPad-v1.2.0.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.0/LaunchPad-v1.2.0.dmg"
     }
   ]
 }
