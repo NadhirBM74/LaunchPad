@@ -104,73 +104,28 @@ struct LiquidGlassBackground: View, Equatable {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            let i = max(0.05, min(1.0, intensity))
-            ZStack {
-                // 1. Flou d'arrière-plan en temps réel : l'opacité contrôle directement la transparence
-                VisualEffectBackground(material: .fullScreenUI)
-                    .opacity(reduceTransparency ? 1.0 : (0.25 + 0.75 * i))
+        let i = max(0.05, min(1.0, intensity))
+        ZStack {
+            // 1. Flou d'arrière-plan en temps réel : l'opacité contrôle directement la transparence
+            VisualEffectBackground(material: .fullScreenUI)
+                .opacity(reduceTransparency ? 1.0 : (0.25 + 0.75 * i))
 
-                // 2. Base semi-translucide constante : ne varie JAMAIS avec le curseur pour ne pas altérer la luminosité
-                Color.black.opacity(reduceTransparency ? 0.80 : 0.28)
+            // 2. Base semi-translucide constante sans voile blanc en haut
+            Color.black.opacity(reduceTransparency ? 0.80 : 0.28)
 
-                // 3. Halo diffus central lumineux (lumière ambiante constante)
-                RadialGradient(
-                    colors: [
-                        Color.white.opacity(0.12),
-                        Color.white.opacity(0.03),
-                        Color.clear
-                    ],
-                    center: UnitPoint(x: 0.5, y: 0.52),
-                    startRadius: 80,
-                    endRadius: max(size.width * 0.52, 600)
-                )
-
-                // 4. Couche optique Liquid Glass : reflets iridescents (luminosité constante)
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.16),
-                        Color.white.opacity(0.03),
-                        Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045),
-                        Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04),
-                        Color.clear
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-
-                // 5. Reflet spéculaire supérieur (biseau lumineux à l'horizon haut, éclat préservé)
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.30),
-                        Color.white.opacity(0.06),
-                        Color.clear
-                    ],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: 0.45)
-                )
-                .frame(height: max(size.height * 0.42, 220))
-                .frame(maxHeight: .infinity, alignment: .top)
-
-                // 6. Contours lumineux nets et fins simulant la tranche biseautée du verre (luminosité constante)
-                Rectangle()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.55),
-                                Color.white.opacity(0.15),
-                                Color.white.opacity(0.06),
-                                Color.white.opacity(0.30)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            }
-            .compositingGroup()
+            // 3. Nuance optique Liquid Glass discrète (sans reflet blanc supérieur)
+            LinearGradient(
+                colors: [
+                    Color.clear,
+                    Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045),
+                    Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
+        .compositingGroup()
         .ignoresSafeArea()
     }
 }
@@ -197,16 +152,7 @@ struct LaunchpadBackground: View, Equatable {
                 case .light:
                     ZStack {
                         VisualEffectBackground(material: .underWindowBackground)
-                        Color.white.opacity(0.38)
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.30),
-                                Color(red: 0.94, green: 0.96, blue: 1.0).opacity(0.18),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                        Color.white.opacity(0.32)
                     }
                 case .liquidGlass:
                     LiquidGlassBackground(intensity: liquidGlassIntensity)

@@ -310,21 +310,16 @@ struct SettingsPanel: View {
             case .liquidGlass:
                 VisualEffectBackground(material: .fullScreenUI)
                     .opacity(0.30 + 0.70 * i)
-                Color.black.opacity(0.24)
+                Color.black.opacity(0.26)
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.18),
+                        Color.clear,
                         Color.purple.opacity(0.06),
                         Color.blue.opacity(0.05),
                         Color.clear
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
-                )
-                LinearGradient(
-                    colors: [Color.white.opacity(0.24), Color.white.opacity(0.04), Color.clear],
-                    startPoint: .top,
-                    endPoint: .center
                 )
             }
         }
