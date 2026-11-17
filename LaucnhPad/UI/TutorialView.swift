@@ -318,8 +318,12 @@ struct TutorialCardView: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: isLifetime ? "crown.fill" : (isTrial ? "bolt.fill" : "checkmark.circle.fill"))
-                                .font(.system(size: 13, weight: .bold))
+                            if isLifetime || isTrial {
+                                AnimatedVerifiedSealBadge(isTrial: isTrial && !isLifetime, size: 15)
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
                             Text(
                                 isLifetime
                                     ? "Commencer avec LaunchPad Pro ✨"
@@ -1460,12 +1464,10 @@ private struct AnimStep5ProTrial: View {
 
                         if licenseManager.isTrialActive {
                             HStack(spacing: 4) {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 7, height: 7)
+                                AnimatedVerifiedSealBadge(isTrial: true, size: 14)
                                 Text("Actif")
                                     .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Color(red: 1.00, green: 0.80, blue: 0.12))
                             }
                         }
                     }
@@ -1604,9 +1606,7 @@ private struct AnimStep5ProTrial: View {
                         Spacer()
 
                         if licenseManager.isProLifetime {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(Color.green)
-                                .font(.system(size: 15))
+                            AnimatedVerifiedSealBadge(isTrial: false, size: 18)
                         }
                     }
 

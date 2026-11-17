@@ -89,3 +89,110 @@ enum AppleDesignSystem {
         )
     }
 }
+
+// MARK: - Badge Vérifié Animé (Bleu Pro / Jaune Essai)
+
+/// Badge officiel en rosace crénelée animé : bleu vif pour la version Pro à vie, jaune doré pour l'essai gratuit.
+struct AnimatedVerifiedSealBadge: View {
+    let isTrial: Bool
+    var size: CGFloat = 24
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
+    @State private var pulseScale: CGFloat = 0.96
+    @State private var haloExpanded: Bool = false
+    @State private var shimmerOffset: CGFloat = -1.35
+
+    private var reduceMotion: Bool {
+        systemReduceMotion || userReduceMotion
+    }
+
+    private var badgeGradient: LinearGradient {
+        if isTrial {
+            return LinearGradient(
+                colors: [
+                    Color(red: 1.00, green: 0.86, blue: 0.16),
+                    Color(red: 0.96, green: 0.65, blue: 0.00)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            return LinearGradient(
+                colors: [
+                    Color(red: 0.14, green: 0.64, blue: 1.00),
+                    Color(red: 0.00, green: 0.45, blue: 0.96)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private var glowColor: Color {
+        isTrial
+            ? Color(red: 1.00, green: 0.78, blue: 0.05)
+            : Color(red: 0.05, green: 0.56, blue: 1.00)
+    }
+
+    var body: some View {
+        ZStack {
+            // Halo lumineux pulsant autour du sceau
+            Circle()
+                .fill(glowColor.opacity(haloExpanded ? 0.14 : 0.42))
+                .frame(width: size * 1.18, height: size * 1.18)
+                .scaleEffect(haloExpanded ? 1.24 : 0.92)
+                .blur(radius: max(2, size * 0.14))
+
+            // Rosace bleue (Pro) ou jaune (Essai) identique au macaron vérifié
+            ZStack {
+                Image(systemName: "seal.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .foregroundStyle(badgeGradient)
+
+                // Reflet métallique animé qui balaie la rosace
+                if !reduceMotion {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: Color.white.opacity(0.55), location: 0.5),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: size * 0.55, height: size * 1.6)
+                    .rotationEffect(.degrees(22))
+                    .offset(x: shimmerOffset * size)
+                    .mask(
+                        Image(systemName: "seal.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: size, height: size)
+                    )
+                }
+
+                // Coche blanche nette centrée
+                Image(systemName: "checkmark")
+                    .font(.system(size: size * 0.43, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
+            }
+            .scaleEffect(reduceMotion ? 1.0 : pulseScale)
+            .shadow(color: glowColor.opacity(0.45), radius: max(2.5, size * 0.16), y: 1.5)
+        }
+        .frame(width: size * 1.25, height: size * 1.25)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                pulseScale = 1.05
+                haloExpanded = true
+            }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: false)) {
+                shimmerOffset = 1.35
+            }
+        }
+    }
+}

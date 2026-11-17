@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.1.7",
-  "name": "LaunchPad v1.1.7",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.7",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.1.7\n\n- 📁 **Dossiers Apple Verre & Animation Native** : Les dossiers adoptent une transparence harmonisée au thème d'icônes choisi, s'ouvrent avec une animation fluide façon Apple et regroupent uniquement les applications Apple en dernière page.\n- 🎵 **Lecteur Musique Clair/Sombre & Lancement Direct** : Basculez le lecteur entre les apparences Clair et Sombre dès la galerie de widgets, avec un bouton central prêt à lancer Apple Music ou Spotify.\n- 🖼️ **Widgets Parfaits dans Chaque Format** : Les petits widgets sont désormais parfaitement carrés, tous les modèles (Météo, Musique, Calendrier, Horloge) s'adaptent aux formats verticaux, un seul widget par catégorie est autorisé et une notification confirme chaque ajout.\n- 🎨 **Icônes Apple Authentiques & Couleur macOS** : Tous les logos officiels Apple sont préservés en haute définition avec une option directe pour retrouver les couleurs de base de macOS et des icônes transparentes cristal.\n- 🔒 **Ergonomie & Réglages Simplifiés** : Le Launchpad reste ouvert pendant Touch ID, la galerie de widgets et les réglages se ferment automatiquement à la fermeture, et la touche Échap quitte les réglages en un geste.",
+  "tag_name": "v1.1.8",
+  "name": "LaunchPad v1.1.8",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.8",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.1.8\n\n- 🌙 **Mode Sombre Authentique en Thème Clair** : La vignette du thème Sombre dans les réglages conserve désormais un véritable fond noir profond et un libellé blanc parfaitement lisible même lorsque l'interface est en mode clair.\n- 🛡️ **Badge Pro & Essai Vérifié Animé** : Un nouveau sceau officiel crénelé animé avec reflets brillants s'affiche en bleu vif lorsque LaunchPad Pro est activé et en jaune doré durant l'essai gratuit.\n- ✨ **Lisibilité & Contrastes Affinés** : Les cartes Verre, Liquid Glass et les boutons d'action de l'onglet Licence bénéficient d'une meilleure visibilité en apparence claire.",
   "assets": [
     {
-      "name": "LaunchPad-v1.1.7.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.7/LaunchPad-v1.1.7.zip"
+      "name": "LaunchPad-v1.1.8.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.8/LaunchPad-v1.1.8.zip"
     },
     {
-      "name": "LaunchPad-v1.1.7.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.7/LaunchPad-v1.1.7.dmg"
+      "name": "LaunchPad-v1.1.8.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.8/LaunchPad-v1.1.8.dmg"
     }
   ]
 }

@@ -327,9 +327,17 @@ struct SettingsPanel: View {
                     Text("Réglages")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.primary)
-                    Text("LaunchPad")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 5) {
+                        Text("LaunchPad")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        if licenseManager.isPro {
+                            AnimatedVerifiedSealBadge(
+                                isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
+                                size: 14
+                            )
+                        }
+                    }
                 }
                 Spacer()
                 Button {
@@ -410,9 +418,10 @@ struct SettingsPanel: View {
                 Spacer(minLength: 4)
 
                 if tab == .license && licenseManager.isPro {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.green)
+                    AnimatedVerifiedSealBadge(
+                        isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
+                        size: 15
+                    )
                 }
             }
             .padding(.horizontal, 12)
@@ -1582,17 +1591,22 @@ struct SettingsPanel: View {
         // En-tête de statut
         SettingsCardBox {
             HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            licenseManager.isPro
-                                ? LinearGradient(colors: [SettingsStyle.accent, Color.purple], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                : LinearGradient(colors: [Color.gray.opacity(0.35), Color.gray.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .frame(width: 52, height: 52)
-                    Image(systemName: licenseManager.isPro ? "crown.fill" : "lock.shield.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.white)
+                if licenseManager.isPro {
+                    AnimatedVerifiedSealBadge(
+                        isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
+                        size: 48
+                    )
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(colors: [Color.gray.opacity(0.35), Color.gray.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .frame(width: 52, height: 52)
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.white)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -1605,19 +1619,25 @@ struct SettingsPanel: View {
                         .font(.system(size: 16, weight: .bold))
 
                         if licenseManager.isProLifetime {
-                            ProBadge()
+                            HStack(spacing: 4) {
+                                AnimatedVerifiedSealBadge(isTrial: false, size: 13)
+                                Text("PRO")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2.5)
+                            .background(Color(red: 0.05, green: 0.56, blue: 1.00).opacity(0.16), in: Capsule())
+                            .foregroundStyle(Color(red: 0.05, green: 0.56, blue: 1.00))
                         } else if licenseManager.isTrialActive {
                             HStack(spacing: 4) {
-                                Image(systemName: "hourglass")
-                                    .font(.system(size: 10, weight: .bold))
+                                AnimatedVerifiedSealBadge(isTrial: true, size: 13)
                                 Text(licenseManager.trialDaysRemaining > 0 ? "\(licenseManager.trialDaysRemaining)j restants" : "7 JOURS")
                                     .font(.system(size: 10, weight: .bold))
                             }
-                            .padding(.horizontal, 7)
+                            .padding(.horizontal, 8)
                             .padding(.vertical, 2.5)
-                            .background(Color.orange.opacity(0.2))
-                            .foregroundStyle(Color.orange)
-                            .clipShape(Capsule())
+                            .background(Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.18), in: Capsule())
+                            .foregroundStyle(Color(red: 0.90, green: 0.60, blue: 0.00))
                         }
                     }
 
@@ -1644,14 +1664,14 @@ struct SettingsPanel: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
-                        .foregroundStyle(Color(red: 0.94, green: 0.90, blue: 1.0))
+                        .foregroundStyle(Color.white)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(
                                     LinearGradient(
                                         colors: [
-                                            SettingsStyle.accent.opacity(0.28),
-                                            Color.purple.opacity(0.14)
+                                            SettingsStyle.accent,
+                                            Color.purple.opacity(0.88)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -1659,7 +1679,7 @@ struct SettingsPanel: View {
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(SettingsStyle.accent.opacity(0.65), lineWidth: 1.2)
+                                        .stroke(Color.white.opacity(0.25), lineWidth: 1.0)
                                 )
                         )
                         .shadow(color: SettingsStyle.accent.opacity(0.22), radius: 8, y: 3)
@@ -2901,10 +2921,10 @@ struct ThemeCardButton: View {
                             VStack(spacing: 5) {
                                 Image(systemName: theme.symbol)
                                     .font(.system(size: 20))
-                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.85) : (theme == .light ? Color.orange : SettingsStyle.accent))
+                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Color.orange : SettingsStyle.accent))
                                 Text(theme.title)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(theme == .light ? Color.black.opacity(0.85) : .primary)
+                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Color.black.opacity(0.85) : .primary))
                             }
                         }
 
@@ -2948,7 +2968,11 @@ struct ThemeCardButton: View {
     private var previewFill: some View {
         switch theme {
         case .dark:
-            Color.black.opacity(0.75)
+            LinearGradient(
+                colors: [Color(red: 0.05, green: 0.05, blue: 0.07), Color.black],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         case .light:
             LinearGradient(
                 colors: [Color.white.opacity(0.95), Color(white: 0.90)],
@@ -2956,14 +2980,17 @@ struct ThemeCardButton: View {
                 endPoint: .bottom
             )
         case .glass:
-            Color.white.opacity(0.09)
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Color.primary.opacity(0.06)
+            }
         case .liquidGlass:
             LinearGradient(
                 colors: [
-                    Color.white.opacity(0.20),
-                    Color.purple.opacity(0.09),
-                    Color.blue.opacity(0.06),
-                    Color.white.opacity(0.03)
+                    Color.primary.opacity(0.10),
+                    Color.purple.opacity(0.14),
+                    Color.blue.opacity(0.10),
+                    Color.primary.opacity(0.04)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -2976,13 +3003,13 @@ struct ThemeCardButton: View {
         switch theme {
         case .dark:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         case .light:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
         case .glass:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.16), lineWidth: 1)
         case .liquidGlass:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(
@@ -3467,25 +3494,18 @@ struct ProCelebrationPopup: View {
                 .padding(.top, 22)
                 .padding(.bottom, 10)
 
-                // Badge couronne dorée
+                // Badge vérifié animé
                 HStack(spacing: 6) {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 11, weight: .bold))
+                    AnimatedVerifiedSealBadge(isTrial: false, size: 15)
                     Text(loc("celebration.badge"))
                         .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .tracking(1.4)
                 }
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(red: 1.0, green: 0.90, blue: 0.50), Color(red: 1.0, green: 0.72, blue: 0.20)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundStyle(Color(red: 0.35, green: 0.78, blue: 1.00))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4.5)
-                .background(Color(red: 0.95, green: 0.75, blue: 0.20).opacity(0.18), in: Capsule())
-                .overlay(Capsule().stroke(Color(red: 1.0, green: 0.85, blue: 0.35).opacity(0.45), lineWidth: 0.8))
+                .background(Color(red: 0.05, green: 0.56, blue: 1.00).opacity(0.18), in: Capsule())
+                .overlay(Capsule().stroke(Color(red: 0.14, green: 0.64, blue: 1.00).opacity(0.48), lineWidth: 0.9))
                 .padding(.bottom, 8)
 
                 // Titre percutant
