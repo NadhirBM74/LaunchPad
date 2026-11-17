@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.1.5",
-  "name": "LaunchPad v1.1.5",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.5",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.1.5\n\n- 🧭 **Réglages Apple Sidebar & Recherche** : Nouvelle interface à barre latérale gauche et barre de recherche intégrée pour trouver et modifier n'importe quel réglage en un instant.\n- 🖼️ **Galerie de Widgets en Grille Visuelle** : Parcourez tous les thèmes météo, vinyles, horloges et calendriers sous forme de cartes visuelles avec recherche instantanée.\n- 💎 **Icônes 100 % Compatibles Transparence** : Nouveau détourage lissé sans grain offrant un rendu verre liquide cristallin et uniforme sur toutes vos applications.\n- 🎨 **Moteur HD 512×512 Retina** : Extraction native en très haute définition éliminant tout flou, avec possibilité de personnaliser l'icône de chaque application.\n- ⚡ **Simplicité & Retours Visuels** : Navigation intuitive pensée pour tout le monde avec confirmations visuelles après chaque action.",
+  "tag_name": "v1.1.6",
+  "name": "LaunchPad v1.1.6",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.6",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.1.6\n\n- 🖼️ **Galerie de Widgets Épurée** : Suppression du cadre sombre autour des aperçus pour laisser place uniquement au widget avec une légère ombre portée.\n- 📐 **Sélecteur de Taille Corrigé** : Les boutons Petit, Moyen, Vertical et Grand restent parfaitement alignés sur une seule ligne.\n- 🖱️ **Défilement Trackpad Fluide** : Faites défiler librement toute la galerie de widgets au trackpad et fermez-la facilement avec Échap.\n- 🧭 **Réglages Apple Sidebar & Recherche** : Navigation latérale intuitive avec barre de recherche intégrée pour accéder à chaque paramètre en un clic.\n- 💎 **Icônes HD 512×512 & Transparence** : Détourage lissé sans grain offrant un rendu verre liquide cristallin sur toutes vos applications.",
   "assets": [
     {
-      "name": "LaunchPad-v1.1.5.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.5/LaunchPad-v1.1.5.zip"
+      "name": "LaunchPad-v1.1.6.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.6/LaunchPad-v1.1.6.zip"
     },
     {
-      "name": "LaunchPad-v1.1.5.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.5/LaunchPad-v1.1.5.dmg"
+      "name": "LaunchPad-v1.1.6.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.6/LaunchPad-v1.1.6.dmg"
     }
   ]
 }
