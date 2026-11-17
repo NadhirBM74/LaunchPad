@@ -147,16 +147,25 @@ struct LaunchpadRootView: View {
                 }
                 if let folder = vm.overlayFolder {
                     let anchor = folderAnchor(for: folder.id, in: size)
-                    FolderOverlayView(vm: vm, store: store, folder: folder, grid: layout.grid, rootSize: size,
-                                      showLabels: showLabels, showRunning: showRunning, reduceMotion: reduceMotion)
+                    // Voile plein écran découplé du zoom pour éviter tout carré sombre qui grandit à l'ouverture.
+                    Color.black.opacity(backgroundStyle == .light ? 0.12 : 0.18)
+                        .contentShape(Rectangle())
+                        .onTapGesture { vm.closeFolder() }
                         .frame(width: size.width, height: size.height)
+                        .transition(.opacity)
+                        .zIndex(249)
+
+                    FolderOverlayView(vm: vm, store: store, folder: folder, grid: layout.grid, rootSize: size,
+                                      anchor: anchor, showLabels: showLabels, showRunning: showRunning, reduceMotion: reduceMotion)
+                        .frame(width: size.width, height: size.height)
+                        .compositingGroup()
                         .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
                         .transition(
                             reduceMotion
                                 ? .opacity
                                 : .asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.22, anchor: anchor)),
-                                    removal: .opacity.combined(with: .scale(scale: 0.26, anchor: anchor))
+                                    insertion: .identity,
+                                    removal: .opacity.combined(with: .scale(scale: 0.93, anchor: anchor))
                                 )
                         )
                         .zIndex(250)
@@ -1242,11 +1251,13 @@ struct FolderOverlayView: View {
     let folder: FolderData
     let grid: GridMetrics
     let rootSize: CGSize
+    var anchor: UnitPoint = .center
     let showLabels: Bool
     let showRunning: Bool
     let reduceMotion: Bool
 
     @State private var title = ""
+    @State private var isRevealed = false
     @State private var isShowingCustomizer = false
     @State private var isShowingAppPicker = false
     @FocusState private var titleFocused: Bool
@@ -1264,29 +1275,10 @@ struct FolderOverlayView: View {
     var body: some View {
         let fm = FolderMetrics.make(rootSize: rootSize, grid: grid, count: max(folder.apps.count, 3))
         ZStack(alignment: .topLeading) {
-            Color.black.opacity(0.32)
-                .contentShape(Rectangle())
-                .onTapGesture { vm.closeFolder() }
-
-            if theme == .liquidGlass {
-                RoundedRectangle(cornerRadius: 36, style: .continuous)
-                    .liquidGlassCard(cornerRadius: 36, interactive: false, borderLineWidth: 1.2)
-                    .shadow(color: .black.opacity(0.45), radius: 36, x: 0, y: 18)
-                    .shadow(color: .black.opacity(0.20), radius: 6, x: 0, y: 3)
-                    .frame(width: fm.panelRect.width, height: fm.panelRect.height)
-                    .contentShape(Rectangle())
-                    .onTapGesture { titleFocused = false }
-                    .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
-            } else {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(theme == .dark ? Color.black.opacity(0.55) : Color.white.opacity(0.10))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 34, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).stroke(Color.white.opacity(0.22), lineWidth: 1.0))
-                    .frame(width: fm.panelRect.width, height: fm.panelRect.height)
-                    .contentShape(Rectangle())
-                    .onTapGesture { titleFocused = false }
-                    .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
-            }
+            folderPanelSurface(width: fm.panelRect.width, height: fm.panelRect.height)
+                .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+                .onTapGesture { titleFocused = false }
+                .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
 
             // En-tête du dossier : Titre éditable + Boutons Personnaliser (pinceau) & Ajouter des apps (+)
             HStack(spacing: 10) {
@@ -1403,9 +1395,13 @@ struct FolderOverlayView: View {
                 .zIndex(50)
             }
         }
-        .opacity(vm.folderFaded ? 0 : 1)
+        .scaleEffect((isRevealed || reduceMotion) ? 1.0 : 0.91, anchor: anchor)
+        .opacity(isRevealed ? (vm.folderFaded ? 0 : 1) : 0)
         .onAppear {
             title = folder.name
+            withAnimation(reduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.34, dampingFraction: 0.92)) {
+                isRevealed = true
+            }
             if vm.consumeNewFolder(folder.id) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { titleFocused = true }
             }
@@ -1457,6 +1453,55 @@ struct FolderOverlayView: View {
         if title.trimmingCharacters(in: .whitespacesAndNewlines) != folder.name {
             store.renameFolder(folder.id, to: title)
         }
+    }
+
+    /// Surface vitrée purement SwiftUI pour un fondu d'ouverture homogène à 120 Hz sans flash de carré noir.
+    @ViewBuilder
+    private func folderPanelSurface(width: CGFloat, height: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
+        let fillColors: [Color] = {
+            switch theme {
+            case .dark:
+                return [
+                    Color.white.opacity(0.14),
+                    Color(white: 0.18).opacity(0.42),
+                    Color(white: 0.12).opacity(0.38)
+                ]
+            case .light:
+                return [
+                    Color.white.opacity(0.38),
+                    Color(red: 0.94, green: 0.96, blue: 1.0).opacity(0.24),
+                    Color.white.opacity(0.30)
+                ]
+            case .liquidGlass:
+                return [
+                    Color.white.opacity(0.20),
+                    Color(red: 0.88, green: 0.93, blue: 1.0).opacity(0.11),
+                    Color.white.opacity(0.15)
+                ]
+            }
+        }()
+
+        ZStack {
+            shape
+                .fill(LinearGradient(colors: fillColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+            shape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(theme == .dark ? 0.10 : 0.18),
+                            Color.white.opacity(0.03),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            shape
+                .strokeBorder(LiquidGlassStyle.specularBorder, lineWidth: 1.15)
+        }
+        .frame(width: width, height: height)
+        .shadow(color: .black.opacity(0.24), radius: 26, x: 0, y: 12)
     }
 }
 

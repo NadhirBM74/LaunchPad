@@ -826,7 +826,7 @@ final class LaunchpadViewModel: ObservableObject {
     private func performOpenFolder(_ id: String) {
         folderSnapshot = store.visibleFolder(id)
         keyboardIndex = nil
-        withAnimation(motion(.spring(response: 0.38, dampingFraction: 0.84))) {
+        withAnimation(motion(.spring(response: 0.34, dampingFraction: 0.92))) {
             openFolderID = id
             folderFaded = false
         }
@@ -854,7 +854,7 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     func closeFolder(refocusSearch: Bool = true) {
-        withAnimation(motion(.spring(response: 0.32, dampingFraction: 0.9))) {
+        withAnimation(motion(.easeOut(duration: 0.24))) {
             openFolderID = nil
             folderFaded = false
         }
