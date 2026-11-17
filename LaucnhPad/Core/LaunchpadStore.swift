@@ -147,13 +147,36 @@ final class LaunchpadStore: ObservableObject {
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didUnmountNotification, object: nil)
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didWakeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(iconStyleNotificationReceived), name: .launchpadIconStyleDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(weatherDataUpdatedNotification(_:)), name: .weatherDataDidUpdate, object: nil)
         watcher.onChange = { [weak self] in self?.scheduleRefresh() }
         refresh()
+        WeatherService.shared.refreshIfNeeded(force: false, requestLocationPermission: false)
     }
 
     @objc private func iconStyleNotificationReceived() {
         iconsVersion &+= 1
         prewarmIcons(Array(catalog.keys))
+    }
+
+    @objc private func weatherDataUpdatedNotification(_ note: Notification) {
+        guard let snap = note.object as? LiveWeatherSnapshot else { return }
+        var copy = items
+        var changed = false
+        for idx in copy.indices {
+            guard var w = copy[idx].widget, w.kind == .weather else { continue }
+            if w.weatherCity != snap.city || w.weatherUnit != snap.unit || w.weatherTemp != snap.temp || w.weatherCondition != snap.condition || w.weatherFeelsLike != snap.feelsLike {
+                w.weatherCity = snap.city
+                w.weatherUnit = snap.unit
+                w.weatherTemp = snap.temp
+                w.weatherCondition = snap.condition
+                w.weatherFeelsLike = snap.feelsLike
+                copy[idx] = .widget(w)
+                changed = true
+            }
+        }
+        if changed {
+            commit(copy)
+        }
     }
 
     @objc private func runningAppsChanged() { updateRunningApps() }

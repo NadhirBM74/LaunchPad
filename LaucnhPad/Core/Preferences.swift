@@ -64,6 +64,13 @@ nonisolated enum PrefKey: Sendable {
     static let widgetGlowColor = "LaunchpadWidgetGlowColor"
     static let widgetCornerRadius = "LaunchpadWidgetCornerRadius"
     static let widgetGlassOpacity = "LaunchpadWidgetGlassOpacity"
+    static let weatherLocationMode = "LaunchpadWeatherLocationMode"
+    static let weatherCityName = "LaunchpadWeatherCityName"
+    static let weatherCountryName = "LaunchpadWeatherCountryName"
+    static let weatherLatitude = "LaunchpadWeatherLatitude"
+    static let weatherLongitude = "LaunchpadWeatherLongitude"
+    static let weatherUnit = "LaunchpadWeatherUnit"
+    static let weatherCachedSnapshot = "LaunchpadWeatherCachedSnapshot"
 
     /// Clés exportées dans les sauvegardes.
     static let backupKeys: [String] = [
@@ -75,7 +82,8 @@ nonisolated enum PrefKey: Sendable {
         isProUnlocked, licenseKey, tintedIcons, tintedIconColor, showFavoritesBar, favoriteAppIDs, customTiles,
         appLanguage, showWidgetBanner, widgetBannerCollapsed, widgetClockEnabled, widgetSystemEnabled,
         widgetQuickNoteEnabled, widgetQuickNoteText, customWidgetsData, widgetPosition, widgetGlowColor,
-        widgetCornerRadius, widgetGlassOpacity,
+        widgetCornerRadius, widgetGlassOpacity, weatherLocationMode, weatherCityName, weatherCountryName,
+        weatherLatitude, weatherLongitude, weatherUnit,
     ]
 }
 
@@ -315,6 +323,8 @@ enum Prefs {
             PrefKey.widgetSystemEnabled: true,
             PrefKey.widgetQuickNoteEnabled: true,
             PrefKey.widgetQuickNoteText: "",
+            PrefKey.weatherLocationMode: "auto",
+            PrefKey.weatherUnit: Locale.current.measurementSystem == .metric ? "C" : "F",
         ])
     }
 
@@ -470,5 +480,6 @@ extension Notification.Name {
     public static let trialStatusDidChange = Notification.Name("TrialStatusDidChange")
     public static let trialDidExpire = Notification.Name("TrialDidExpire")
     public static let launchpadIconStyleDidChange = Notification.Name("LaunchpadIconStyleDidChange")
+    public static let weatherDataDidUpdate = Notification.Name("LaunchpadWeatherDataDidUpdate")
 }
 

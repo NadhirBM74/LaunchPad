@@ -207,6 +207,7 @@ final class LaunchpadViewModel: ObservableObject {
     @Published var uninstall: UninstallSession?
     @Published var customTileModal: CustomTileModalModel?
     @Published var showWidgetGallery: Bool = false
+    @Published var showWeatherCityPicker: Bool = false
     @Published var showTutorial: Bool = false
     @Published var tutorialStepIndex: Int = 0
     @Published private(set) var favoritesRevision = 0
@@ -531,6 +532,7 @@ final class LaunchpadViewModel: ObservableObject {
         appeared = value
         if !value {
             if showWidgetGallery { showWidgetGallery = false }
+            if showWeatherCityPicker { showWeatherCityPicker = false }
             if CustomIconManager.shared.activePickerAppID != nil {
                 CustomIconManager.shared.activePickerAppID = nil
             }
@@ -605,6 +607,7 @@ final class LaunchpadViewModel: ObservableObject {
         folderFaded = false
         folderSnapshot = nil
         showWidgetGallery = false
+        showWeatherCityPicker = false
         CustomIconManager.shared.activePickerAppID = nil
         selection.removeAll()
         keyboardIndex = nil
@@ -675,7 +678,7 @@ final class LaunchpadViewModel: ObservableObject {
 
     /// Défilement à deux doigts (suivi interactif, comme le « paged drag » de LaunchOS) ou molette.
     func handleScroll(_ event: NSEvent) -> Bool {
-        guard openFolderID == nil, drag == nil, !isPresentingModal, !showWidgetGallery, CustomIconManager.shared.activePickerAppID == nil else { return false }
+        guard openFolderID == nil, drag == nil, !isPresentingModal, !showWidgetGallery, !showWeatherCityPicker, CustomIconManager.shared.activePickerAppID == nil else { return false }
         let hasPhases = event.phase != [] || event.momentumPhase != []
         if event.hasPreciseScrollingDeltas, hasPhases {
             if event.momentumPhase != [] { return true }
@@ -726,6 +729,10 @@ final class LaunchpadViewModel: ObservableObject {
             }
         }
         if event.keyCode == 53 {
+            if showWeatherCityPicker {
+                showWeatherCityPicker = false
+                return true
+            }
             if showWidgetGallery {
                 showWidgetGallery = false
                 return true
@@ -737,7 +744,7 @@ final class LaunchpadViewModel: ObservableObject {
             escape()
             return true
         }
-        if isPresentingModal || textInputActive || showWidgetGallery || CustomIconManager.shared.activePickerAppID != nil { return false }
+        if isPresentingModal || textInputActive || showWidgetGallery || showWeatherCityPicker || CustomIconManager.shared.activePickerAppID != nil { return false }
         switch event.keyCode {
         case 36, 76: activateKeyboardSelection(); return true
         case 123: moveSelection(dx: -1, dy: 0); return true
@@ -803,8 +810,12 @@ final class LaunchpadViewModel: ObservableObject {
             close(launchedApp: true)
         case .folder(let folder):
             openFolder(folder.id)
-        case .widget:
-            break
+        case .widget(let config):
+            if config.kind == .weather {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                    showWeatherCityPicker = true
+                }
+            }
         }
     }
 

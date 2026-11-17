@@ -336,11 +336,11 @@ final class WidgetManager: ObservableObject {
                 size: .tall,
                 order: 1,
                 weatherTheme: .appleMinimal,
-                weatherCity: "New York",
-                weatherUnit: "F",
-                weatherTemp: 69,
-                weatherCondition: "Rainy",
-                weatherFeelsLike: 69
+                weatherCity: "Paris",
+                weatherUnit: "C",
+                weatherTemp: 15,
+                weatherCondition: "Cloudy",
+                weatherFeelsLike: 14
             ),
             // 3. Lecteur Full Cover + Pilule (Photo de Référence 3)
             CustomWidgetConfig(

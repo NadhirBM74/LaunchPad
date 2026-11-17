@@ -180,6 +180,30 @@ struct LaunchpadRootView: View {
                         .frame(width: size.width, height: size.height)
                         .transition(.opacity.combined(with: .scale(scale: 0.94)))
                 }
+                if vm.showWeatherCityPicker {
+                    ZStack {
+                        Color.black.opacity(0.48)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    vm.showWeatherCityPicker = false
+                                }
+                            }
+                        WeatherCityPickerSheet(
+                            onTextFocusChanged: { focused in
+                                vm.textInputActive = focused
+                            },
+                            onClose: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    vm.showWeatherCityPicker = false
+                                }
+                            }
+                        )
+                    }
+                    .frame(width: size.width, height: size.height)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .zIndex(480)
+                }
                 if let customAppID = customIconManager.activePickerAppID {
                     ZStack {
                         Color.black.opacity(0.48)
@@ -1254,6 +1278,28 @@ struct ItemContextMenu: View {
                         }
                     }
                 }
+                Button {
+                    WeatherService.shared.useCurrentLocation(requestPermission: true)
+                } label: {
+                    let prefix = WeatherService.shared.locationMode == .auto ? "✓ " : ""
+                    Text("\(prefix)\(loc("weather.menu.auto_location"))")
+                }
+                Button(loc("weather.menu.choose_city")) {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                        vm.showWeatherCityPicker = true
+                    }
+                }
+                Menu(loc("weather.menu.unit")) {
+                    Button("\(WeatherService.shared.unit == "C" ? "✓ " : "")°C") {
+                        WeatherService.shared.setUnit("C")
+                    }
+                    Button("\(WeatherService.shared.unit == "F" ? "✓ " : "")°F") {
+                        WeatherService.shared.setUnit("F")
+                    }
+                }
+                Button(loc("weather.menu.refresh")) {
+                    WeatherService.shared.refreshIfNeeded(force: true, requestLocationPermission: true)
+                }
             } else if config.kind == .calendar {
                 Menu(loc("widget.menu.calendar_style")) {
                     ForEach(CalendarWidgetStyle.allCases) { cStyle in
@@ -1661,6 +1707,7 @@ struct WidgetGalleryModal: View {
     }
 
     @ObservedObject private var licenseManager = LicenseManager.shared
+    @ObservedObject private var weatherService = WeatherService.shared
     @State private var selectedCategory: GalleryCategory = .all
     @State private var searchText: String = ""
     @State private var selectedCardID: String = "weather-darkPremium"
@@ -1824,6 +1871,9 @@ struct WidgetGalleryModal: View {
             .frame(width: min(920, rootSize.width - 36), height: min(630, rootSize.height - 44))
             .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
             .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
+        }
+        .onAppear {
+            weatherService.refreshIfNeeded(requestLocationPermission: true)
         }
     }
 
@@ -1995,13 +2045,11 @@ struct WidgetGalleryModal: View {
             }
         }()
 
-        var effectiveConfig = card.config
-        if isSelected, card.config.kind.allowedSizes.contains(selectedSize) {
-            effectiveConfig.size = selectedSize
-        }
-        if card.category == .music {
-            effectiveConfig.musicAppearance = selectedMusicAppearance
-        }
+        let effectiveConfig = applyingGalleryOptions(
+            to: card.config,
+            category: card.category,
+            sizeOverride: (isSelected && card.config.kind.allowedSizes.contains(selectedSize)) ? selectedSize : nil
+        )
         return WidgetGalleryCardButton(
             card: card,
             effectiveConfig: effectiveConfig,
@@ -2015,19 +2063,41 @@ struct WidgetGalleryModal: View {
         .equatable()
     }
 
+    private func applyingGalleryOptions(
+        to base: CustomWidgetConfig,
+        category: GalleryCategory,
+        sizeOverride: WidgetSize?
+    ) -> CustomWidgetConfig {
+        var c = base
+        if let sizeOverride {
+            c.size = sizeOverride
+        }
+        if category == .music {
+            c.musicAppearance = selectedMusicAppearance
+        }
+        if c.kind == .weather {
+            if let snap = weatherService.snapshot {
+                c.weatherCity = snap.city
+                c.weatherUnit = snap.unit
+                c.weatherTemp = snap.temp
+                c.weatherCondition = snap.condition
+                c.weatherFeelsLike = snap.feelsLike
+            } else {
+                if !weatherService.activeCity.isEmpty {
+                    c.weatherCity = weatherService.activeCity
+                }
+                c.weatherUnit = weatherService.unit
+            }
+        }
+        return c
+    }
+
     @ViewBuilder
     private var liveSizePreviewBanner: some View {
         let card = activeCard
         let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
         let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
-        let previewConfig: CustomWidgetConfig = {
-            var c = card.config
-            c.size = chosenSize
-            if card.category == .music {
-                c.musicAppearance = selectedMusicAppearance
-            }
-            return c
-        }()
+        let previewConfig = applyingGalleryOptions(to: card.config, category: card.category, sizeOverride: chosenSize)
         let pw = previewConfig.size.width
         let ph = previewConfig.size.height
         let scale = min(130.0 / ph, 250.0 / pw)
@@ -2091,6 +2161,67 @@ struct WidgetGalleryModal: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
                                 .background(chosen ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+
+                if card.category == .weather {
+                    HStack(spacing: 6) {
+                        Text(loc("weather.gallery.location_label"))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.70))
+
+                        Button {
+                            weatherService.useCurrentLocation(requestPermission: true)
+                        } label: {
+                            let isAuto = weatherService.locationMode == .auto
+                            HStack(spacing: 4) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 9.5, weight: .bold))
+                                Text(loc("weather.gallery.auto_btn"))
+                                    .font(.system(size: 11, weight: isAuto ? .bold : .medium))
+                            }
+                            .foregroundStyle(isAuto ? .black : .white.opacity(0.88))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(isAuto ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                vm.showWeatherCityPicker = true
+                            }
+                        } label: {
+                            let isManual = weatherService.locationMode == .manual
+                            HStack(spacing: 4) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 9.5, weight: .bold))
+                                Text(isManual && !weatherService.activeCity.isEmpty ? weatherService.activeCity : loc("weather.menu.choose_city"))
+                                    .font(.system(size: 11, weight: isManual ? .bold : .medium))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(isManual ? .black : .white.opacity(0.88))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(isManual ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        ForEach(["C", "F"], id: \.self) { u in
+                            let chosen = weatherService.unit == u
+                            Button {
+                                weatherService.setUnit(u)
+                            } label: {
+                                Text("°\(u)")
+                                    .font(.system(size: 11, weight: chosen ? .bold : .medium))
+                                    .foregroundStyle(chosen ? .black : .white.opacity(0.88))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(chosen ? Color.white : Color.white.opacity(0.14), in: Capsule())
                             }
                             .buttonStyle(.plain)
                         }
@@ -2205,11 +2336,7 @@ struct WidgetGalleryModal: View {
         let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
         let hadExistingInCategory = existingInCategory != nil
         let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
-        var newConfig = card.config
-        newConfig.size = chosenSize
-        if card.category == .music {
-            newConfig.musicAppearance = selectedMusicAppearance
-        }
+        let newConfig = applyingGalleryOptions(to: card.config, category: card.category, sizeOverride: chosenSize)
 
         let currentPage = vm.page
         WidgetManager.shared.updateMusicStyle(for: newConfig.kind, style: newConfig.musicStyle)

@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.15",
-  "name": "LaunchPad v1.2.15",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.15",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.15\n\n- 🔘 **Indicateur de Pages Liquid Glass** : Les points de pagination en bas de l'écran sont désormais regroupés dans une pilule en verre translucide avec liseré lumineux et retour subtil au survol.",
+  "tag_name": "v1.2.16",
+  "name": "LaunchPad v1.2.16",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.16",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.16\n\n- 📍 **Météo Locale Automatique** : Les widgets météo détectent désormais automatiquement la ville exacte où vous vous trouvez et affichent les conditions, prévisions horaires et prévisions sur 7 jours en temps réel.\n- 🏙️ **Sélecteur de Ville Intégré** : Cliquez sur un widget météo, passez par son menu contextuel ou depuis la galerie pour rechercher et choisir n'importe quelle ville dans le monde, revenir à votre position exacte ou basculer entre °C et °F.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.15.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.15/LaunchPad-v1.2.15.zip"
+      "name": "LaunchPad-v1.2.16.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.16/LaunchPad-v1.2.16.zip"
     },
     {
-      "name": "LaunchPad-v1.2.15.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.15/LaunchPad-v1.2.15.dmg"
+      "name": "LaunchPad-v1.2.16.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.16/LaunchPad-v1.2.16.dmg"
     }
   ]
 }

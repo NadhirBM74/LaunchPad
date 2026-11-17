@@ -41,6 +41,7 @@ struct PremiumClockWidgetView: View {
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
+    @ObservedObject private var weatherService = WeatherService.shared
     @State private var currentDate = Date()
     @State private var timer: AnyCancellable?
 
@@ -102,6 +103,9 @@ struct PremiumClockWidgetView: View {
             currentDate = Date()
             if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
                 startTimer()
+                if config.clockStyle == .weatherClock {
+                    weatherService.refreshIfNeeded(requestLocationPermission: true)
+                }
             }
         }
         .onDisappear {

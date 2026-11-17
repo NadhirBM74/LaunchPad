@@ -261,19 +261,21 @@
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
 				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "LaucnhPad contrôle Musique et Spotify (lecture, pause, morceau suivant) depuis le widget multimédia, et utilise le Finder pour les apps protégées.";
 				INFOPLIST_KEY_NSAppleMusicUsageDescription = "LaucnhPad utilise Apple Music pour afficher les morceaux et contrôler la lecture dans le widget multimédia.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "LaunchPad utilise votre position pour afficher la météo exacte de votre ville dans les widgets.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "LaunchPad utilise votre position pour afficher la météo exacte de votre ville dans les widgets.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© Nadhir Ben Mabrouk";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.15;
+				MARKETING_VERSION = 1.2.16;
 				OTHER_CODE_SIGN_FLAGS = "-r='designated => identifier \"me.LaucnhPad\"'";
 				PRODUCT_BUNDLE_IDENTIFIER = me.LaucnhPad;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -312,19 +314,21 @@
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
 				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "LaucnhPad contrôle Musique et Spotify (lecture, pause, morceau suivant) depuis le widget multimédia, et utilise le Finder pour les apps protégées.";
 				INFOPLIST_KEY_NSAppleMusicUsageDescription = "LaucnhPad utilise Apple Music pour afficher les morceaux et contrôler la lecture dans le widget multimédia.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "LaunchPad utilise votre position pour afficher la météo exacte de votre ville dans les widgets.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "LaunchPad utilise votre position pour afficher la météo exacte de votre ville dans les widgets.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© Nadhir Ben Mabrouk";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.15;
+				MARKETING_VERSION = 1.2.16;
 				OTHER_CODE_SIGN_FLAGS = "-r='designated => identifier \"me.LaucnhPad\"'";
 				PRODUCT_BUNDLE_IDENTIFIER = me.LaucnhPad;
 				PRODUCT_NAME = "$(TARGET_NAME)";

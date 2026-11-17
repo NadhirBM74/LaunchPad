@@ -56,14 +56,25 @@ struct RichWeatherData {
     let daily: [(day: String, symbol: String, low: Int, high: Int, barStart: CGFloat, barEnd: CGFloat)]
 
     static func from(config: CustomWidgetConfig) -> RichWeatherData {
-        let t = config.weatherTemp
-        let high = t + 18
-        let low = t
-        let cond = config.weatherCondition
+        let live = WeatherService.shared.snapshot
+        let t = live?.temp ?? config.weatherTemp
+        let feelsLike = live?.feelsLike ?? config.weatherFeelsLike
+        let high = live?.high ?? (t + 4)
+        let low = live?.low ?? (t - 4)
+        let cond = live?.condition ?? config.weatherCondition
+        let unit = live?.unit ?? config.weatherUnit
+        let resolvedCity: String = {
+            if let liveCity = live?.city, !liveCity.isEmpty { return liveCity }
+            let svcCity = WeatherService.shared.activeCity
+            if !svcCity.isEmpty { return svcCity }
+            return config.weatherCity.isEmpty ? loc("weather.city_default") : config.weatherCity
+        }()
+
         let condDisplay: String = {
             switch cond.lowercased() {
             case "sunny": return loc("widget.weather.cond.sunny")
             case "clear": return loc("widget.weather.cond.clear")
+            case "cloudy": return loc("widget.weather.cond.cloudy")
             case "rainy": return loc("widget.weather.cond.drizzle")
             case "snowy": return loc("widget.weather.cond.snow")
             case "stormy": return loc("widget.weather.cond.storm")
@@ -71,49 +82,77 @@ struct RichWeatherData {
             }
         }()
 
-        let hourly: [(String, Int, String)] = [
-            ("19:00", t + 7, "cloud"),
-            ("22:00", t + 6, "cloud"),
-            ("02:00", max(0, t - 5), "wind"),
-            ("06:00", max(0, t - 3), "wind"),
-            ("10:00", t + 1, "sun.max")
-        ]
+        let hourly: [(String, Int, String)] = {
+            if let liveHourly = live?.hourly, !liveHourly.isEmpty {
+                return liveHourly.map { ($0.time, $0.temp, $0.symbol) }
+            }
+            return [
+                ("19:00", t + 1, "cloud"),
+                ("22:00", t, "cloud"),
+                ("02:00", t - 2, "wind"),
+                ("06:00", t - 1, "wind"),
+                ("10:00", t + 2, "sun.max")
+            ]
+        }()
 
         let dayFmt = DateFormatter()
         dayFmt.locale = Locale(identifier: LocalizationManager.activeLanguageCode)
         dayFmt.dateFormat = "EEE"
+        let isoFmt = DateFormatter()
+        isoFmt.locale = Locale(identifier: "en_US_POSIX")
+        isoFmt.dateFormat = "yyyy-MM-dd"
         let cal = Calendar.current
         let now = Date()
-        func localizedWeekday(offset: Int) -> String {
-            let d = cal.date(byAdding: .day, value: offset, to: now) ?? now
+        func localizedWeekday(offset: Int, isoDate: String? = nil) -> String {
+            let d: Date
+            if let isoDate, let parsed = isoFmt.date(from: isoDate) {
+                d = parsed
+            } else {
+                d = cal.date(byAdding: .day, value: offset, to: now) ?? now
+            }
             return dayFmt.string(from: d).replacingOccurrences(of: ".", with: "").capitalized
         }
 
-        let daily: [(String, String, Int, Int, CGFloat, CGFloat)] = [
-            (localizedWeekday(offset: 0), "cloud.rain", t, t + 18, 0.15, 0.92),
-            (localizedWeekday(offset: 1), "cloud.rain", t - 1, t + 11, 0.10, 0.68),
-            (localizedWeekday(offset: 2), "sun.max", t - 5, t + 12, 0.05, 0.72),
-            (localizedWeekday(offset: 3), "sun.max", t - 4, t + 12, 0.08, 0.74),
-            (localizedWeekday(offset: 4), "cloud.sun", t - 4, t + 1, 0.10, 0.48),
-            (localizedWeekday(offset: 5), "cloud.sun", t - 5, t + 12, 0.06, 0.72),
-            (localizedWeekday(offset: 6), "sun.max", t, t + 11, 0.14, 0.68)
-        ]
+        let daily: [(String, String, Int, Int, CGFloat, CGFloat)] = {
+            if let liveDaily = live?.daily, !liveDaily.isEmpty {
+                let weekMin = Double(liveDaily.map(\.low).min() ?? low)
+                let weekMax = Double(liveDaily.map(\.high).max() ?? high)
+                let span = max(1.0, weekMax - weekMin)
+                return liveDaily.enumerated().map { idx, d in
+                    let start = CGFloat(max(0.0, min(0.85, (Double(d.low) - weekMin) / span)))
+                    let end = CGFloat(max(Double(start) + 0.12, min(1.0, (Double(d.high) - weekMin) / span)))
+                    return (localizedWeekday(offset: idx, isoDate: d.isoDate), d.symbol, d.low, d.high, start, end)
+                }
+            }
+            return [
+                (localizedWeekday(offset: 0), "cloud.rain", low, high, 0.15, 0.92),
+                (localizedWeekday(offset: 1), "cloud.rain", low - 1, high - 1, 0.10, 0.68),
+                (localizedWeekday(offset: 2), "sun.max", low - 2, high + 1, 0.05, 0.72),
+                (localizedWeekday(offset: 3), "sun.max", low - 1, high + 2, 0.08, 0.74),
+                (localizedWeekday(offset: 4), "cloud.sun", low - 1, high - 1, 0.10, 0.48),
+                (localizedWeekday(offset: 5), "cloud.sun", low - 2, high, 0.06, 0.72),
+                (localizedWeekday(offset: 6), "sun.max", low, high + 1, 0.14, 0.68)
+            ]
+        }()
+
+        let windVal = live?.windSpeedValue ?? (unit == "C" ? 11 : 7)
+        let windStr = unit == "C" ? "\(windVal) km/h" : "\(windVal) mph"
 
         return RichWeatherData(
-            city: config.weatherCity.isEmpty ? "New York" : config.weatherCity,
+            city: resolvedCity,
             temp: t,
-            feelsLike: config.weatherFeelsLike,
+            feelsLike: feelsLike,
             high: high,
             low: low,
             condition: cond,
             conditionDisplay: condDisplay,
-            unit: config.weatherUnit,
-            humidity: 89,
-            windSpeed: config.weatherUnit == "C" ? "11 km/h" : "7 mph",
-            precipProb: 11,
-            uvIndex: 3,
-            sunrise: "7:30 AM",
-            sunset: "4:24 PM",
+            unit: unit,
+            humidity: live?.humidity ?? 72,
+            windSpeed: windStr,
+            precipProb: live?.precipProb ?? 15,
+            uvIndex: live?.uvIndex ?? 2,
+            sunrise: live?.sunrise ?? "07:45",
+            sunset: live?.sunset ?? "17:30",
             hourly: hourly,
             daily: daily
         )
@@ -149,6 +188,7 @@ struct PremiumWeatherWidgetView: View {
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
+    @ObservedObject private var weatherService = WeatherService.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
     @State private var animateWeather = false
@@ -188,6 +228,7 @@ struct PremiumWeatherWidgetView: View {
         .frame(width: w, height: h)
         .onAppear {
             syncWeatherAnimation(visible: LaunchpadViewModel.isLaunchpadVisible)
+            weatherService.refreshIfNeeded(requestLocationPermission: !isPreview && LaunchpadViewModel.isLaunchpadVisible)
         }
         .onDisappear {
             animateWeather = false
@@ -201,6 +242,9 @@ struct PremiumWeatherWidgetView: View {
         .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
             guard let visible = notif.object as? Bool else { return }
             syncWeatherAnimation(visible: visible)
+            if visible && !isPreview {
+                weatherService.refreshIfNeeded(requestLocationPermission: true)
+            }
         }
     }
 
