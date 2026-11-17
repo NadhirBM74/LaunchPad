@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import AppKit
+import CoreServices
 import MusicKit
 import AuthenticationServices
 import CryptoKit
@@ -323,12 +324,21 @@ public final class MusicServiceManager: ObservableObject {
     private var artworkCache: [String: Data] = [:]
     private var inFlightArtworkQueries: Set<String> = []
     private var inFlightSpotifyRefreshTask: Task<String?, Never>?
+    private var spotifyNotificationRefreshTask: Task<Void, Never>?
     private var randomLaunchTask: Task<Void, Never>?
     private var isRefreshingNowPlaying = false
     private var lastRefreshUptime: TimeInterval = 0
     private var lastSystemFetchUptime: TimeInterval = 0
     private var cachedSystemTrack: NowPlayingTrack? = nil
     private var hasPendingNotificationUpdate = false
+
+    public var isSpotifyInstalled: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") != nil
+    }
+
+    public var isAppleMusicInstalled: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") != nil
+    }
 
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
@@ -350,17 +360,11 @@ public final class MusicServiceManager: ObservableObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            if UserDefaults.standard.bool(forKey: "AppleMusicConnected") {
+            if UserDefaults.standard.bool(forKey: "AppleMusicConnected") || MusicAuthorization.currentStatus == .authorized {
                 self.verifyAppleMusicAuthorization()
             }
 
-            let hasSpotifyToken = await Task.detached(priority: .utility) {
-                KeychainHelper.loadString(key: "spotify_access_token") != nil
-            }.value
-            if hasSpotifyToken {
-                self.spotifyStatus = .connected(details: UserDefaults.standard.string(forKey: "SpotifyUserDisplayName"))
-                self.verifySpotifyConnection()
-            }
+            await self.verifyNativeSpotifyAvailability(askUserIfNeeded: false)
 
             if LaunchpadViewModel.isLaunchpadVisible {
                 self.refreshNowPlaying(force: true)
@@ -421,6 +425,7 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func processAppleMusicNotification(info: [AnyHashable: Any]) {
+        if preferredService == .spotify { return }
         let playerState = (info["Player State"] as? String) ?? ""
         let isPlaying = playerState.lowercased() == "playing"
         let name = (info["Name"] as? String) ?? ""
@@ -447,10 +452,6 @@ public final class MusicServiceManager: ObservableObject {
                 canControlPlayback: true,
                 limitationNotice: nil
             ))
-
-            if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
-                resolveArtwork(for: name, artist: artist, album: album)
-            }
         }
     }
 
@@ -464,34 +465,58 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func processSpotifyNotification(info: [AnyHashable: Any]) {
-        let playerState = (info["Player State"] as? String) ?? ""
-        let isPlaying = playerState.lowercased() == "playing"
-        let name = (info["Name"] as? String) ?? ""
-        let artist = (info["Artist"] as? String) ?? ""
-        let album = (info["Album"] as? String) ?? ""
+        let playerState = ((info["Player State"] as? String) ?? "").lowercased()
+        let isPlaying = playerState == "playing"
+        let name = ((info["Name"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let artist = ((info["Artist"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let album = ((info["Album"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawDuration = (info["Duration"] as? NSNumber)?.doubleValue ?? 0
+        let durationSec = rawDuration > 1000 ? (rawDuration / 1000.0) : rawDuration
+        let notifElapsed = (info["Playback Position"] as? NSNumber)?.doubleValue
 
-        if !name.isEmpty {
-            let isSameSong = (self.currentTrack.title == name && self.currentTrack.artist == artist)
-            let cacheKey = artworkCacheKey(title: name, artist: artist)
-            let existingArtwork = isSameSong ? self.currentTrack.artworkData : artworkCache[cacheKey]
-            let elapsed = isSameSong ? self.progressState.elapsedSeconds : 0
+        if playerState == "stopped" || name.isEmpty {
+            if preferredService == .spotify || currentTrack.serviceSource == .spotify {
+                assignCurrentTrack(.empty)
+            }
+            return
+        }
 
-            assignCurrentTrack(NowPlayingTrack(
-                title: name,
-                artist: artist,
-                album: album,
-                artworkURL: isSameSong ? self.currentTrack.artworkURL : nil,
-                artworkData: existingArtwork,
-                isPlaying: isPlaying,
-                elapsedSeconds: elapsed,
-                durationSeconds: self.currentTrack.durationSeconds > 0 ? self.currentTrack.durationSeconds : 210,
-                serviceSource: .spotify,
-                canControlPlayback: true,
-                limitationNotice: spotifyLimitationNotice
-            ))
+        // Si l'utilisateur a verrouillé Apple Music, ignorer les notifications Spotify en arrière-plan.
+        if preferredService == .appleMusic { return }
 
-            if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
-                resolveArtwork(for: name, artist: artist, album: album, fallbackURL: self.currentTrack.artworkURL)
+        if spotifyStatus == .notConnected && isSpotifyInstalled {
+            spotifyStatus = .connected(details: "Spotify macOS")
+        }
+
+        let isSameSong = (self.currentTrack.title == name && self.currentTrack.artist == artist && self.currentTrack.serviceSource == .spotify)
+        let cacheKey = artworkCacheKey(title: name, artist: artist)
+        let existingArtwork = isSameSong ? self.currentTrack.artworkData : artworkCache[cacheKey]
+        let elapsed = notifElapsed ?? (isSameSong ? self.progressState.elapsedSeconds : 0)
+        let resolvedDuration = durationSec > 0 ? durationSec : (isSameSong && self.currentTrack.durationSeconds > 0 ? self.currentTrack.durationSeconds : 210)
+
+        assignCurrentTrack(NowPlayingTrack(
+            title: name,
+            artist: artist,
+            album: album,
+            artworkURL: isSameSong ? self.currentTrack.artworkURL : nil,
+            artworkData: existingArtwork,
+            isPlaying: isPlaying,
+            elapsedSeconds: elapsed,
+            durationSeconds: resolvedDuration,
+            serviceSource: .spotify,
+            canControlPlayback: true,
+            limitationNotice: nil
+        ))
+
+        if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
+            // Récupère immédiatement l'URL officielle de pochette depuis Spotify Desktop (i.scdn.co) sans attendre le timer de 10 s.
+            spotifyNotificationRefreshTask?.cancel()
+            spotifyNotificationRefreshTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, !Task.isCancelled else { return }
+                if let local = await self.fetchLocalSpotifyTrack() {
+                    self.assignCurrentTrack(local)
+                }
             }
         }
     }
@@ -614,74 +639,128 @@ public final class MusicServiceManager: ObservableObject {
         }
     }
 
-    // MARK: - Spotify (OAuth 2.0 PKCE Officiel)
+    // MARK: - Source & Connexion Native Spotify (sans configuration développeur)
 
-    public func connectSpotify() {
-        let clientID = effectiveSpotifyClientID
-        let verifier = Self.generateCodeVerifier()
-        let challenge = Self.generateCodeChallenge(from: verifier)
-        let state = UUID().uuidString
+    /// Sélectionne la source audio dans les Réglages et connecte le service choisi en 1 clic.
+    public func selectSource(_ source: MusicServiceSource) {
+        preferredService = source
+        switch source {
+        case .spotify:
+            if !spotifyStatus.isConnected {
+                connectSpotify()
+            } else {
+                refreshNowPlaying(force: true)
+            }
+        case .appleMusic:
+            if !appleMusicStatus.isConnected {
+                connectAppleMusic()
+            } else {
+                refreshNowPlaying(force: true)
+            }
+        case .system, .none:
+            refreshNowPlaying(force: true)
+        }
+    }
 
-        self.pendingPKCEVerifier = verifier
-        self.pendingAuthState = state
-        self.spotifyStatus = .connecting
+    public func openAutomationPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 
-        var components = URLComponents(string: "https://accounts.spotify.com/authorize")!
-        components.queryItems = [
-            URLQueryItem(name: "client_id", value: clientID),
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "redirect_uri", value: Self.spotifyRedirectURI),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-            URLQueryItem(name: "code_challenge", value: challenge),
-            URLQueryItem(name: "state", value: state),
-            URLQueryItem(name: "scope", value: "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read user-top-read playlist-read-private")
-        ]
+    nonisolated private static func checkAutomationPermission(bundleID: String, askUserIfNeeded: Bool) -> OSStatus {
+        let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
+        guard let aeDesc = target.aeDesc else { return OSStatus(-1) }
+        return AEDeterminePermissionToAutomateTarget(aeDesc, typeWildCard, typeWildCard, askUserIfNeeded)
+    }
 
-        guard let authURL = components.url else {
-            self.spotifyStatus = .error(message: "URL d'authentification invalide.")
+    private func verifyNativeSpotifyAvailability(askUserIfNeeded: Bool) async {
+        guard isSpotifyInstalled else {
+            spotifyStatus = .notConnected
             return
         }
 
-        authSession?.cancel()
-        authSession = ASWebAuthenticationSession(url: authURL, callbackURLScheme: "launchpad") { [weak self] callbackURL, error in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if let error = error as? ASWebAuthenticationSessionError {
-                    if error.code == .canceledLogin {
-                        // Annulation par l'utilisateur : retour propre sans message alarmiste
-                        if !self.spotifyStatus.isConnected {
-                            self.spotifyStatus = .notConnected
-                        }
-                        return
+        let status = await Task.detached(priority: .utility) {
+            Self.checkAutomationPermission(bundleID: "com.spotify.client", askUserIfNeeded: askUserIfNeeded)
+        }.value
+
+        switch status {
+        case noErr:
+            UserDefaults.standard.set(true, forKey: "SpotifyLocalConnected")
+            spotifyUserDisplayName = nil
+            spotifyLimitationNotice = nil
+            spotifyStatus = .connected(details: "Spotify macOS")
+        case OSStatus(errAEEventNotPermitted):
+            spotifyStatus = .restricted(reason: "Autorisation macOS requise")
+        default:
+            if UserDefaults.standard.bool(forKey: "SpotifyLocalConnected") {
+                spotifyStatus = .connected(details: "Spotify macOS")
+            } else {
+                spotifyStatus = .notConnected
+            }
+        }
+    }
+
+    /// Connecte Spotify nativement sur macOS sans compte développeur ni navigateur OAuth.
+    public func connectSpotify() {
+        guard let spotifyURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") else {
+            self.spotifyStatus = .error(message: "Spotify n'est pas installé sur ce Mac.")
+            return
+        }
+
+        self.spotifyStatus = .connecting
+        self.spotifyLimitationNotice = nil
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            var permStatus = await Task.detached(priority: .userInitiated) {
+                Self.checkAutomationPermission(bundleID: "com.spotify.client", askUserIfNeeded: true)
+            }.value
+
+            // Si Spotify n'est pas encore ouvert (procNotFound = -600), l'ouvrir discrètement en arrière-plan
+            // afin que macOS puisse afficher une seule fois la demande d'autorisation native.
+            if permStatus == OSStatus(procNotFound) {
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = false
+                config.hides = true
+                _ = try? await NSWorkspace.shared.openApplication(at: spotifyURL, configuration: config)
+
+                for _ in 0..<10 {
+                    if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").isEmpty {
+                        break
                     }
-                    self.spotifyStatus = .error(message: error.localizedDescription)
-                    return
+                    try? await Task.sleep(for: .milliseconds(250))
                 }
+                try? await Task.sleep(for: .milliseconds(250))
 
-                guard let callbackURL,
-                      let urlComponents = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false) else {
-                    self.spotifyStatus = .error(message: loc("music.spotify.access_denied"))
-                    return
-                }
+                permStatus = await Task.detached(priority: .userInitiated) {
+                    Self.checkAutomationPermission(bundleID: "com.spotify.client", askUserIfNeeded: true)
+                }.value
+            }
 
-                if let returnedState = urlComponents.queryItems?.first(where: { $0.name == "state" })?.value,
-                   returnedState != self.pendingAuthState {
-                    self.spotifyStatus = .error(message: "Contrôle de sécurité (state) échoué.")
-                    return
-                }
-
-                if let code = urlComponents.queryItems?.first(where: { $0.name == "code" })?.value,
-                   let verifier = self.pendingPKCEVerifier {
-                    await self.exchangeSpotifyCodeForToken(code: code, verifier: verifier)
-                } else if let errorMsg = urlComponents.queryItems?.first(where: { $0.name == "error" })?.value {
-                    self.spotifyStatus = .error(message: "Erreur Spotify : \(errorMsg)")
+            switch permStatus {
+            case noErr:
+                UserDefaults.standard.set(true, forKey: "SpotifyLocalConnected")
+                self.spotifyStatus = .connected(details: "Spotify macOS")
+                self.refreshNowPlaying(force: true)
+            case OSStatus(errAEEventNotPermitted):
+                UserDefaults.standard.set(false, forKey: "SpotifyLocalConnected")
+                self.spotifyStatus = .restricted(reason: "Autorisation Automatisation refusée")
+            default:
+                // Dernier essai direct via AppleScript si Spotify démarre encore
+                let res = await Self.runOsascript("tell application \"Spotify\" to get player state")
+                if res.success {
+                    UserDefaults.standard.set(true, forKey: "SpotifyLocalConnected")
+                    self.spotifyStatus = .connected(details: "Spotify macOS")
+                    self.refreshNowPlaying(force: true)
+                } else {
+                    UserDefaults.standard.set(true, forKey: "SpotifyLocalConnected")
+                    self.spotifyStatus = .connected(details: "Spotify prêt sur ce Mac")
+                    self.refreshNowPlaying(force: true)
                 }
             }
         }
-
-        authSession?.presentationContextProvider = authAnchorProvider
-        authSession?.prefersEphemeralWebBrowserSession = false
-        authSession?.start()
     }
 
     public func disconnectSpotify() {
@@ -690,6 +769,7 @@ public final class MusicServiceManager: ObservableObject {
         KeychainHelper.delete(key: "spotify_token_expiry")
         UserDefaults.standard.removeObject(forKey: "SpotifyUserDisplayName")
         UserDefaults.standard.removeObject(forKey: "SpotifyProductType")
+        UserDefaults.standard.set(false, forKey: "SpotifyLocalConnected")
 
         spotifyStatus = .notConnected
         spotifyUserDisplayName = nil
@@ -895,60 +975,79 @@ public final class MusicServiceManager: ObservableObject {
             progressState.elapsedSeconds = newTrack.elapsedSeconds
         }
         updateProgressTimerState()
+
+        if newTrack.hasTrack && newTrack.artworkData == nil && LaunchpadViewModel.isLaunchpadVisible {
+            switch newTrack.serviceSource {
+            case .spotify:
+                resolveArtwork(for: newTrack.title, artist: newTrack.artist, album: newTrack.album, fallbackURL: newTrack.artworkURL, allowLocalMusicApp: false)
+            case .appleMusic:
+                resolveArtwork(for: newTrack.title, artist: newTrack.artist, album: newTrack.album, allowLocalMusicApp: true)
+            case .system:
+                if !Self.isBrowser(bundleID: newTrack.sourceBundleID), !newTrack.artist.isEmpty {
+                    resolveArtwork(for: newTrack.title, artist: newTrack.artist, album: newTrack.album, allowLocalMusicApp: false)
+                }
+            case .none:
+                break
+            }
+        }
     }
 
     private func performRefreshNowPlaying(force: Bool = false) async {
-        // 1. Si un service particulier est explicitement forcé par l'utilisateur
+        // 1. Source explicite Spotify : 100 % native sur Spotify macOS sans basculer sur un autre lecteur.
         if preferredService == .spotify {
-            if spotifyStatus.isConnected, let track = await fetchSpotifyCurrentlyPlaying() {
-                assignCurrentTrack(track)
-                return
-            }
             if let localSpotify = await fetchLocalSpotifyTrack() {
                 assignCurrentTrack(localSpotify)
                 return
             }
-        } else if preferredService == .appleMusic {
+            if let tokenTrack = await (KeychainHelper.loadString(key: "spotify_access_token") != nil ? fetchSpotifyCurrentlyPlaying() : nil) {
+                assignCurrentTrack(tokenTrack)
+                return
+            }
+            if currentTrack.hasTrack {
+                assignCurrentTrack(.empty)
+            }
+            return
+        }
+
+        // 2. Source explicite Apple Music : reste strictement dédiée à l'app Musique.
+        if preferredService == .appleMusic {
             if let track = await fetchLocalAppleMusicTrack() {
                 assignCurrentTrack(track)
                 return
             }
+            if currentTrack.hasTrack {
+                assignCurrentTrack(.empty)
+            }
+            return
         }
 
-        // 2. Mode automatique (.system ou préférence par défaut) :
-        // On interroge d'abord les lecteurs dédiés (0 sous-processus externe, ultra-léger en CPU).
-        async let spotifyWebTrack = spotifyStatus.isConnected ? fetchSpotifyCurrentlyPlaying() : nil
+        // 3. Mode Automatique (.system) : détecte d'abord Spotify / Musique s'ils sont ouverts.
         async let localAppleTrack = fetchLocalAppleMusicTrack()
         async let localSpotifyTrack = fetchLocalSpotifyTrack()
 
-        let (spotifyWeb, localApple, localSpotify) = await (spotifyWebTrack, localAppleTrack, localSpotifyTrack)
-        let dedicatedCandidates = [spotifyWeb, localApple, localSpotify].compactMap { $0 }
+        let (localApple, localSpotify) = await (localAppleTrack, localSpotifyTrack)
+        let dedicatedCandidates = [localSpotify, localApple].compactMap { $0 }
 
-        // Si Musique ou Spotify est en cours de lecture active, on évite complètement de lancer osascript !
         if let playingDedicated = dedicatedCandidates.first(where: { $0.isPlaying }) {
             assignCurrentTrack(playingDedicated)
             return
         }
 
-        // 3. Seulement si aucun lecteur dédié ne joue, on interroge la lecture système universelle (avec limitation de fréquence)
+        // 4. Sinon interroger les navigateurs / lecteurs vidéo / médias système via MediaRemote.
         let system = await fetchSystemTrack(force: force)
         let candidates = dedicatedCandidates + [system].compactMap { $0 }
 
-        // Priorité 1 : Le lecteur actuellement en cours de lecture
         if let playingCandidate = candidates.first(where: { $0.isPlaying }) {
             assignCurrentTrack(playingCandidate)
             return
         }
 
-        // Priorité 2 : Si aucun ne joue actuellement, afficher le dernier morceau en pause disponible
         if let pausedCandidate = candidates.first(where: { $0.hasTrack }) {
             assignCurrentTrack(pausedCandidate)
             return
         }
 
-        // Priorité 3 : plus aucune lecture nulle part (application fermée) → on vide le widget
-        // plutôt que d'afficher indéfiniment un morceau périmé.
-        if currentTrack.hasTrack, currentTrack.serviceSource == .system {
+        if currentTrack.hasTrack {
             assignCurrentTrack(.empty)
         }
     }
@@ -1125,8 +1224,8 @@ public final class MusicServiceManager: ObservableObject {
             @MainActor
             func applyIfStillCurrent(_ data: Data) {
                 self.storeArtwork(data, forKey: cacheKey)
-                if self.currentTrack.title == trimmedTitle &&
-                   (trimmedArtist.isEmpty || self.currentTrack.artist.caseInsensitiveCompare(trimmedArtist) == .orderedSame) {
+                let curTitle = self.currentTrack.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                if curTitle.caseInsensitiveCompare(trimmedTitle) == .orderedSame {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         self.currentTrack.artworkData = data
                     }
@@ -1392,7 +1491,7 @@ public final class MusicServiceManager: ObservableObject {
         let cacheKey = artworkCacheKey(title: title, artist: artist)
         let existingArtwork = isSameSong ? self.currentTrack.artworkData : artworkCache[cacheKey]
 
-        let track = NowPlayingTrack(
+        return NowPlayingTrack(
             title: title,
             artist: artist,
             album: album,
@@ -1405,11 +1504,6 @@ public final class MusicServiceManager: ObservableObject {
             canControlPlayback: true,
             limitationNotice: nil
         )
-
-        if existingArtwork == nil {
-            resolveArtwork(for: title, artist: artist, album: album)
-        }
-        return track
     }
 
     private func fetchLocalSpotifyTrack() async -> NowPlayingTrack? {
@@ -1427,21 +1521,21 @@ public final class MusicServiceManager: ObservableObject {
         guard parts.count >= 6 else { return nil }
 
         let isPlaying = parts[0] == "playing"
-        let title = parts[1]
-        let artist = parts[2]
-        let album = parts[3]
+        let title = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        let artist = parts[2].trimmingCharacters(in: .whitespacesAndNewlines)
+        let album = parts[3].trimmingCharacters(in: .whitespacesAndNewlines)
         let elapsed = Self.parseDouble(parts[4]) ?? 0
         let duration = Self.parseDouble(parts[5]) ?? 210
-        let artworkUrlString = parts.count > 6 ? parts[6] : ""
+        let artworkUrlString = parts.count > 6 ? parts[6].trimmingCharacters(in: .whitespacesAndNewlines) : ""
 
         guard !title.isEmpty else { return nil }
 
-        let artURL = URL(string: artworkUrlString)
-        let isSameSong = (self.currentTrack.title == title && self.currentTrack.artist == artist)
+        let artURL = artworkUrlString.isEmpty ? nil : URL(string: artworkUrlString)
+        let isSameSong = (self.currentTrack.title == title && self.currentTrack.artist == artist && self.currentTrack.serviceSource == .spotify)
         let cacheKey = artworkCacheKey(title: title, artist: artist)
         let existingArtwork = isSameSong ? self.currentTrack.artworkData : artworkCache[cacheKey]
 
-        let track = NowPlayingTrack(
+        return NowPlayingTrack(
             title: title,
             artist: artist,
             album: album,
@@ -1452,13 +1546,8 @@ public final class MusicServiceManager: ObservableObject {
             durationSeconds: max(1, duration),
             serviceSource: .spotify,
             canControlPlayback: true,
-            limitationNotice: spotifyLimitationNotice
+            limitationNotice: nil
         )
-
-        if existingArtwork == nil {
-            resolveArtwork(for: title, artist: artist, album: album, fallbackURL: artURL)
-        }
-        return track
     }
 
     // MARK: - Contrôles de Lecture (Play / Pause / Next / Prev)
@@ -1553,14 +1642,7 @@ public final class MusicServiceManager: ObservableObject {
     public func launchAndPlayPreferredPlatform() {
         let useSpotify = (preferredService == .spotify) || (preferredService == .system && spotifyStatus.isConnected && !appleMusicStatus.isConnected)
         if useSpotify {
-            let bundleID = "com.spotify.client"
-            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                self?.toggleSpotifyPlayback()
-                self?.refreshNowPlaying()
-            }
+            playRandomMusic()
         } else {
             let bundleID = "com.apple.Music"
             if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
@@ -2024,23 +2106,39 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func playSpotifyLocalWithShuffle() async -> NowPlayingTrack? {
+        if !isAppRunning(bundleID: "com.spotify.client"),
+           let spotifyURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") {
+            let cfg = NSWorkspace.OpenConfiguration()
+            cfg.activates = false
+            _ = try? await NSWorkspace.shared.openApplication(at: spotifyURL, configuration: cfg)
+            for _ in 0..<12 {
+                if isAppRunning(bundleID: "com.spotify.client") { break }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+
         let scriptSource = """
         tell application "Spotify"
             if not running then
                 launch
-                delay 0.8
+                delay 1.0
             end if
             try
                 set shuffling to true
             end try
             try
-                play track "spotify:collection:tracks"
-            on error
-                try
-                    play
-                end try
+                play
             end try
-            delay 0.3
+            delay 0.35
+            try
+                if (player state as string) is not "playing" then
+                    try
+                        play track "spotify:collection:tracks"
+                        delay 0.35
+                    end try
+                end if
+            end try
             try
                 set pState to (player state as string)
                 set trName to (name of current track as string)

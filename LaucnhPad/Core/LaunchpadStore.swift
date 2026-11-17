@@ -418,10 +418,21 @@ final class LaunchpadStore: ObservableObject {
     // MARK: Réorganisation manuelle
 
     /// Déplace un élément de premier niveau à un index de la liste affichée.
-    func moveItem(_ id: String, toVisibleIndex target: Int) {
+    func moveItem(_ id: String, toVisibleIndex target: Int, afterTarget: Bool = false, unpinFromLastPage: Bool = false) {
         guard let from = items.firstIndex(where: { $0.id == id }) else { return }
         let others = visibleItems.filter { $0.id != id }
-        let destination = max(0, min(target, others.count))
+        let rawDestination: Int
+        if afterTarget {
+            let targetID = visibleItems.indices.contains(target) ? visibleItems[target].id : nil
+            if let targetID, let anchorIdx = others.firstIndex(where: { $0.id == targetID }) {
+                rawDestination = anchorIdx + 1
+            } else {
+                rawDestination = others.count
+            }
+        } else {
+            rawDestination = target
+        }
+        let destination = max(0, min(rawDestination, others.count))
         var copy = items
         var moving = copy.remove(at: from)
         let insertionIndex: Int
@@ -437,8 +448,10 @@ final class LaunchpadStore: ObservableObject {
             insertionIndex = copy.count
         }
         if case .folder(var movingFolder) = moving, movingFolder.pinToLastPage {
-            // Si l'utilisateur sort manuellement un dossier Apple avant le groupe épinglé, on retire l'épinglage automatique.
-            if let firstPinned = copy.firstIndex(where: { $0.folder?.pinToLastPage == true }), insertionIndex < firstPinned {
+            // Retire l'épinglage automatique si le dossier est déplacé vers une page normale ou s'il était le seul dossier épinglé déplacé avant la fin.
+            let firstPinned = copy.firstIndex(where: { $0.folder?.pinToLastPage == true })
+            let movedBeforePinnedGroup = firstPinned.map { insertionIndex < $0 } ?? (insertionIndex < copy.count)
+            if unpinFromLastPage || movedBeforePinnedGroup {
                 movingFolder.pinToLastPage = false
                 moving = .folder(movingFolder)
             }
@@ -463,7 +476,9 @@ final class LaunchpadStore: ObservableObject {
             commit(copy)
             return folder.id
         case .folder(var folder):
-            folder.apps.append(appID)
+            if !folder.apps.contains(appID) {
+                folder.apps.append(appID)
+            }
             copy[targetIndex] = .folder(folder)
             commit(copy)
             return folder.id

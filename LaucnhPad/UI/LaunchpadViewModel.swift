@@ -50,7 +50,7 @@ struct GridMetrics: Equatable {
         let icon = iconCenter(ofSlot: slot)
         let dx = point.x - icon.x
         let dy = point.y - icon.y
-        let maxRadius = iconSize * 0.42
+        let maxRadius = iconSize * 0.36
         return (slot, (dx * dx + dy * dy) < (maxRadius * maxRadius))
     }
 }
@@ -295,6 +295,7 @@ final class LaunchpadViewModel: ObservableObject {
     private var longPressTask: Task<Void, Never>?
     private var reorderTask: Task<Void, Never>?
     private var pendingReorderKey: String?
+    private var lastReorderHoverKey: String?
     private var pendingReorderAction: (() -> Void)?
     private var mergeTask: Task<Void, Never>?
     private var mergeCandidate: String?
@@ -879,6 +880,9 @@ final class LaunchpadViewModel: ObservableObject {
     var canDrag: Bool { !isSearching && !isPresentingModal }
 
     func pointerChanged(_ item: LayoutItem, source: DragSource, value: DragGesture.Value) {
+        if press == nil, drag != nil {
+            endDrag()
+        }
         if press?.id != item.id {
             guard drag == nil else { return }
             press = PressState(id: item.id)
@@ -957,6 +961,7 @@ final class LaunchpadViewModel: ObservableObject {
 
     private func beginDrag(_ item: LayoutItem, source: DragSource, value: DragGesture.Value) {
         let center = iconCenter(for: item.id, source: source) ?? value.startLocation
+        lastReorderHoverKey = nil
         pointer.location = value.location
         drag = DragState(id: item.id, source: source, isFolder: item.isFolder,
                          grabOffset: CGSize(width: value.startLocation.x - center.x, height: value.startLocation.y - center.y))
@@ -990,11 +995,45 @@ final class LaunchpadViewModel: ObservableObject {
         else { cancelEdge() }
 
         let local = CGPoint(x: location.x - gridOrigin.x, y: location.y - gridOrigin.y)
-        guard let hit = m.hit(local) else { cancelMerge(); cancelReorder(); return }
         let items = store.visibleItems
         guard let draggedIndex = items.firstIndex(where: { $0.id == state.id }) else { return }
-
         let placedItems = placedDisplayItems(metrics: m)
+        let pageItems = placedItems.filter { $0.page == page }
+
+        guard let hit = m.hit(local) else {
+            cancelMerge()
+            // Lorsqu'on glisse sur les marges gauche/droite (changement de page), permettre quand même le placement sur la page affichée.
+            guard local.y >= 0, local.y < m.size.height,
+                  placedItem(for: state.id)?.page != page else {
+                cancelReorder()
+                return
+            }
+            if local.x < m.horizontalPadding, let first = pageItems.first,
+               let targetIdx = items.firstIndex(where: { $0.id == first.id }), targetIdx != draggedIndex {
+                let hoverKey = "edge-start-p\(page)"
+                guard hoverKey != lastReorderHoverKey else { return }
+                let id = state.id
+                let pageHasPinnedOnly = !pageItems.isEmpty && pageItems.allSatisfy { $0.item.folder?.pinToLastPage == true }
+                scheduleReorder(key: hoverKey) { [weak self] in
+                    self?.lastReorderHoverKey = hoverKey
+                    self?.store.moveItem(id, toVisibleIndex: targetIdx, afterTarget: false, unpinFromLastPage: !pageHasPinnedOnly)
+                }
+            } else if local.x >= m.size.width - m.horizontalPadding, let last = pageItems.last,
+                      let targetIdx = items.firstIndex(where: { $0.id == last.id }), targetIdx != draggedIndex {
+                let hoverKey = "edge-end-p\(page)"
+                guard hoverKey != lastReorderHoverKey else { return }
+                let id = state.id
+                let pageHasPinnedOnly = !pageItems.isEmpty && pageItems.allSatisfy { $0.item.folder?.pinToLastPage == true }
+                scheduleReorder(key: hoverKey) { [weak self] in
+                    self?.lastReorderHoverKey = hoverKey
+                    self?.store.moveItem(id, toVisibleIndex: targetIdx, afterTarget: true, unpinFromLastPage: !pageHasPinnedOnly)
+                }
+            } else {
+                cancelReorder()
+            }
+            return
+        }
+
         let hitCol = hit.slot % m.columns
         let hitRow = hit.slot / m.columns
         let targetPlaced = placedItemAt(page: page, col: hitCol, row: hitRow)
@@ -1003,25 +1042,38 @@ final class LaunchpadViewModel: ObservableObject {
 
         if hit.onIcon, let targetPlaced, targetPlaced.id != state.id, !state.isFolder, !isDraggedWidget, !isTargetWidget {
             cancelReorder()
+            lastReorderHoverKey = nil
             scheduleMerge(targetPlaced.id)
             return
         }
         cancelMerge()
 
         if let targetPlaced {
-            guard targetPlaced.id != state.id else { cancelReorder(); return }
+            guard targetPlaced.id != state.id else {
+                lastReorderHoverKey = "cell-\(page)-\(hitRow)-\(hitCol)"
+                cancelReorder()
+                return
+            }
             guard let targetIdx = items.firstIndex(where: { $0.id == targetPlaced.id }) else { return }
             guard targetIdx != draggedIndex else { cancelReorder(); return }
+            let hoverKey = "cell-\(page)-\(hitRow)-\(hitCol)"
+            // Empêche tout aller-retour sur la même case quand un widget multi-cases ou une rangée glisse sous le curseur immobile.
+            guard hoverKey != lastReorderHoverKey else { return }
             let id = state.id
-            scheduleReorder(key: "grid-\(targetIdx)") { [weak self] in
-                self?.store.moveItem(id, toVisibleIndex: targetIdx)
+            let targetIsPinnedFolder = targetPlaced.item.folder?.pinToLastPage == true
+            scheduleReorder(key: hoverKey) { [weak self] in
+                self?.lastReorderHoverKey = hoverKey
+                self?.store.moveItem(id, toVisibleIndex: targetIdx, afterTarget: false, unpinFromLastPage: !targetIsPinnedFolder)
             }
         } else {
-            let pageItems = placedItems.filter { $0.page == page }
             if let last = pageItems.last, let targetIdx = items.firstIndex(where: { $0.id == last.id }), targetIdx != draggedIndex {
+                let hoverKey = "end-p\(page)-\(hit.slot)"
+                guard hoverKey != lastReorderHoverKey else { return }
                 let id = state.id
-                scheduleReorder(key: "grid-end-\(targetIdx)") { [weak self] in
-                    self?.store.moveItem(id, toVisibleIndex: targetIdx)
+                let pageHasPinned = pageItems.contains { $0.item.folder?.pinToLastPage == true }
+                scheduleReorder(key: hoverKey) { [weak self] in
+                    self?.lastReorderHoverKey = hoverKey
+                    self?.store.moveItem(id, toVisibleIndex: targetIdx, afterTarget: true, unpinFromLastPage: !pageHasPinned)
                 }
             }
         }
@@ -1031,9 +1083,16 @@ final class LaunchpadViewModel: ObservableObject {
         guard let fm = folderMetrics, !fm.scrolls, let state = drag,
               let folder = store.visibleFolder(folderID), let slot = fm.hit(location) else { cancelReorder(); return }
         let desired = min(slot, folder.apps.count - 1)
-        guard let current = folder.apps.firstIndex(of: state.id), desired != current else { cancelReorder(); return }
+        guard let current = folder.apps.firstIndex(of: state.id), desired != current else {
+            lastReorderHoverKey = "folder-\(slot)"
+            cancelReorder()
+            return
+        }
+        let hoverKey = "folder-\(slot)"
+        guard hoverKey != lastReorderHoverKey else { return }
         let id = state.id
-        scheduleReorder(key: "folder-\(desired)") { [weak self] in
+        scheduleReorder(key: hoverKey) { [weak self] in
+            self?.lastReorderHoverKey = hoverKey
             self?.store.moveInFolder(id, folderID: folderID, toVisibleIndex: desired)
         }
     }
@@ -1042,6 +1101,7 @@ final class LaunchpadViewModel: ObservableObject {
         guard var state = drag else { return }
         cancelReorder()
         cancelMerge()
+        lastReorderHoverKey = nil
         folderSnapshot = overlayFolder
         withAnimation(motion(.easeOut(duration: 0.22))) {
             store.removeFromFolder(state.id, folderID: folderID)
@@ -1049,13 +1109,18 @@ final class LaunchpadViewModel: ObservableObject {
         }
         state.detached = true
         drag = state
-        if let m = metrics, let index = store.visibleItems.firstIndex(where: { $0.id == state.id }) {
-            setPage(index / m.pageSize)
+        if let m = metrics {
+            if let placed = placedItem(for: state.id) {
+                setPage(placed.page)
+            } else if let index = store.visibleItems.firstIndex(where: { $0.id == state.id }) {
+                setPage(index / m.pageSize)
+            }
         }
     }
 
     private func endDrag() {
         cancelEdge()
+        lastReorderHoverKey = nil
         reorderTask?.cancel()
         if let action = pendingReorderAction {
             withAnimation(motion(.spring(response: 0.3, dampingFraction: 0.85))) { action() }
@@ -1147,6 +1212,7 @@ final class LaunchpadViewModel: ObservableObject {
                 guard let self, !Task.isCancelled, self.drag != nil else { return }
                 let target = self.page + direction
                 guard target >= 0, target < self.pageCount else { return }
+                self.lastReorderHoverKey = nil
                 self.setPage(target)
                 self.gridHover(self.pointer.location)
                 try? await Task.sleep(for: .milliseconds(300))

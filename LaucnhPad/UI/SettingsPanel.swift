@@ -82,7 +82,6 @@ struct SettingsPanel: View {
     @State private var showAdvancedInGeneral = false
     @State private var showManageAppsInCustomization = false
     @State private var settingsToast: String? = nil
-    @State private var settingsSearchQuery: String = ""
     @State private var isPlusSectionExpanded: Bool = true
     @State private var hasLaunchOSDB = false
     @State private var hasSystemLPDB = false
@@ -250,29 +249,20 @@ struct SettingsPanel: View {
                     rightPaneHeader
                         .padding(.horizontal, 24)
                         .padding(.top, 22)
-                        .padding(.bottom, 12)
-
-                    // Barre de recherche intégrée (comme "Search in Albums")
-                    settingsSearchBar
-                        .padding(.horizontal, 24)
                         .padding(.bottom, 14)
 
                     Divider().background(SettingsStyle.separator)
 
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 14) {
-                            if !settingsSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                searchResultsSection
-                            } else {
-                                switch selectedTab {
-                                case .interface: interfaceTab
-                                case .apps: customizationAndAppsTab
-                                case .notifications: notificationsTab
-                                case .general: generalTab
-                                case .advanced: advancedTab
-                                case .license: licenseTab
-                                case .about: aboutTab
-                                }
+                            switch selectedTab {
+                            case .interface: interfaceTab
+                            case .apps: customizationAndAppsTab
+                            case .notifications: notificationsTab
+                            case .general: generalTab
+                            case .advanced: advancedTab
+                            case .license: licenseTab
+                            case .about: aboutTab
                             }
                         }
                         .padding(.horizontal, 24)
@@ -449,7 +439,6 @@ struct SettingsPanel: View {
         let selected = selectedTab == tab
         return Button {
             withAnimation(.easeOut(duration: 0.16)) {
-                settingsSearchQuery = ""
                 selectedTab = tab
             }
         } label: {
@@ -481,10 +470,10 @@ struct SettingsPanel: View {
     private var rightPaneHeader: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(settingsSearchQuery.isEmpty ? selectedTab.title : "Résultats de recherche")
+                Text(selectedTab.title)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.primary)
-                Text(settingsSearchQuery.isEmpty ? selectedTab.subtitle : "Accédez directement au réglage souhaité")
+                Text(selectedTab.subtitle)
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
             }
@@ -501,125 +490,6 @@ struct SettingsPanel: View {
                     .foregroundStyle(.secondary)
             }
             .accessibilityLabel("Appuyez sur la touche Échap pour quitter les réglages")
-        }
-    }
-
-    private var settingsSearchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-            TextField("Rechercher un réglage (ex : icônes, thème, gestes, notifications…)", text: $settingsSearchQuery)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-            if !settingsSearchQuery.isEmpty {
-                Button {
-                    settingsSearchQuery = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-        )
-    }
-
-    private struct SettingsSearchShortcut: Identifiable {
-        let id = UUID()
-        let title: String
-        let description: String
-        let icon: String
-        let tab: SettingsTab
-        let keywords: String
-        var requiresPro: Bool = false
-    }
-
-    private static let searchableShortcuts: [SettingsSearchShortcut] = [
-        SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd", requiresPro: true),
-        SettingsSearchShortcut(title: "Thème et apparence", description: "Liquid Glass, Sombre ou Clair et transparence du verre", icon: "paintpalette.fill", tab: .apps, keywords: "theme apparence liquid glass sombre clair transparence"),
-        SettingsSearchShortcut(title: "Taille des icônes & grille", description: "Colonnes, lignes, échelle des icônes et barre de favoris", icon: "square.grid.3x3.fill", tab: .apps, keywords: "grille taille colonnes lignes echelle favoris labels"),
-        SettingsSearchShortcut(title: "Gestes Trackpad & Raccourci clavier", description: "Pincement à 3/4 doigts, touche F4 et raccourci global", icon: "hand.pinch.fill", tab: .general, keywords: "geste trackpad pincer clavier raccourci f4 coin actif"),
-        SettingsSearchShortcut(title: "Notifications & Mises à jour auto", description: "Alertes de nouvelles versions et bannières visuelles", icon: "bell.badge.fill", tab: .notifications, keywords: "notification alerte mise a jour automatique banner"),
-        SettingsSearchShortcut(title: "Apple Music & Spotify", description: "Connecter vos services musicaux pour les widgets", icon: "music.note", tab: .general, keywords: "musique spotify apple music widget"),
-        SettingsSearchShortcut(title: "Sauvegarde & Réinitialisation", description: "Exporter/importer votre disposition ou réinitialiser", icon: "externaldrive.fill", tab: .advanced, keywords: "sauvegarde export import reinitialiser tri launchos"),
-        SettingsSearchShortcut(title: "Licence LaunchPad Pro", description: "Essai gratuit 7 jours et activation de clé", icon: "crown.fill", tab: .license, keywords: "licence pro essai cle activation"),
-        SettingsSearchShortcut(title: "À propos & Version", description: "Vérifier les mises à jour et informations de version", icon: "info.circle.fill", tab: .about, keywords: "apropos version update github discord")
-    ]
-
-    @ViewBuilder
-    private var searchResultsSection: some View {
-        let q = settingsSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let matches = Self.searchableShortcuts.filter {
-            (!$0.requiresPro || licenseManager.isPro)
-                && ($0.title.lowercased().contains(q) || $0.description.lowercased().contains(q) || $0.keywords.lowercased().contains(q))
-        }
-        if matches.isEmpty {
-            SettingsCardBox {
-                VStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 26))
-                        .foregroundStyle(.secondary)
-                    Text("Aucun réglage trouvé pour « \(settingsSearchQuery) »")
-                        .font(.system(size: 13.5, weight: .semibold))
-                    Text("Essayez « icônes », « thème », « notifications » ou « trackpad ».")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            }
-        } else {
-            SettingsCardBox {
-                ForEach(Array(matches.enumerated()), id: \.element.id) { idx, item in
-                    if idx > 0 { SettingsSeparator() }
-                    Button {
-                        withAnimation(.easeOut(duration: 0.16)) {
-                            selectedTab = item.tab
-                            settingsSearchQuery = ""
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 32, height: 32)
-                                .background(SettingsStyle.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.title)
-                                    .font(.system(size: 13.5, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                                Text(item.description)
-                                    .font(.system(size: 11.5))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(item.tab.title)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color.primary.opacity(0.08), in: Capsule())
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
         }
     }
 
@@ -1258,197 +1128,200 @@ struct SettingsPanel: View {
 
     private struct MusicServicesSettingsView: View {
         @ObservedObject private var musicManager = MusicServiceManager.shared
-        @ObservedObject private var locManager = LocalizationManager.shared
+        @State private var hoveredSource: MusicServiceSource? = nil
 
         var body: some View {
-        SettingsSectionTitle(loc("music_services.title"))
-
-        // 1. Carte Apple Music (Style Liquid Glass)
-        SettingsCardBox {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 14) {
-                    AppleMusicLogoView(size: 42)
+                SettingsSectionTitle("Source")
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 8) {
-                            Text(loc("music.apple.title"))
-                                .font(.system(size: 14, weight: .semibold))
-                            MusicConnectionStatusBadge(status: musicManager.appleMusicStatus)
-                        }
+                HStack(spacing: 48) {
+                    Spacer(minLength: 0)
 
-                        Text(appleMusicDescriptionText)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                    sourceOption(source: .system, label: "Auto") {
+                        Image(systemName: "person.crop.rectangle.stack.fill")
+                            .font(.system(size: 30, weight: .regular))
+                            .foregroundStyle(.primary.opacity(musicManager.preferredService == .system ? 0.96 : 0.72))
                     }
 
-                    Spacer(minLength: 12)
-
-                    if musicManager.appleMusicStatus.isConnected {
-                        Button(role: .destructive) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                musicManager.disconnectAppleMusic()
-                            }
-                        } label: {
-                            Label(loc("music.disconnect"), systemImage: "xmark.circle")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.regular)
-                    } else {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                musicManager.connectAppleMusic()
-                            }
-                        } label: {
-                            if musicManager.appleMusicStatus == .connecting {
-                                HStack(spacing: 6) {
-                                    ProgressView().controlSize(.small)
-                                    Text(loc("music.status.connecting"))
-                                }
-                            } else {
-                                Label(loc("music.connect"), systemImage: "arrow.right.circle.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 0.98, green: 0.22, blue: 0.38))
-                        .controlSize(.regular)
+                    sourceOption(source: .spotify, label: "Spotify") {
+                        spotifyTileIcon
                     }
+
+                    sourceOption(source: .appleMusic, label: "Music") {
+                        AppleMusicLogoView(size: 46)
+                    }
+
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+
+                sourceStatusFooter
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .padding(.vertical, 4)
+            .padding(.bottom, 4)
         }
 
-        // 2. Carte Spotify (Style Liquid Glass)
-        SettingsCardBox {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 14) {
-                    SpotifyLogoView(size: 42)
+        private func sourceOption<Icon: View>(
+            source: MusicServiceSource,
+            label: String,
+            @ViewBuilder icon: () -> Icon
+        ) -> some View {
+            let isSelected = musicManager.preferredService == source
+            let isHovered = hoveredSource == source
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 8) {
-                            Text(loc("music.spotify.title"))
-                                .font(.system(size: 14, weight: .semibold))
-                            MusicConnectionStatusBadge(status: musicManager.spotifyStatus)
-                        }
-
-                        Text(spotifyDescriptionText)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 12)
-
-                    if musicManager.spotifyStatus.isConnected {
-                        Button(role: .destructive) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                musicManager.disconnectSpotify()
-                            }
-                        } label: {
-                            Label(loc("music.disconnect"), systemImage: "xmark.circle")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.regular)
-                    } else {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                musicManager.connectSpotify()
-                            }
-                        } label: {
-                            if musicManager.spotifyStatus == .connecting {
-                                HStack(spacing: 6) {
-                                    ProgressView().controlSize(.small)
-                                    Text(loc("music.status.connecting"))
-                                }
-                            } else {
-                                Label(loc("music.connect"), systemImage: "arrow.right.circle.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 0.114, green: 0.725, blue: 0.329))
-                        .controlSize(.regular)
-                    }
+            return Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.80)) {
+                    musicManager.selectSource(source)
                 }
+            } label: {
+                VStack(spacing: 10) {
+                    Text(label)
+                        .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
 
-                if let notice = musicManager.spotifyLimitationNotice, musicManager.spotifyStatus.isConnected {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.orange)
-                        Text(notice)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(8)
-                    .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+                    icon()
+                        .frame(width: 48, height: 48)
+                        .scaleEffect(isHovered ? 1.07 : (isSelected ? 1.03 : 1.0))
+
+                    Circle()
+                        .fill(isSelected ? Color.primary.opacity(0.92) : Color.clear)
+                        .frame(width: 5, height: 5)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.16)) {
+                    hoveredSource = hovering ? source : (hoveredSource == source ? nil : hoveredSource)
+                }
+            }
+        }
 
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(loc("music.spotify.client_id"))
-                                .font(.system(size: 11, weight: .medium))
-                            Spacer()
-                            TextField(loc("music.spotify.client_id_placeholder"), text: $musicManager.customSpotifyClientID)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11))
-                                .frame(width: 250)
-                        }
-                        Text(loc("music.spotify.client_id_help"))
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.top, 4)
-                } label: {
-                    Text(loc("music.spotify.dev_config"))
-                        .font(.system(size: 11, weight: .medium))
+        private var spotifyTileIcon: some View {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11.5, style: .continuous)
+                    .fill(Color(red: 0.08, green: 0.09, blue: 0.09))
+                    .frame(width: 46, height: 46)
+                    .shadow(color: .black.opacity(0.28), radius: 5, y: 2)
+
+                Circle()
+                    .fill(Color(red: 0.118, green: 0.843, blue: 0.376))
+                    .frame(width: 31, height: 31)
+
+                SpotifyWavesShape()
+                    .stroke(Color.black, style: StrokeStyle(lineWidth: 2.7, lineCap: .round))
+                    .frame(width: 20, height: 20)
+            }
+        }
+
+        @ViewBuilder
+        private var sourceStatusFooter: some View {
+            switch musicManager.preferredService {
+            case .system, .none:
+                HStack(spacing: 6) {
+                    Circle().fill(Color.green).frame(width: 6, height: 6)
+                    Text("Détection automatique (Spotify, Apple Music et lecteurs Mac)")
+                        .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
-            }
-            .padding(.vertical, 4)
-        }
 
-        // 3. Source prioritaire
-        SettingsCardBox {
-            SettingsRow(loc("music.service.preferred")) {
-                Picker("", selection: $musicManager.preferredService) {
-                    Text(loc("music.service.auto")).tag(MusicServiceSource.system)
-                    Text(loc("music.apple.title")).tag(MusicServiceSource.appleMusic)
-                    Text(loc("music.spotify.title")).tag(MusicServiceSource.spotify)
+            case .spotify:
+                switch musicManager.spotifyStatus {
+                case .connected:
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.green).frame(width: 6, height: 6)
+                        Text("Spotify connecté nativement sur ce Mac")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                case .connecting:
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("Connexion à Spotify…")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                case .restricted(let reason):
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                        Text(reason)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                        Button("Autoriser") {
+                            musicManager.openAutomationPrivacySettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                case .error(let msg):
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                        Text(msg)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                case .notConnected:
+                    Button("Connecter Spotify") {
+                        musicManager.connectSpotify()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .labelsHidden()
-                .fixedSize()
-            }
-        }
-        }
 
-        private var appleMusicDescriptionText: String {
-            if musicManager.appleMusicStatus.isConnected {
-                return musicManager.appleMusicSubscriptionDescription.isEmpty
-                    ? loc("music.apple.authorized")
-                    : musicManager.appleMusicSubscriptionDescription
-            }
-            return loc("music.apple.desc")
-        }
-
-        private var spotifyDescriptionText: String {
-            if musicManager.spotifyStatus.isConnected {
-                if let name = musicManager.spotifyUserDisplayName {
-                    let tier = (musicManager.spotifyProductType?.capitalized ?? "")
-                    return tier.isEmpty ? name : "\(name) • \(tier)"
+            case .appleMusic:
+                switch musicManager.appleMusicStatus {
+                case .connected:
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.green).frame(width: 6, height: 6)
+                        Text("Apple Music connecté")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                case .connecting:
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("Autorisation d'Apple Music…")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                case .restricted(let reason):
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                        Text(reason)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                        Button("Réglages") {
+                            musicManager.openAutomationPrivacySettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                case .error(let msg):
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                        Text(msg)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                case .notConnected:
+                    Button("Connecter Apple Music") {
+                        musicManager.connectAppleMusic()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                return loc("music.status.connected")
             }
-            return loc("music.spotify.desc")
         }
     }
 
