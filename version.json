@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.1.4",
-  "name": "LaunchPad v1.1.4",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.4",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.1.4\n\n- 💎 **Moteur d'Icônes HD 512×512 Retina** : Extraction native en très haute définition et normalisation intelligente éliminant tout flou sur l'ensemble de vos applications.\n- 🎨 **10 Styles d'Icônes & Personnalisation par App** : Basculez entre Originales HD, Sombre, Clair, Teinté, Monochrome, Transparent ou Verre, et attribuez une image ou un symbole sur mesure à n'importe quelle application.\n- 🧭 **Interface de Réglages Simplifiée** : Nouvelle organisation claire et intuitive (Apparence, Personnalisation, Notifications, Général, À propos) avec confirmations visuelles instantanées.\n- 🖼️ **Nouvelle Galerie Visuelle de Widgets** : Explorez les widgets par catégorie avec miniatures en direct et ajoutez-les en 3 étapes simples directement depuis la barre supérieure.\n- ⚡ **Fluidité & Compatibilité Swift 6** : Cache d'icônes auto-réparateur et architecture optimisée garantissant une réactivité immédiate au quotidien.",
+  "tag_name": "v1.1.5",
+  "name": "LaunchPad v1.1.5",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.5",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.1.5\n\n- 🧭 **Réglages Apple Sidebar & Recherche** : Nouvelle interface à barre latérale gauche et barre de recherche intégrée pour trouver et modifier n'importe quel réglage en un instant.\n- 🖼️ **Galerie de Widgets en Grille Visuelle** : Parcourez tous les thèmes météo, vinyles, horloges et calendriers sous forme de cartes visuelles avec recherche instantanée.\n- 💎 **Icônes 100 % Compatibles Transparence** : Nouveau détourage lissé sans grain offrant un rendu verre liquide cristallin et uniforme sur toutes vos applications.\n- 🎨 **Moteur HD 512×512 Retina** : Extraction native en très haute définition éliminant tout flou, avec possibilité de personnaliser l'icône de chaque application.\n- ⚡ **Simplicité & Retours Visuels** : Navigation intuitive pensée pour tout le monde avec confirmations visuelles après chaque action.",
   "assets": [
     {
-      "name": "LaunchPad-v1.1.4.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.4/LaunchPad-v1.1.4.zip"
+      "name": "LaunchPad-v1.1.5.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.5/LaunchPad-v1.1.5.zip"
     },
     {
-      "name": "LaunchPad-v1.1.4.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.4/LaunchPad-v1.1.4.dmg"
+      "name": "LaunchPad-v1.1.5.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.5/LaunchPad-v1.1.5.dmg"
     }
   ]
 }
