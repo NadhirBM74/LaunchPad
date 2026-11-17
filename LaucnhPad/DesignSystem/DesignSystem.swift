@@ -92,16 +92,14 @@ enum AppleDesignSystem {
 
 // MARK: - Badge Vérifié Animé (Bleu Pro / Jaune Essai)
 
-/// Badge officiel en rosace crénelée animé : bleu vif pour la version Pro à vie, jaune doré pour l'essai gratuit.
+/// Badge officiel en rosace crénelée animé : seuls les pics extérieurs tournent, la coche centrale reste fixe.
+/// Bleu vif pour LaunchPad Pro, jaune doré pendant l'essai gratuit.
 struct AnimatedVerifiedSealBadge: View {
     let isTrial: Bool
     var size: CGFloat = 24
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
-    @State private var pulseScale: CGFloat = 0.96
-    @State private var haloExpanded: Bool = false
-    @State private var shimmerOffset: CGFloat = -1.35
 
     private var reduceMotion: Bool {
         systemReduceMotion || userReduceMotion
@@ -137,62 +135,37 @@ struct AnimatedVerifiedSealBadge: View {
 
     var body: some View {
         ZStack {
-            // Halo lumineux pulsant autour du sceau
             Circle()
-                .fill(glowColor.opacity(haloExpanded ? 0.14 : 0.42))
-                .frame(width: size * 1.18, height: size * 1.18)
-                .scaleEffect(haloExpanded ? 1.24 : 0.92)
-                .blur(radius: max(2, size * 0.14))
+                .fill(glowColor.opacity(0.24))
+                .frame(width: size * 1.15, height: size * 1.15)
+                .blur(radius: max(1.8, size * 0.12))
 
-            // Rosace bleue (Pro) ou jaune (Essai) identique au macaron vérifié
-            ZStack {
-                Image(systemName: "seal.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size, height: size)
-                    .foregroundStyle(badgeGradient)
+            // Seule la rosace extérieure (les pics crénelés) tourne en continu
+            TimelineView(.animation(paused: reduceMotion)) { timeline in
+                let period: Double = 8.0
+                let angle: Double = reduceMotion
+                    ? 0.0
+                    : (timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period) * 360.0
 
-                // Reflet métallique animé qui balaie la rosace
-                if !reduceMotion {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: Color.white.opacity(0.55), location: 0.5),
-                            .init(color: .clear, location: 1.0)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .frame(width: size * 0.55, height: size * 1.6)
-                    .rotationEffect(.degrees(22))
-                    .offset(x: shimmerOffset * size)
+                Rectangle()
+                    .fill(badgeGradient)
+                    .frame(width: size * 1.12, height: size * 1.12)
                     .mask(
                         Image(systemName: "seal.fill")
                             .resizable()
                             .scaledToFit()
                             .frame(width: size, height: size)
+                            .rotationEffect(.degrees(angle))
                     )
-                }
+            }
+            .shadow(color: glowColor.opacity(0.45), radius: max(2.0, size * 0.15), y: 1.2)
 
-                // Coche blanche nette centrée
-                Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.43, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
-            }
-            .scaleEffect(reduceMotion ? 1.0 : pulseScale)
-            .shadow(color: glowColor.opacity(0.45), radius: max(2.5, size * 0.16), y: 1.5)
+            // Le "V" (coche blanche) au milieu reste strictement immobile
+            Image(systemName: "checkmark")
+                .font(.system(size: size * 0.43, weight: .heavy))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
         }
-        .frame(width: size * 1.25, height: size * 1.25)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                pulseScale = 1.05
-                haloExpanded = true
-            }
-            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: false)) {
-                shimmerOffset = 1.35
-            }
-        }
+        .frame(width: size * 1.20, height: size * 1.20)
     }
 }

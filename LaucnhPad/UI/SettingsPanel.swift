@@ -321,16 +321,31 @@ struct SettingsPanel: View {
 
     private var appleSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // En-tête de la barre latérale
-            HStack(alignment: .center) {
+            // En-tête de la barre latérale (avec photo et prénom du compte Apple si disponible)
+            HStack(alignment: .center, spacing: 10) {
+                if let avatar = licenseManager.appleAccountAvatar {
+                    Image(nsImage: avatar)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFill()
+                        .frame(width: 34, height: 34)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.14), lineWidth: 1))
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.secondary)
+                }
+
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Réglages")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.primary)
-                    HStack(spacing: 5) {
-                        Text("LaunchPad")
-                            .font(.system(size: 11.5, weight: .medium))
+                    HStack(spacing: 4) {
+                        Text(licenseManager.appleAccountFirstName.isEmpty ? "LaunchPad" : licenseManager.appleAccountFirstName)
+                            .font(.system(size: 11.5, weight: .semibold))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         if licenseManager.isPro {
                             AnimatedVerifiedSealBadge(
                                 isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
@@ -1588,39 +1603,67 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var licenseTab: some View {
-        // En-tête de statut
+        // En-tête de profil Compte Apple + statut Pro/Essai avec badge animé
         SettingsCardBox {
-            HStack(spacing: 16) {
-                if licenseManager.isPro {
-                    AnimatedVerifiedSealBadge(
-                        isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
-                        size: 48
-                    )
-                } else {
+            VStack(spacing: 14) {
+                // Portrait circulaire du compte Apple + Prénom + Sceau vérifié animé (Bleu Pro / Jaune Essai)
+                VStack(spacing: 10) {
                     ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(colors: [Color.gray.opacity(0.35), Color.gray.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            )
-                            .frame(width: 52, height: 52)
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.white)
+                        if let avatar = licenseManager.appleAccountAvatar {
+                            Image(nsImage: avatar)
+                                .resizable()
+                                .interpolation(.high)
+                                .scaledToFill()
+                                .frame(width: 82, height: 82)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(
+                                            licenseManager.isPro
+                                                ? (licenseManager.isProLifetime ? Color(red: 0.06, green: 0.56, blue: 1.00) : Color(red: 1.00, green: 0.78, blue: 0.05))
+                                                : Color.primary.opacity(0.18),
+                                            lineWidth: 2.2
+                                        )
+                                )
+                                .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+                        } else {
+                            Circle()
+                                .fill(
+                                    licenseManager.isPro
+                                        ? LinearGradient(colors: [SettingsStyle.accent, Color.purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        : LinearGradient(colors: [Color.gray.opacity(0.35), Color.gray.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                                .frame(width: 82, height: 82)
+                            Image(systemName: licenseManager.isPro ? "person.crop.circle.fill" : "lock.shield.fill")
+                                .font(.system(size: 38))
+                                .foregroundStyle(.white)
+                        }
                     }
-                }
 
-                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Text(licenseManager.appleAccountFirstName.isEmpty ? "LaunchPad" : licenseManager.appleAccountFirstName)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.primary)
+
+                        if licenseManager.isPro {
+                            AnimatedVerifiedSealBadge(
+                                isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
+                                size: 22
+                            )
+                        }
+                    }
+
                     HStack(spacing: 8) {
                         Text(
                             licenseManager.isProLifetime
                                 ? loc("license.pro_unlocked")
                                 : (licenseManager.isTrialActive ? loc("license.trial_active") : loc("license.free_version"))
                         )
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
 
                         if licenseManager.isProLifetime {
                             HStack(spacing: 4) {
-                                AnimatedVerifiedSealBadge(isTrial: false, size: 13)
                                 Text("PRO")
                                     .font(.system(size: 10, weight: .bold))
                             }
@@ -1629,15 +1672,12 @@ struct SettingsPanel: View {
                             .background(Color(red: 0.05, green: 0.56, blue: 1.00).opacity(0.16), in: Capsule())
                             .foregroundStyle(Color(red: 0.05, green: 0.56, blue: 1.00))
                         } else if licenseManager.isTrialActive {
-                            HStack(spacing: 4) {
-                                AnimatedVerifiedSealBadge(isTrial: true, size: 13)
-                                Text(licenseManager.trialDaysRemaining > 0 ? "\(licenseManager.trialDaysRemaining)j restants" : "7 JOURS")
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2.5)
-                            .background(Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.18), in: Capsule())
-                            .foregroundStyle(Color(red: 0.90, green: 0.60, blue: 0.00))
+                            Text(licenseManager.trialDaysRemaining > 0 ? "\(licenseManager.trialDaysRemaining)j restants" : "7 JOURS")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2.5)
+                                .background(Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.18), in: Capsule())
+                                .foregroundStyle(Color(red: 0.85, green: 0.55, blue: 0.00))
                         }
                     }
 
@@ -1648,9 +1688,10 @@ struct SettingsPanel: View {
                     )
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 460)
                 }
-                Spacer()
 
                 if !licenseManager.isProLifetime {
                     Button {
@@ -1662,8 +1703,8 @@ struct SettingsPanel: View {
                             Text(licenseManager.isTrialActive ? "Payer Pro à vie" : "Get Pro")
                                 .font(.system(size: 13, weight: .semibold))
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
                         .foregroundStyle(Color.white)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1687,7 +1728,8 @@ struct SettingsPanel: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
         }
 
         // Bandeau Compte à Rebours de l'Essai 7 Jours (si actif)

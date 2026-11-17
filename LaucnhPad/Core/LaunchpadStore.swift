@@ -273,6 +273,13 @@ final class LaunchpadStore: ObservableObject {
             AppNotificationManager.shared.sendNewAppsDiscoveredNotification(count: fresh.count)
         }
 
+        // Migration unique : extrait toute app externe des dossiers Apple hérités et place tous les dossiers Apple en dernière page.
+        let appleMigrationKey = "LaunchpadAppleFoldersLastPageMigrated_v119"
+        if !newCatalog.isEmpty && !UserDefaults.standard.bool(forKey: appleMigrationKey) {
+            UserDefaults.standard.set(true, forKey: appleMigrationKey)
+            updated = migrateAppleFoldersToLastPage(in: updated, catalog: newCatalog)
+        }
+
         if updated != items || previous != newCatalog {
             commit(updated, save: updated != items)
         }
@@ -909,6 +916,45 @@ final class LaunchpadStore: ObservableObject {
         }
 
         return result
+    }
+
+    /// Migre les anciens dossiers système (souvent remplis d'apps tierces ou placés en page 1)
+    /// en préservant les widgets et les dossiers personnalisés de l'utilisateur.
+    private func migrateAppleFoldersToLastPage(in currentItems: [LayoutItem], catalog: [String: AppInfo]) -> [LayoutItem] {
+        let appleSystemFolderKeys: Set<String> = [
+            "utilitaires", "utilities",
+            "productivite", "productivity",
+            "multimedia", "media",
+            "internet & maison", "internet & home",
+            "jeux", "games"
+        ]
+
+        func normalizedFolderKey(_ name: String) -> String {
+            name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var widgets: [LayoutItem] = []
+        var customFolders: [LayoutItem] = []
+        var claimedByCustomFolder = Set<String>()
+
+        for item in currentItems {
+            switch item {
+            case .widget:
+                widgets.append(item)
+            case .folder(let folder):
+                if !appleSystemFolderKeys.contains(normalizedFolderKey(folder.name)) {
+                    customFolders.append(item)
+                    claimedByCustomFolder.formUnion(folder.apps)
+                }
+            case .app:
+                break
+            }
+        }
+
+        let remainingApps = catalog.values.filter { !claimedByCustomFolder.contains($0.id) }
+        let categorized = buildDefaultCategorizedItems(from: remainingApps)
+        return widgets + customFolders + categorized
     }
 
     private func suggestedFolderName(for ids: [String]) -> String {

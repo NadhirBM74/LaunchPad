@@ -1377,7 +1377,8 @@ struct FolderOverlayView: View {
                 .position(x: fm.contentRect.midX, y: fm.contentRect.midY)
             } else {
                 tiles(fm)
-                    .frame(width: fm.contentRect.width, height: fm.contentHeight)
+                    .frame(width: fm.contentRect.width, height: fm.contentRect.height, alignment: .topLeading)
+                    .clipped()
                     .position(x: fm.contentRect.midX, y: fm.contentRect.midY)
             }
 
@@ -1447,7 +1448,9 @@ struct FolderOverlayView: View {
         .frame(width: fm.contentRect.width, height: fm.contentHeight, alignment: .topLeading)
 
         if fm.scrolls {
-            ScrollView(.vertical, showsIndicators: false) { grid }
+            ScrollView(.vertical, showsIndicators: true) { grid }
+                .frame(width: fm.contentRect.width, height: fm.contentRect.height, alignment: .topLeading)
+                .clipped()
         } else {
             grid
         }

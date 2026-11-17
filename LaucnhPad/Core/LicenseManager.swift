@@ -2,6 +2,8 @@ import Foundation
 import Combine
 import AppKit
 import Security
+import Collaboration
+import OpenDirectory
 
 // MARK: - Persistance Indestructible dans le Trousseau d'Accès (Keychain)
 // Garantit que même si l'utilisateur supprime l'application (ou les préférences UserDefaults)
@@ -100,6 +102,10 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var trialSecondsRemaining: Int = 0
     @Published private(set) var trialProgress: Double = 0.0
 
+    // MARK: - Profil du Compte Apple / macOS (Photo & Prénom)
+    @Published private(set) var appleAccountFirstName: String = ""
+    @Published private(set) var appleAccountAvatar: NSImage? = nil
+
     private var countdownTimer: Timer?
 
     /// Identifiant de l'instance d'activation attribué par l'API de licence (Lemon Squeezy / Polar)
@@ -167,6 +173,74 @@ final class LicenseManager: ObservableObject {
                 startCountdownTicker()
             }
         }
+
+        loadAppleAccountProfile()
+    }
+
+    /// Extrait la photo de profil et le prénom du compte Apple / macOS local pour l'affichage dans la licence.
+    func loadAppleAccountProfile() {
+        let userName = NSUserName()
+        let fallbackFull = NSFullUserName()
+
+        var extractedFirstName: String? = nil
+        var extractedAvatar: NSImage? = nil
+
+        if let identity = CBIdentity(name: userName, authority: .default()) {
+            if let img = identity.image {
+                extractedAvatar = img
+            }
+            if !identity.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                extractedFirstName = Self.extractFirstName(from: identity.fullName)
+            }
+        }
+
+        if extractedAvatar == nil || extractedFirstName == nil {
+            if let node = try? ODNode(session: .default(), type: ODNodeType(kODNodeTypeLocalNodes)),
+               let record = try? node.record(withRecordType: kODRecordTypeUsers, name: userName, attributes: nil),
+               let attrs = try? record.recordDetails(forAttributes: [
+                    kODAttributeTypeFirstName,
+                    kODAttributeTypeFullName,
+                    kODAttributeTypeJPEGPhoto,
+                    kODAttributeTypePicture
+               ]) {
+                if extractedFirstName == nil,
+                   let firstArr = attrs[kODAttributeTypeFirstName] as? [Any],
+                   let firstVal = firstArr.first as? String,
+                   !firstVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    extractedFirstName = firstVal.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                if extractedFirstName == nil,
+                   let fullArr = attrs[kODAttributeTypeFullName] as? [Any],
+                   let fullVal = fullArr.first as? String,
+                   !fullVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    extractedFirstName = Self.extractFirstName(from: fullVal)
+                }
+                if extractedAvatar == nil,
+                   let photoArr = attrs[kODAttributeTypeJPEGPhoto] as? [Any],
+                   let photoData = photoArr.first as? Data {
+                    extractedAvatar = NSImage(data: photoData)
+                }
+                if extractedAvatar == nil,
+                   let picArr = attrs[kODAttributeTypePicture] as? [Any],
+                   let picPath = picArr.first as? String {
+                    extractedAvatar = NSImage(contentsOfFile: picPath)
+                }
+            }
+        }
+
+        let finalName = extractedFirstName
+            ?? Self.extractFirstName(from: fallbackFull)
+            ?? (userName.prefix(1).uppercased() + userName.dropFirst())
+
+        self.appleAccountFirstName = finalName
+        self.appleAccountAvatar = extractedAvatar
+    }
+
+    private static func extractFirstName(from fullName: String) -> String? {
+        let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let first = trimmed.components(separatedBy: .whitespacesAndNewlines).first(where: { !$0.isEmpty }) ?? trimmed
+        return first
     }
 
     // =========================================================================
