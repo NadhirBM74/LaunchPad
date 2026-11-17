@@ -1131,8 +1131,11 @@ struct SettingsPanel: View {
         @State private var hoveredSource: MusicServiceSource? = nil
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 12) {
-                SettingsSectionTitle("Source")
+            VStack(alignment: .center, spacing: 12) {
+                Text("Source")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 14)
 
                 HStack(spacing: 48) {
                     Spacer(minLength: 0)
@@ -1144,11 +1147,11 @@ struct SettingsPanel: View {
                     }
 
                     sourceOption(source: .spotify, label: "Spotify") {
-                        spotifyTileIcon
+                        sourceAppLogo("SpotifySourceLogo")
                     }
 
                     sourceOption(source: .appleMusic, label: "Music") {
-                        AppleMusicLogoView(size: 46)
+                        sourceAppLogo("AppleMusicSourceLogo")
                     }
 
                     Spacer(minLength: 0)
@@ -1200,21 +1203,14 @@ struct SettingsPanel: View {
             }
         }
 
-        private var spotifyTileIcon: some View {
-            ZStack {
-                RoundedRectangle(cornerRadius: 11.5, style: .continuous)
-                    .fill(Color(red: 0.08, green: 0.09, blue: 0.09))
-                    .frame(width: 46, height: 46)
-                    .shadow(color: .black.opacity(0.28), radius: 5, y: 2)
-
-                Circle()
-                    .fill(Color(red: 0.118, green: 0.843, blue: 0.376))
-                    .frame(width: 31, height: 31)
-
-                SpotifyWavesShape()
-                    .stroke(Color.black, style: StrokeStyle(lineWidth: 2.7, lineCap: .round))
-                    .frame(width: 20, height: 20)
-            }
+        private func sourceAppLogo(_ assetName: String) -> some View {
+            Image(assetName)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 46, height: 46)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .shadow(color: .black.opacity(0.24), radius: 5, y: 2)
         }
 
         @ViewBuilder

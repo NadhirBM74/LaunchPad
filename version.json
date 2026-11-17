@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.8",
-  "name": "LaunchPad v1.2.8",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.8",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.8\n\n- 🎵 **Spotify Natif Sans Configuration en 1 Clic** : Nouveau sélecteur minimaliste Source (Auto, Spotify, Music) sans fond superflu et connexion native directe à l'application Spotify macOS sans compte développeur.\n- 🧲 **Déplacement Fiabilisé des Applications et Dossiers** : Correction des retours involontaires de dossiers en dernière page, des oscillations autour des widgets et des glissements vers les bords d'écran.\n- 🧹 **Interface des Réglages Épurée** : Suppression de la barre de recherche dans les paramètres pour un affichage plus direct et plus aéré.",
+  "tag_name": "v1.2.9",
+  "name": "LaunchPad v1.2.9",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.9",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.9\n\n- 🎵 **Nouveaux Logos Officiels Spotify & Apple Music** : Intégration des icônes haute définition importées pour le sélecteur de sources audio dans les réglages.\n- 🎯 **Présentation Centrée du Sélecteur Source** : Alignement centré du titre Source et harmonisation parfaite de la taille visuelle des icônes audio.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.8.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.8/LaunchPad-v1.2.8.zip"
+      "name": "LaunchPad-v1.2.9.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.9/LaunchPad-v1.2.9.zip"
     },
     {
-      "name": "LaunchPad-v1.2.8.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.8/LaunchPad-v1.2.8.dmg"
+      "name": "LaunchPad-v1.2.9.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.9/LaunchPad-v1.2.9.dmg"
     }
   ]
 }
