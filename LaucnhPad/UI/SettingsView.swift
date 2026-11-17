@@ -86,7 +86,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        close()
+        // Les réglages se ferment uniquement via la touche Échap (Esc) ou la fermeture du Launchpad
         return false
     }
 
@@ -95,11 +95,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func show(above launchpadLevel: NSWindow.Level? = nil, on screen: NSScreen? = nil) {
         if window == nil {
             let window = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: SettingsPanel.size.width, height: SettingsPanel.size.height),
-                                  styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                                  styleMask: [.titled, .fullSizeContentView],
                                   backing: .buffered, defer: false)
             window.title = "Réglages LaucnhPad"
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
+            window.standardWindowButton(.closeButton)?.isHidden = true
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            window.standardWindowButton(.zoomButton)?.isHidden = true
             window.isReleasedWhenClosed = false
             window.isOpaque = false
             window.backgroundColor = .clear
@@ -171,13 +174,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
     #endif
 
-    /// Le Launchpad se ferme : la fenêtre reste ouverte mais redevient une fenêtre normale.
+    /// Le Launchpad se ferme (ex: geste à 3 doigts) : on ferme automatiquement les réglages
+    /// pour qu'ils ne restent pas ouverts ni ne réapparaissent à la prochaine ouverture.
     func launchpadDidHide() {
-        guard let window, isAboveLaunchpad else { return }
-        isAboveLaunchpad = false
-        window.level = .normal
-        window.collectionBehavior = [.moveToActiveSpace]
-        if window.isVisible { NSApp.setActivationPolicy(.regular) }
+        if isVisible {
+            close()
+        }
     }
 
     private func center(_ window: NSWindow, on screen: NSScreen?) {

@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.1.6",
-  "name": "LaunchPad v1.1.6",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.6",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.1.6\n\n- 🖼️ **Galerie de Widgets Épurée** : Suppression du cadre sombre autour des aperçus pour laisser place uniquement au widget avec une légère ombre portée.\n- 📐 **Sélecteur de Taille Corrigé** : Les boutons Petit, Moyen, Vertical et Grand restent parfaitement alignés sur une seule ligne.\n- 🖱️ **Défilement Trackpad Fluide** : Faites défiler librement toute la galerie de widgets au trackpad et fermez-la facilement avec Échap.\n- 🧭 **Réglages Apple Sidebar & Recherche** : Navigation latérale intuitive avec barre de recherche intégrée pour accéder à chaque paramètre en un clic.\n- 💎 **Icônes HD 512×512 & Transparence** : Détourage lissé sans grain offrant un rendu verre liquide cristallin sur toutes vos applications.",
+  "tag_name": "v1.1.7",
+  "name": "LaunchPad v1.1.7",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.7",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.1.7\n\n- 🎵 **Lecteur Multimédia Prêt à Lancer** : Lorsqu'aucune musique n'est en cours, un bouton central élégant lance directement votre plateforme connectée (Apple Music ou Spotify).\n- 🖼️ **Prévisualisation Animée par Taille** : Dans la galerie de widgets, chaque changement de format (Petit, Moyen, Vertical, Grand) anime instantanément un aperçu en direct façon Apple.\n- 🌍 **Noms & Dossiers Apple Localisés** : Les applications Apple adoptent automatiquement la langue choisie dans LaunchPad et sont classées par défaut en dossiers thématiques (Utilitaires, Productivité, Multimédia…).\n- 🔒 **Touch ID sans Interruption** : Le Launchpad reste désormais ouvert et actif lorsque vous posez le doigt pour déverrouiller un dossier ou une application.\n- 🧭 **Réglages Épurés & Intuitifs** : Taille des icônes par préréglages simples (Petit à Très grand), fermeture automatique des réglages avec Launchpad et navigation dédiée à la touche Échap.",
   "assets": [
     {
-      "name": "LaunchPad-v1.1.6.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.6/LaunchPad-v1.1.6.zip"
+      "name": "LaunchPad-v1.1.7.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.7/LaunchPad-v1.1.7.zip"
     },
     {
-      "name": "LaunchPad-v1.1.6.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.6/LaunchPad-v1.1.6.dmg"
+      "name": "LaunchPad-v1.1.7.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.7/LaunchPad-v1.1.7.dmg"
     }
   ]
 }

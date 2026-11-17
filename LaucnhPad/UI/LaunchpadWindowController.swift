@@ -82,7 +82,13 @@ final class LaunchpadWindowController: NSObject {
                 self.panel.level = .floating
             } else {
                 self.panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 2)
+                NSApp.activate(ignoringOtherApps: true)
                 self.focusPanel()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                    guard let self, self.isVisible else { return }
+                    NSApp.activate(ignoringOtherApps: true)
+                    self.focusPanel()
+                }
             }
         }
 
@@ -261,8 +267,9 @@ final class LaunchpadWindowController: NSObject {
     @objc private func appDidResignActive() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            // Ne pas masquer le Launchpad si une authentification Touch ID est en cours
-            guard !self.viewModel.isAuthenticatingBiometrics else { return }
+            // Ne pas masquer le Launchpad si une authentification Touch ID est en cours ou vient juste de se terminer
+            let recentBiometric = Date().timeIntervalSince(self.viewModel.lastBiometricCompletionTime) < 1.5
+            guard !self.viewModel.isAuthenticatingBiometrics, !recentBiometric else { return }
             if self.isVisible { self.hide(launchedApp: true) }
         }
     }

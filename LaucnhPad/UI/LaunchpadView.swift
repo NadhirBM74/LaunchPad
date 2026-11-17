@@ -1667,10 +1667,17 @@ struct WidgetGalleryModal: View {
 
                     Divider().background(Color.white.opacity(0.12))
 
+                    // Prévisualisation animée style Apple selon la taille sélectionnée
+                    liveSizePreviewBanner
+                        .padding(.horizontal, 24)
+                        .padding(.top, 10)
+                        .padding(.bottom, 4)
+                        .background(Color.black.opacity(0.18))
+
                     // Barre d'action en bas : Taille + Bouton Ajouter
                     bottomActionBar
                         .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 10)
                         .background(Color.black.opacity(0.22))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1839,23 +1846,28 @@ struct WidgetGalleryModal: View {
     private func galleryGridCard(_ card: GalleryCardItem) -> some View {
         let isSelected = (selectedCardID == card.id)
         let isHovered = (hoveredCardID == card.id)
-        let previewW = card.config.size.width
-        let previewH = card.config.size.height
+        var effectiveConfig = card.config
+        if isSelected, card.config.kind.allowedSizes.contains(selectedSize) {
+            effectiveConfig.size = selectedSize
+        }
+        let previewW = effectiveConfig.size.width
+        let previewH = effectiveConfig.size.height
         let boxSize: CGFloat = 148
         let thumbScale = min(132 / previewW, 118 / previewH)
 
         return Button {
-            withAnimation(AppleDesignSystem.Springs.snappy) {
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) {
                 selectCard(card)
             }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    WidgetHostView(config: card.config)
+                    WidgetHostView(config: effectiveConfig, isPreview: true)
                         .scaleEffect(thumbScale)
                         .frame(width: previewW * thumbScale, height: previewH * thumbScale)
                         .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
                         .allowsHitTesting(false)
+                        .animation(.spring(response: 0.38, dampingFraction: 0.76), value: effectiveConfig.size)
                 }
                 .frame(height: boxSize * 0.86)
                 .frame(maxWidth: .infinity)
@@ -1885,6 +1897,47 @@ struct WidgetGalleryModal: View {
         .buttonStyle(.plain)
         .onHover { hovering in
             hoveredCardID = hovering ? card.id : (hoveredCardID == card.id ? nil : hoveredCardID)
+        }
+    }
+
+    @ViewBuilder
+    private var liveSizePreviewBanner: some View {
+        let card = activeCard
+        let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
+        let previewConfig: CustomWidgetConfig = {
+            var c = card.config
+            c.size = chosenSize
+            return c
+        }()
+        let pw = previewConfig.size.width
+        let ph = previewConfig.size.height
+        let scale = min(130.0 / ph, 250.0 / pw)
+
+        HStack(spacing: 16) {
+            ZStack {
+                WidgetHostView(config: previewConfig, isPreview: true)
+                    .scaleEffect(scale)
+                    .frame(width: pw * scale, height: ph * scale)
+                    .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
+                    .allowsHitTesting(false)
+            }
+            .frame(width: 256, height: 132)
+            .animation(.spring(response: 0.40, dampingFraction: 0.78), value: chosenSize)
+            .animation(.spring(response: 0.36, dampingFraction: 0.80), value: selectedCardID)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Aperçu en direct • \(friendlySizeLabel(chosenSize))")
+                    .font(.system(size: 11.5, weight: .bold))
+                    .foregroundStyle(Color.cyan)
+                Text(card.title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("Format \(Int(pw))×\(Int(ph)) pt • \(card.subtitle)")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            Spacer()
         }
     }
 

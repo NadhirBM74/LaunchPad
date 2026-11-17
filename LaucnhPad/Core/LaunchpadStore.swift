@@ -241,16 +241,21 @@ final class LaunchpadStore: ObservableObject {
         let isSubsequentScan = hasLayoutFile && !previous.isEmpty
         if !hasLayoutFile {
             let legacy = UserDefaults.standard.stringArray(forKey: "LaunchpadSavedAppOrder") ?? []
-            let rank = Dictionary(legacy.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
-            fresh.sort {
-                let left = rank[$0.id] ?? Int.max, right = rank[$1.id] ?? Int.max
-                return left == right ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : left < right
+            if !legacy.isEmpty {
+                let rank = Dictionary(legacy.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+                fresh.sort {
+                    let left = rank[$0.id] ?? Int.max, right = rank[$1.id] ?? Int.max
+                    return left == right ? displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending : left < right
+                }
+                updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
+            } else {
+                updated.append(contentsOf: buildDefaultCategorizedItems(from: fresh))
             }
             hasLayoutFile = true
         } else {
-            fresh.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            fresh.sort { displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending }
+            updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
         }
-        updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
 
         if isSubsequentScan && !fresh.isEmpty {
             AppNotificationManager.shared.sendNewAppsDiscoveredNotification(count: fresh.count)
@@ -265,7 +270,10 @@ final class LaunchpadStore: ObservableObject {
 
     func displayName(_ id: String) -> String {
         if let custom = customNames[id], !custom.isEmpty { return custom }
-        return catalog[id]?.name ?? (id as NSString).lastPathComponent
+        if let app = catalog[id] {
+            return AppleAppLocalizer.localizedName(for: app, languageCode: LocalizationManager.activeLanguageCode)
+        }
+        return (id as NSString).lastPathComponent
     }
 
     func isVisibleApp(_ id: String) -> Bool { catalog[id] != nil && !hidden.contains(id) }
@@ -753,11 +761,121 @@ final class LaunchpadStore: ObservableObject {
         }
     }
 
-    /// Réinitialise : toutes les apps par ordre alphabétique, sans dossier, en préservant les widgets.
+    /// Réinitialise : classe les applications Apple dans des dossiers par utilisation et affiche les autres par ordre alphabétique.
     func resetLayout() {
         let widgets = items.filter { $0.isWidget }
-        let apps = catalog.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        commit(widgets + apps.map { .app($0.id) })
+        let categorized = buildDefaultCategorizedItems(from: Array(catalog.values))
+        commit(widgets + categorized)
+    }
+
+    /// Regroupe toutes les applications Apple dans des dossiers thématiques (Utilitaires, Productivité, Multimédia, Internet, Jeux).
+    func organizeAppleAppsIntoFolders() {
+        let widgets = items.filter { $0.isWidget }
+        let categorized = buildDefaultCategorizedItems(from: Array(catalog.values))
+        commit(widgets + categorized)
+    }
+
+    private func buildDefaultCategorizedItems(from apps: [AppInfo]) -> [LayoutItem] {
+        let isFr = LocalizationManager.activeLanguageCode.lowercased() == "fr"
+
+        let utilitiesName = isFr ? "Utilitaires" : "Utilities"
+        let productivityName = isFr ? "Productivité" : "Productivity"
+        let mediaName = isFr ? "Multimédia" : "Media"
+        let internetName = isFr ? "Internet & Maison" : "Internet & Home"
+        let gamesName = isFr ? "Jeux" : "Games"
+
+        let utilityIDs: Set<String> = [
+            "com.apple.terminal", "com.apple.activitymonitor", "com.apple.diskutility",
+            "com.apple.console", "com.apple.keychainaccess", "com.apple.systemprofiler",
+            "com.apple.systempreferences", "com.apple.preferences.softwareupdate",
+            "com.apple.screenshot.launcher", "com.apple.screencapture",
+            "com.apple.audio.audiomidisetup", "com.apple.bluetoothfileexchange",
+            "com.apple.colorsyncutility", "com.apple.digitalcolormeter", "com.apple.grapher",
+            "com.apple.migrationassistant", "com.apple.scripteditor2",
+            "com.apple.voiceoverutility", "com.apple.airport.airportutility",
+            "com.apple.print.printerproxy", "com.apple.printcenter", "com.apple.automator",
+            "com.apple.shortcuts", "com.apple.backup.launcher", "com.apple.bootcampassistant"
+        ]
+        let productivityIDs: Set<String> = [
+            "com.apple.notes", "com.apple.reminders", "com.apple.ical", "com.apple.addressbook",
+            "com.apple.textedit", "com.apple.preview", "com.apple.calculator", "com.apple.clock",
+            "com.apple.dictionary", "com.apple.stickies", "com.apple.fontbook", "com.apple.freeform",
+            "com.apple.iwork.pages", "com.apple.iwork.numbers", "com.apple.iwork.keynote",
+            "com.apple.passwords"
+        ]
+        let mediaIDs: Set<String> = [
+            "com.apple.music", "com.apple.tv", "com.apple.podcasts", "com.apple.ibooksx",
+            "com.apple.photos", "com.apple.quicktimeplayerx", "com.apple.photobooth",
+            "com.apple.image_capture", "com.apple.voicememos", "com.apple.imovieapp",
+            "com.apple.garageband10"
+        ]
+        let internetIDs: Set<String> = [
+            "com.apple.safari", "com.apple.mail", "com.apple.mobilesms", "com.apple.facetime",
+            "com.apple.maps", "com.apple.weather", "com.apple.stocks", "com.apple.news",
+            "com.apple.home", "com.apple.findmy", "com.apple.appstore"
+        ]
+        let gameIDs: Set<String> = [
+            "com.apple.chess", "com.apple.games"
+        ]
+
+        var utilitiesApps: [AppInfo] = []
+        var productivityApps: [AppInfo] = []
+        var mediaApps: [AppInfo] = []
+        var internetApps: [AppInfo] = []
+        var gamesApps: [AppInfo] = []
+        var otherApps: [AppInfo] = []
+
+        for app in apps {
+            let bid = app.normalizedBundleID ?? ""
+            let isUtilitiesPath = app.id.contains("/Utilities/")
+            let isSystemApple = bid.hasPrefix("com.apple.") || app.id.hasPrefix("/System/Applications")
+
+            if utilityIDs.contains(bid) || (isSystemApple && isUtilitiesPath) {
+                utilitiesApps.append(app)
+            } else if productivityIDs.contains(bid) {
+                productivityApps.append(app)
+            } else if mediaIDs.contains(bid) {
+                mediaApps.append(app)
+            } else if internetIDs.contains(bid) {
+                internetApps.append(app)
+            } else if gameIDs.contains(bid) {
+                gamesApps.append(app)
+            } else if isSystemApple {
+                utilitiesApps.append(app)
+            } else {
+                otherApps.append(app)
+            }
+        }
+
+        func sortedIDs(_ list: [AppInfo]) -> [String] {
+            list.sorted {
+                displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending
+            }.map(\.id)
+        }
+
+        var result: [LayoutItem] = []
+
+        let folderSpecs: [(String, FolderVisualStyle, String, [AppInfo])] = [
+            (internetName, .frostedGlass, "globe", internetApps),
+            (productivityName, .clearGlass, "doc.text.fill", productivityApps),
+            (mediaName, .silkSand, "music.note", mediaApps),
+            (utilitiesName, .matteOnyx, "wrench.and.screwdriver.fill", utilitiesApps),
+            (gamesName, .obsidianWaves, "gamecontroller.fill", gamesApps)
+        ]
+
+        for (name, style, symbol, groupApps) in folderSpecs where !groupApps.isEmpty {
+            let folder = FolderData(
+                id: UUID().uuidString,
+                name: name,
+                apps: sortedIDs(groupApps),
+                style: style,
+                iconSymbol: symbol
+            )
+            result.append(.folder(folder))
+        }
+
+        result.append(contentsOf: sortedIDs(otherApps).map { .app($0) })
+        return result
     }
 
     private func suggestedFolderName(for ids: [String]) -> String {

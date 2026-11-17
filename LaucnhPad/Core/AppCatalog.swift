@@ -854,6 +854,145 @@ nonisolated enum IconRenderer {
     }
 }
 
+// MARK: - Noms d'applications Apple localisés selon la langue de l'app
+
+enum AppleAppLocalizer {
+    private static let frNames: [String: String] = [
+        "com.apple.systempreferences": "Réglages Système",
+        "com.apple.preferences.softwareupdate": "Mise à jour de logiciels",
+        "com.apple.ical": "Calendrier",
+        "com.apple.music": "Musique",
+        "com.apple.preview": "Aperçu",
+        "com.apple.activitymonitor": "Moniteur d'activité",
+        "com.apple.audio.audiomidisetup": "Configuration audio et MIDI",
+        "com.apple.chess": "Échecs",
+        "com.apple.calculator": "Calculette",
+        "com.apple.clock": "Horloge",
+        "com.apple.ibooksx": "Livres",
+        "com.apple.maps": "Plans",
+        "com.apple.weather": "Météo",
+        "com.apple.shortcuts": "Raccourcis",
+        "com.apple.voicememos": "Dictaphone",
+        "com.apple.reminders": "Rappels",
+        "com.apple.home": "Maison",
+        "com.apple.findmy": "Localiser",
+        "com.apple.diskutility": "Utilitaire de disque",
+        "com.apple.keychainaccess": "Trousseau d'accès",
+        "com.apple.systemprofiler": "Informations système",
+        "com.apple.screenshot.launcher": "Capture d'écran",
+        "com.apple.screencapture": "Capture d'écran",
+        "com.apple.migrationassistant": "Assistant migration",
+        "com.apple.bluetoothfileexchange": "Échange de fichiers Bluetooth",
+        "com.apple.airport.airportutility": "Utilitaire AirPort",
+        "com.apple.colorsyncutility": "Utilitaire ColorSync",
+        "com.apple.digitalcolormeter": "Colorimètre numérique",
+        "com.apple.scripteditor2": "Éditeur de script",
+        "com.apple.print.printerproxy": "Centre d'impression",
+        "com.apple.printcenter": "Centre d'impression",
+        "com.apple.image_capture": "Transfert d'images",
+        "com.apple.dictionary": "Dictionnaire",
+        "com.apple.stickies": "Aide-mémoire",
+        "com.apple.stocks": "Bourse",
+        "com.apple.fontbook": "Livre des polices",
+        "com.apple.voiceoverutility": "Utilitaire VoiceOver",
+        "com.apple.passwords": "Mots de passe",
+        "com.apple.news": "News",
+        "com.apple.quicktimeplayerx": "QuickTime Player",
+        "com.apple.backup.launcher": "Time Machine",
+        "com.apple.addressbook": "Contacts",
+        "com.apple.automator": "Automator",
+        "com.apple.textedit": "TextEdit",
+        "com.apple.notes": "Notes",
+        "com.apple.photos": "Photos",
+        "com.apple.mobilesms": "Messages",
+        "com.apple.mail": "Mail",
+        "com.apple.safari": "Safari",
+        "com.apple.facetime": "FaceTime",
+        "com.apple.terminal": "Terminal",
+        "com.apple.console": "Console",
+        "com.apple.appstore": "App Store",
+        "com.apple.tv": "TV",
+        "com.apple.podcasts": "Podcasts",
+        "com.apple.freeform": "Freeform",
+        "com.apple.grapher": "Grapher",
+        "com.apple.photobooth": "Photo Booth",
+        "com.apple.launchpad.launcher": "Apps"
+    ]
+
+    private static let frByEnglishName: [String: String] = [
+        "system settings": "Réglages Système",
+        "system preferences": "Réglages Système",
+        "calendar": "Calendrier",
+        "music": "Musique",
+        "preview": "Aperçu",
+        "activity monitor": "Moniteur d'activité",
+        "audio midi setup": "Configuration audio et MIDI",
+        "chess": "Échecs",
+        "calculator": "Calculette",
+        "clock": "Horloge",
+        "books": "Livres",
+        "maps": "Plans",
+        "weather": "Météo",
+        "shortcuts": "Raccourcis",
+        "voice memos": "Dictaphone",
+        "reminders": "Rappels",
+        "home": "Maison",
+        "find my": "Localiser",
+        "disk utility": "Utilitaire de disque",
+        "keychain access": "Trousseau d'accès",
+        "system information": "Informations système",
+        "screenshot": "Capture d'écran",
+        "migration assistant": "Assistant migration",
+        "bluetooth file exchange": "Échange de fichiers Bluetooth",
+        "airport utility": "Utilitaire AirPort",
+        "colorsync utility": "Utilitaire ColorSync",
+        "digital color meter": "Colorimètre numérique",
+        "script editor": "Éditeur de script",
+        "print center": "Centre d'impression",
+        "image capture": "Transfert d'images",
+        "dictionary": "Dictionnaire",
+        "stickies": "Aide-mémoire",
+        "stocks": "Bourse",
+        "font book": "Livre des polices",
+        "voiceover utility": "Utilitaire VoiceOver",
+        "passwords": "Mots de passe"
+    ]
+
+    static func localizedName(for app: AppInfo, languageCode: String) -> String {
+        let lang = languageCode.lowercased()
+        let isAppleApp = (app.bundleID?.lowercased().hasPrefix("com.apple.") == true)
+            || app.id.hasPrefix("/System/Applications")
+        guard isAppleApp else { return app.name }
+
+        // 1. Lecture directe depuis <App>.app/Contents/Resources/<lang>.lproj/InfoPlist.strings
+        let lprojCandidates = [lang, "\(lang)_FR", "\(lang)_ES", "\(lang)_DE", "\(lang)_IT", "\(lang)_PT", "French"]
+        let resourcesDir = app.url.appendingPathComponent("Contents/Resources", isDirectory: true)
+        for code in lprojCandidates {
+            if code == "French" && lang != "fr" { continue }
+            let stringsURL = resourcesDir.appendingPathComponent("\(code).lproj/InfoPlist.strings")
+            if let dict = NSDictionary(contentsOf: stringsURL) as? [String: Any] {
+                if let display = dict["CFBundleDisplayName"] as? String, !display.isEmpty {
+                    return display
+                }
+                if let bundleName = dict["CFBundleName"] as? String, !bundleName.isEmpty {
+                    return bundleName
+                }
+            }
+        }
+
+        // 2. Dictionnaire intégré pour garantir le français même sur les bundles système scellés
+        if lang == "fr" {
+            if let bid = app.normalizedBundleID, let mapped = frNames[bid] {
+                return mapped
+            }
+            if let mapped = frByEnglishName[app.normalizedName] {
+                return mapped
+            }
+        }
+        return app.name
+    }
+}
+
 // MARK: - Noms de catégories
 
 enum CategoryNames {

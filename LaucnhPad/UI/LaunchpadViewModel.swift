@@ -221,6 +221,7 @@ final class LaunchpadViewModel: ObservableObject {
     var onClose: (_ launchedApp: Bool) -> Void = { _ in }
     var onOpenSettings: () -> Void = {}
     @Published var isAuthenticatingBiometrics = false
+    var lastBiometricCompletionTime: Date = .distantPast
     var onBiometricAuthChange: ((Bool) -> Void)?
 
     // MARK: - Flou d'arrière-plan des Réglages et Aperçu de la taille des icônes
@@ -806,6 +807,7 @@ final class LaunchpadViewModel: ObservableObject {
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { [weak self] success, _ in
                 guard let self else { return }
                 Task { @MainActor in
+                    self.lastBiometricCompletionTime = Date()
                     self.isAuthenticatingBiometrics = false
                     self.onBiometricAuthChange?(false)
                     completion(success)

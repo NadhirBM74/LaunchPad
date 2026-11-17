@@ -3490,9 +3490,10 @@ struct QuickNoteWidgetView: View {
 struct WidgetHostView: View, Equatable {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
 
     static func == (lhs: WidgetHostView, rhs: WidgetHostView) -> Bool {
-        lhs.config == rhs.config && lhs.targetSize == rhs.targetSize
+        lhs.config == rhs.config && lhs.targetSize == rhs.targetSize && lhs.isPreview == rhs.isPreview
     }
 
     var body: some View {
@@ -3501,10 +3502,10 @@ struct WidgetHostView: View, Equatable {
             if config.musicStyle == .classicTurntable {
                 VinylPlayerWidgetView(config: config, targetSize: targetSize)
             } else {
-                ReferenceMusicWidgetView(config: config, targetSize: targetSize)
+                ReferenceMusicWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
             }
         case .mediaWide:
-            ReferenceMusicWidgetView(config: config, targetSize: targetSize)
+            ReferenceMusicWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .weather:
             PremiumWeatherWidgetView(config: config, targetSize: targetSize)
         case .calendar:

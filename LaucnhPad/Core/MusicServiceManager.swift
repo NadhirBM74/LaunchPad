@@ -1446,6 +1446,40 @@ public final class MusicServiceManager: ObservableObject {
         }
     }
 
+    public var preferredConnectedPlatformName: String {
+        if preferredService == .spotify || (preferredService == .system && spotifyStatus.isConnected && !appleMusicStatus.isConnected) {
+            return "Spotify"
+        }
+        if preferredService == .appleMusic || appleMusicStatus.isConnected {
+            return "Apple Music"
+        }
+        return "Musique"
+    }
+
+    /// Lance et démarre la lecture sur la plateforme musicale connectée (Spotify ou Apple Music).
+    public func launchAndPlayPreferredPlatform() {
+        let useSpotify = (preferredService == .spotify) || (preferredService == .system && spotifyStatus.isConnected && !appleMusicStatus.isConnected)
+        if useSpotify {
+            let bundleID = "com.spotify.client"
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.toggleSpotifyPlayback()
+                self?.refreshNowPlaying()
+            }
+        } else {
+            let bundleID = "com.apple.Music"
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.toggleAppleMusicPlayback()
+                self?.refreshNowPlaying()
+            }
+        }
+    }
+
     public func togglePlayPause() {
         if currentTrack.serviceSource == .system {
             sendSystemCommand(.togglePlayPause)

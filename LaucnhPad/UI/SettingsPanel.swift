@@ -438,18 +438,18 @@ struct SettingsPanel: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
-                NotificationCenter.default.post(name: .closeSettings, object: nil)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
+            HStack(spacing: 6) {
+                Text("ESC")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(Color.primary.opacity(0.08), in: Circle())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Text("Appuyez sur Échap pour quitter")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .help("Fermer les réglages")
-            .accessibilityLabel("Fermer les réglages")
+            .accessibilityLabel("Appuyez sur la touche Échap pour quitter les réglages")
         }
     }
 
@@ -674,11 +674,57 @@ struct SettingsPanel: View {
 
         SettingsSectionTitle("Taille et disposition de la grille")
         SettingsCardBox {
-            SettingsSliderRow("Taille des icônes", value: $iconScale, range: 0.7...1.3, onEditingChanged: { editing in
-                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: editing)
-                if !editing { triggerSettingsToast("Taille des icônes enregistrée") }
-            })
-            IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Taille des icônes")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Choisissez une taille prédéfinie ou ajustez précisément avec le curseur.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+
+                HStack(spacing: 8) {
+                    ForEach([
+                        ("Petit", 0.80),
+                        ("Normal", 1.00),
+                        ("Grand", 1.15),
+                        ("Très grand", 1.28)
+                    ], id: \.0) { label, value in
+                        let isChosen = abs(iconScale - value) < 0.04
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+                                iconScale = value
+                            }
+                            NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: true)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
+                            }
+                            triggerSettingsToast("Taille des icônes : \(label)")
+                        } label: {
+                            Text(label)
+                                .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
+                                .foregroundStyle(isChosen ? .white : .primary.opacity(0.88))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 7)
+                                .background(
+                                    isChosen ? SettingsStyle.accent : Color.primary.opacity(0.07),
+                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                SettingsSliderRow("Ajustement fin", value: $iconScale, range: 0.7...1.3, onEditingChanged: { editing in
+                    NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: editing)
+                    if !editing { triggerSettingsToast("Taille des icônes enregistrée") }
+                })
+                IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
+            }
+            .padding(.vertical, 6)
             SettingsSeparator()
             SettingsRow("Nombre de colonnes et de lignes", subtitle: "Ajustez le nombre d'applications affichées par page.") {
                 HStack(spacing: 10) {
@@ -979,28 +1025,6 @@ struct SettingsPanel: View {
                     SettingsNumberField(value: $rows, range: 3...8)
                 }
             }
-            SettingsSeparator()
-            SettingsSliderRow(loc("interface.icon_scale"), value: $iconScale, range: 0.7...1.3, onEditingChanged: { editing in
-                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: editing)
-            })
-            IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
-            SettingsSeparator()
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(loc("interface.icon_color"))
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Dark, Light, Tinted & Clear Colored Glass (Inspiré des références Apple)")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                IconAppearanceShowcaseView {
-                    store.reloadIcons()
-                }
-            }
-            .padding(.vertical, 10)
         }
         SettingsCardBox {
             SettingsRow(loc("interface.hide_labels")) {
@@ -1132,379 +1156,6 @@ struct SettingsPanel: View {
                         }
                     }
                 ))
-            }
-        }
-
-        SettingsSectionTitle(loc("widgets.title"))
-        SettingsCardBox {
-            SettingsRow(
-                loc("widgets.enable_banner"),
-                subtitle: loc("widgets.banner_subtitle"),
-                isPro: true,
-                isProUnlocked: licenseManager.isPro
-            ) {
-                SettingsSwitch(isOn: Binding(
-                    get: { showWidgetBanner },
-                    set: { newValue in
-                        if newValue && !licenseManager.isPro {
-                            confirm(loc("pro_alert.widgets_title"),
-                                    loc("pro_alert.widgets_msg")) {
-                                withAnimation { selectedTab = .license }
-                            }
-                        } else {
-                            showWidgetBanner = newValue
-                        }
-                    }
-                ))
-            }
-
-            if showWidgetBanner && licenseManager.isPro {
-                SettingsSeparator()
-
-                // Disposition / Positionnement (Style référence : Volet gauche)
-                SettingsRow(loc("widget.settings.position"), subtitle: loc("widget.settings.position_desc")) {
-                    Picker("", selection: Binding(
-                        get: { widgetManager.position },
-                        set: {
-                            widgetManager.position = $0
-                            widgetManager.saveSettings()
-                        }
-                    )) {
-                        Text(loc("widget.position.leftSide")).tag(WidgetPosition.leftSide)
-                        Text(loc("widget.position.topBanner")).tag(WidgetPosition.topBanner)
-                    }
-                    .labelsHidden().fixedSize()
-                }
-
-                SettingsSeparator()
-
-                // Lueur des contours néon (Inspiré des lignes organiques de l'image)
-                SettingsRow(loc("widget.settings.glow"), subtitle: loc("widget.settings.glow_desc")) {
-                    HStack(spacing: 8) {
-                        ForEach(WidgetGlowColor.allCases) { glow in
-                            Button {
-                                widgetManager.glowColor = glow
-                                widgetManager.saveSettings()
-                            } label: {
-                                Circle()
-                                    .fill(glow == .none ? Color.gray.opacity(0.3) : glow.primaryColor)
-                                    .frame(width: 20, height: 20)
-                                    .overlay(
-                                        Circle().stroke(widgetManager.glowColor == glow ? Color.white : Color.clear, lineWidth: 2)
-                                    )
-                                    .scaleEffect(widgetManager.glowColor == glow ? 1.15 : 1.0)
-                            }
-                            .buttonStyle(.plain)
-                            .help(glow.title)
-                        }
-                    }
-                }
-
-                SettingsSeparator()
-
-                // Arrondi des coins
-                SettingsRow(loc("widget.settings.corners")) {
-                    Picker("", selection: Binding(
-                        get: { Int(widgetManager.cornerRadius) },
-                        set: {
-                            widgetManager.cornerRadius = CGFloat($0)
-                            widgetManager.saveSettings()
-                        }
-                    )) {
-                        Text("18 px (Doux)").tag(18)
-                        Text("26 px (Apple / Référence)").tag(26)
-                        Text("34 px (Extra arrondi)").tag(34)
-                    }
-                    .labelsHidden().fixedSize()
-                }
-
-                SettingsSeparator()
-
-                // Opacité du verre
-                SettingsSliderRow(
-                    loc("widget.settings.opacity"),
-                    value: Binding(
-                        get: { widgetManager.glassOpacity },
-                        set: {
-                            widgetManager.glassOpacity = $0
-                            widgetManager.saveSettings()
-                        }
-                    ),
-                    range: 0.20...0.85
-                )
-            }
-        }
-
-        if showWidgetBanner && licenseManager.isPro {
-            SettingsSectionTitle(loc("widget.settings.manage_widgets"))
-            ForEach(widgetManager.widgets) { config in
-                SettingsCardBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(config.kind.title)
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text(config.kind.subtitle)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            SettingsSwitch(isOn: Binding(
-                                get: { config.isEnabled },
-                                set: { _ in widgetManager.toggleWidget(config.kind) }
-                            ))
-                        }
-                        .padding(.vertical, 4)
-
-                        if config.isEnabled {
-                            SettingsSeparator()
-
-                            // Choix de la taille
-                            HStack {
-                                Text(loc("widget.settings.size")).font(.system(size: 12))
-                                Spacer()
-                                Picker("", selection: Binding(
-                                    get: { config.size },
-                                    set: { newSize in
-                                        widgetManager.updateSize(for: config.kind, size: newSize)
-                                        _ = store.updateWidgetSize(config.id, to: newSize, columns: columns, rows: rows)
-                                    }
-                                )) {
-                                    ForEach(config.kind.allowedSizes) { size in
-                                        Text(size.title).tag(size)
-                                    }
-                                }
-                                .labelsHidden().fixedSize()
-                            }
-
-                            // Options spécifiques selon le widget
-                            if config.kind == .weather {
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Thème météo (18 styles)").font(.system(size: 12, weight: .medium))
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { config.weatherTheme },
-                                        set: { newTheme in
-                                            widgetManager.updateWeatherTheme(newTheme)
-                                            if let updated = widgetManager.config(for: .weather) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    )) {
-                                        ForEach(WeatherWidgetTheme.allCases) { theme in
-                                            Text(theme.title).tag(theme)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(maxWidth: 220)
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text(loc("widget.weather.city")).font(.system(size: 12))
-                                    Spacer()
-                                    TextField("", text: Binding(
-                                        get: { config.weatherCity },
-                                        set: {
-                                            widgetManager.updateWeather(city: $0, unit: config.weatherUnit, temp: config.weatherTemp, condition: config.weatherCondition, feelsLike: config.weatherFeelsLike)
-                                            if let updated = widgetManager.config(for: .weather) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    ))
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 140)
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text(loc("widget.weather.condition")).font(.system(size: 12))
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { config.weatherCondition },
-                                        set: {
-                                            widgetManager.updateWeather(city: config.weatherCity, unit: config.weatherUnit, temp: config.weatherTemp, condition: $0, feelsLike: config.weatherFeelsLike)
-                                            if let updated = widgetManager.config(for: .weather) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    )) {
-                                        Text(loc("widget.weather.cond.cloudy")).tag("Cloudy")
-                                        Text(loc("widget.weather.cond.sunny")).tag("Sunny")
-                                        Text(loc("widget.weather.cond.rainy")).tag("Rainy")
-                                        Text(loc("widget.weather.cond.clear")).tag("Clear")
-                                    }
-                                    .labelsHidden().fixedSize()
-                                }
-                            } else if config.kind == .vinylPlayer || config.kind == .mediaWide {
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Design du lecteur").font(.system(size: 12, weight: .medium))
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { config.musicStyle },
-                                        set: { newStyle in
-                                            widgetManager.updateMusicStyle(for: config.kind, style: newStyle)
-                                            if let updated = widgetManager.config(for: config.kind) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    )) {
-                                        ForEach(MusicWidgetStyle.allCases) { style in
-                                            Text(style.title).tag(style)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(maxWidth: 230)
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text(loc("widget.music.artist")).font(.system(size: 12))
-                                    Spacer()
-                                    TextField("", text: Binding(
-                                        get: { config.musicArtist },
-                                        set: {
-                                            widgetManager.updateMusic(track: config.musicTrack, artist: $0, album: config.musicAlbum)
-                                            if let updated = widgetManager.config(for: config.kind) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    ))
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 140)
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text(loc("widget.music.track")).font(.system(size: 12))
-                                    Spacer()
-                                    TextField("", text: Binding(
-                                        get: { config.musicTrack },
-                                        set: {
-                                            widgetManager.updateMusic(track: $0, artist: config.musicArtist, album: config.musicAlbum)
-                                            if let updated = widgetManager.config(for: config.kind) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    ))
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 140)
-                                }
-                            } else if config.kind == .calendar {
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Style de calendrier").font(.system(size: 12, weight: .medium))
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { config.calendarStyle },
-                                        set: { newStyle in
-                                            widgetManager.updateCalendarStyle(newStyle)
-                                            if let updated = widgetManager.config(for: .calendar) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    )) {
-                                        ForEach(CalendarWidgetStyle.allCases) { style in
-                                            Text(style.title).tag(style)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(maxWidth: 230)
-                                }
-                            } else if config.kind == .clock {
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Design d'horloge (15 styles)").font(.system(size: 12, weight: .medium))
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { config.clockStyle },
-                                        set: { newStyle in
-                                            widgetManager.updateClockStyle(newStyle)
-                                            if let updated = widgetManager.config(for: .clock) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    )) {
-                                        ForEach(ClockWidgetStyle.allCases) { style in
-                                            Text(style.title).tag(style)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(maxWidth: 230)
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Format 24 heures").font(.system(size: 12))
-                                    Spacer()
-                                    SettingsSwitch(isOn: Binding(
-                                        get: { config.clockFormat24h },
-                                        set: {
-                                            widgetManager.updateClockStyle(config.clockStyle, format24h: $0)
-                                            if let updated = widgetManager.config(for: .clock) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    ))
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Afficher les secondes").font(.system(size: 12))
-                                    Spacer()
-                                    SettingsSwitch(isOn: Binding(
-                                        get: { config.clockShowSeconds },
-                                        set: {
-                                            widgetManager.updateClockStyle(config.clockStyle, showSeconds: $0)
-                                            if let updated = widgetManager.config(for: .clock) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    ))
-                                }
-
-                                SettingsSeparator()
-                                HStack {
-                                    Text("Couleur d'accent").font(.system(size: 12))
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { config.clockAccentColor },
-                                        set: {
-                                            widgetManager.updateClockStyle(config.clockStyle, accentColor: $0)
-                                            if let updated = widgetManager.config(for: .clock) {
-                                                store.syncWidgetConfig(updated)
-                                            }
-                                        }
-                                    )) {
-                                        Text("Rouge Apple").tag("red")
-                                        Text("Orange").tag("orange")
-                                        Text("Cyan").tag("cyan")
-                                        Text("Violet").tag("purple")
-                                        Text("Vert").tag("green")
-                                        Text("Or").tag("gold")
-                                        Text("Blanc").tag("white")
-                                    }
-                                    .labelsHidden().fixedSize()
-                                }
-                            }
-
-                            SettingsSeparator()
-                            HStack {
-                                Spacer()
-                                Button("Réinitialiser ce widget") {
-                                    widgetManager.resetWidget(config.kind)
-                                    if let updated = widgetManager.config(for: config.kind) {
-                                        store.syncWidgetConfig(updated)
-                                    }
-                                }
-                                .controlSize(.small)
-                            }
-                            .padding(.top, 2)
-                        }
-                    }
-                }
             }
         }
 
@@ -1731,6 +1382,13 @@ struct SettingsPanel: View {
             }
             SettingsSeparator()
             SettingsRow(loc("apps.catalog")) { Button(loc("apps.refresh")) { store.refresh() } }
+            SettingsSeparator()
+            SettingsRow("Classer les applications Apple par utilisation", subtitle: "Regroupe automatiquement dans des dossiers (Utilitaires, Productivité, Multimédia…).") {
+                Button("Organiser maintenant") {
+                    store.organizeAppleAppsIntoFolders()
+                    triggerSettingsToast("Applications Apple classées en dossiers !")
+                }
+            }
             SettingsSeparator()
             SettingsRow(loc("apps.folders"), subtitle: loc("apps.ungroup_confirm_msg")) {
                 Button(loc("apps.ungroup_all")) { store.ungroupAll() }

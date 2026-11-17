@@ -338,6 +338,7 @@ struct ReferenceVinylDiscView: View {
 struct ReferenceMusicWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
 
     @ObservedObject private var musicManager = MusicServiceManager.shared
     @ObservedObject private var widgetManager = WidgetManager.shared
@@ -420,21 +421,25 @@ struct ReferenceMusicWidgetView: View {
             let availH = geo.size.height
 
             ZStack {
-                switch config.musicStyle {
-                case .fullBleedPill:
-                    fullBleedPillLayout(width: availW, height: availH)
+                if !isPreview && !track.hasTrack {
+                    emptyLaunchMusicView(width: availW, height: availH)
+                } else {
+                    switch config.musicStyle {
+                    case .fullBleedPill:
+                        fullBleedPillLayout(width: availW, height: availH)
 
-                case .vinylSplatterWide:
-                    vinylSplatterLayout(width: availW, height: availH)
+                    case .vinylSplatterWide:
+                        vinylSplatterLayout(width: availW, height: availH)
 
-                case .vinylWhiteGrooved:
-                    vinylWhiteGroovedLayout(width: availW, height: availH)
+                    case .vinylWhiteGrooved:
+                        vinylWhiteGroovedLayout(width: availW, height: availH)
 
-                case .framedEditorial:
-                    framedEditorialLayout(width: availW, height: availH)
+                    case .framedEditorial:
+                        framedEditorialLayout(width: availW, height: availH)
 
-                case .classicTurntable, .adaptiveGlass:
-                    vinylSplatterLayout(width: availW, height: availH)
+                    case .classicTurntable, .adaptiveGlass:
+                        vinylSplatterLayout(width: availW, height: availH)
+                    }
                 }
             }
             .frame(width: availW, height: availH)
@@ -470,6 +475,74 @@ struct ReferenceMusicWidgetView: View {
             let visible = (notif.object as? Bool) ?? false
             isWindowVisible = visible
             if !visible { spinTracker.reset() }
+        }
+    }
+
+    @ViewBuilder
+    private func emptyLaunchMusicView(width: CGFloat, height: CGFloat) -> some View {
+        let platform = musicManager.preferredConnectedPlatformName
+        let isSpotify = (platform == "Spotify")
+        let btnSize = min(64, max(44, min(width, height) * 0.34))
+
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.12, green: 0.13, blue: 0.18).opacity(0.92),
+                    Color(red: 0.07, green: 0.08, blue: 0.12).opacity(0.96)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [
+                    (isSpotify ? Color(red: 0.11, green: 0.73, blue: 0.33) : Color(red: 0.98, green: 0.22, blue: 0.38)).opacity(0.24),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 4,
+                endRadius: max(width, height) * 0.6
+            )
+
+            VStack(spacing: min(12, height * 0.07)) {
+                Button {
+                    musicManager.launchAndPlayPreferredPlatform()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: isSpotify
+                                        ? [Color(red: 0.14, green: 0.80, blue: 0.38), Color(red: 0.09, green: 0.62, blue: 0.28)]
+                                        : [Color(red: 1.00, green: 0.26, blue: 0.42), Color(red: 0.86, green: 0.14, blue: 0.30)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: btnSize, height: btnSize)
+                            .shadow(color: (isSpotify ? Color.green : Color.pink).opacity(0.45), radius: 12, y: 4)
+
+                        Image(systemName: "play.fill")
+                            .font(.system(size: btnSize * 0.40, weight: .bold))
+                            .foregroundStyle(.white)
+                            .offset(x: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Lancer \(platform)")
+
+                VStack(spacing: 2) {
+                    Text("Lancer \(platform)")
+                        .font(.system(size: min(14, max(11.5, width * 0.055)), weight: .bold))
+                        .foregroundStyle(.white)
+                    if height > 125 {
+                        Text("Appuyez pour démarrer la musique")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.62))
+                    }
+                }
+            }
+            .padding(12)
         }
     }
 
