@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.1.3",
-  "name": "LaunchPad v1.1.3",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.3",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.1.3\n\n- 🎨 **Refonte d'icônes & Styles Liquid Glass** : Découvrez des icônes vectorielles redessinées avec précision et une galerie interactive proposant les modes Sombre, Clair, Teinté et Verre Liquide.\n- 🎵 **Nouveaux Widgets Musical & Vinyle** : Contrôlez Apple Music et Spotify avec 9 designs inédits incluant des vinyles marbrés ou blancs rainurés et des pochettes plein écran.\n- 🌤️ **Grande Bibliothèque Météo (18 Thèmes)** : Personnalisez votre météo en temps réel parmi 18 univers graphiques exclusifs (Dark Premium Cuivre, Horizon Solaire, Dashboard 7 jours, Éditorial, Aurore).\n- 🗓️ **Collections d'Horloges & Calendrier EventKit** : Profitez de 15 styles d'horloges (Analogique Floutée, Flip Clock, Néon, Fuseaux horaires) et de 6 vues calendrier synchronisées avec vos événements macOS.\n- 📁 **Dossiers Design sur Mesure** : Habillez vos dossiers avec 9 finitions haut de gamme (Verre Dépoli, Sable Soyeux, Marbre Fluide, Argent Brossé, Onyx) et gérez vos applications en un clic.",
+  "tag_name": "v1.1.4",
+  "name": "LaunchPad v1.1.4",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.1.4",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.1.4\n\n- 💎 **Moteur d'Icônes HD 512×512 Retina** : Extraction native en très haute définition et normalisation intelligente éliminant tout flou sur l'ensemble de vos applications.\n- 🎨 **10 Styles d'Icônes & Personnalisation par App** : Basculez entre Originales HD, Sombre, Clair, Teinté, Monochrome, Transparent ou Verre, et attribuez une image ou un symbole sur mesure à n'importe quelle application.\n- 🧭 **Interface de Réglages Simplifiée** : Nouvelle organisation claire et intuitive (Apparence, Personnalisation, Notifications, Général, À propos) avec confirmations visuelles instantanées.\n- 🖼️ **Nouvelle Galerie Visuelle de Widgets** : Explorez les widgets par catégorie avec miniatures en direct et ajoutez-les en 3 étapes simples directement depuis la barre supérieure.\n- ⚡ **Fluidité & Compatibilité Swift 6** : Cache d'icônes auto-réparateur et architecture optimisée garantissant une réactivité immédiate au quotidien.",
   "assets": [
     {
-      "name": "LaunchPad-v1.1.3.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.3/LaunchPad-v1.1.3.zip"
+      "name": "LaunchPad-v1.1.4.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.4/LaunchPad-v1.1.4.zip"
     },
     {
-      "name": "LaunchPad-v1.1.3.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.3/LaunchPad-v1.1.3.dmg"
+      "name": "LaunchPad-v1.1.4.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.1.4/LaunchPad-v1.1.4.dmg"
     }
   ]
 }
