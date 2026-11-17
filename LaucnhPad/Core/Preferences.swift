@@ -100,48 +100,17 @@ enum AppLogo: Int, CaseIterable, Identifiable {
 
     var assetName: String { "AppLogo\(rawValue)" }
 
-    @MainActor private static var renderedCache: [AppLogo: NSImage] = [:]
-
     @MainActor var image: NSImage? {
-        if let cached = Self.renderedCache[self] {
-            return cached
-        }
-        let style: IconAppearanceStyle
-        let kind: CustomAppIconKind
-        var tint: Color = Color(red: 0.08, green: 0.54, blue: 0.98)
-        switch self {
-        case .noir:
-            style = .dark
-            kind = .photos
-        case .liquidGlass:
-            style = .clearLiquid
-            kind = .photos
-        case .graphite:
-            style = .clearDark
-            kind = .keynote
-        case .blanc:
-            style = .light
-            kind = .freeform
-        case .orRoyal:
-            style = .dark
-            kind = .home
-        case .aurora:
-            style = .tinted
-            kind = .photos
-            tint = Color(red: 0.10, green: 0.58, blue: 1.0)
-        }
-        let view = CustomAppIconView(kind: kind, style: style, tintColor: tint, size: 256)
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 1.0
-        if let img = renderer.nsImage {
-            img.size = NSSize(width: 256, height: 256)
-            Self.renderedCache[self] = img
-            return img
-        }
         if let img = NSImage(named: NSImage.Name(assetName)) {
             return img
         }
-        return NSApp.applicationIconImage
+        if let bundleImage = Bundle.main.image(forResource: NSImage.Name(assetName)) {
+            return bundleImage
+        }
+        if self == .noir {
+            return NSApp.applicationIconImage
+        }
+        return nil
     }
 }
 
@@ -203,8 +172,16 @@ enum ScreenTarget: String, CaseIterable, Identifiable {
 enum AppTheme: String, CaseIterable, Identifiable {
     case dark = "dark"
     case light = "light"
-    case glass = "glass"
     case liquidGlass = "liquidGlass"
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "dark", "glass": self = .dark
+        case "light": self = .light
+        case "liquidGlass": self = .liquidGlass
+        default: return nil
+        }
+    }
 
     var id: String { rawValue }
     var title: String { loc("theme.\(rawValue)") }
@@ -212,7 +189,6 @@ enum AppTheme: String, CaseIterable, Identifiable {
         switch self {
         case .dark: "moon.fill"
         case .light: "sun.max.fill"
-        case .glass: "macwindow"
         case .liquidGlass: "sparkles"
         }
     }
@@ -222,6 +198,14 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
     var isLight: Bool {
         self == .light
+    }
+    /// Assombrissement fixe et optimal par thème (remplace le curseur manuel)
+    var fixedDimming: Double {
+        switch self {
+        case .dark: return 0.00
+        case .light: return 0.50
+        case .liquidGlass: return 0.15
+        }
     }
     /// Ne charge pas de fond d'écran image système
     var usesWallpaper: Bool { false }
@@ -246,8 +230,12 @@ enum Prefs {
 
     /// À appeler AVANT `registerDefaults()` : `object(forKey:)` renvoie sinon la valeur enregistrée par défaut.
     static func migrateLegacyValues() {
-        if let current = defaults.string(forKey: PrefKey.backgroundStyle), current == "wallpaper" || current == "transparent" {
-            defaults.set(AppTheme.liquidGlass.rawValue, forKey: PrefKey.backgroundStyle)
+        if let current = defaults.string(forKey: PrefKey.backgroundStyle) {
+            if current == "wallpaper" || current == "transparent" {
+                defaults.set(AppTheme.liquidGlass.rawValue, forKey: PrefKey.backgroundStyle)
+            } else if current == "glass" {
+                defaults.set(isProUnlocked ? AppTheme.liquidGlass.rawValue : AppTheme.dark.rawValue, forKey: PrefKey.backgroundStyle)
+            }
         }
         if defaults.object(forKey: PrefKey.pinchMode) == nil {
             if let legacy = defaults.string(forKey: "LaunchpadTrackpadMode") {
@@ -256,8 +244,20 @@ enum Prefs {
                 defaults.set(PinchMode.off.rawValue, forKey: PrefKey.pinchMode)
             }
         }
-        if !isProUnlocked && appLogo.isProOnly {
-            defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
+        if !isProUnlocked {
+            if appLogo.isProOnly {
+                defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
+            }
+            if backgroundStyle.isProOnly {
+                defaults.set(AppTheme.dark.rawValue, forKey: PrefKey.backgroundStyle)
+            }
+            let rawIconStyle = defaults.string(forKey: PrefKey.iconStyle) ?? "original"
+            if let parsed = IconAppearanceStyle(rawValue: rawIconStyle), parsed.requiresPro {
+                defaults.set(IconAppearanceStyle.original.rawValue, forKey: PrefKey.iconStyle)
+            }
+            if defaults.bool(forKey: PrefKey.tintedIcons) {
+                defaults.set(false, forKey: PrefKey.tintedIcons)
+            }
         }
         if !defaults.bool(forKey: "LaunchpadMigratedToHDOriginalIconsV1") {
             defaults.set(true, forKey: "LaunchpadMigratedToHDOriginalIconsV1")

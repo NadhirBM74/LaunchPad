@@ -67,7 +67,7 @@ enum KeychainTrialStorage {
 /// Gestionnaire de la licence et de l'état Freemium de l'application.
 ///
 /// Trois états sont pris en charge :
-/// - **Version gratuite** : fonctionnalités de base actives, thèmes Sombre et Verre flouté.
+/// - **Version gratuite** : fonctionnalités de base actives, thèmes Sombre et Clair.
 /// - **Essai Pro de 7 jours** : accès Pro complet sans restriction avec décompte en direct ; repasse en gratuit à l'échéance.
 /// - **Version Pro Permanente** : débloquée par achat/licence (Lemon Squeezy ou clé), sans limite de temps.
 @MainActor
@@ -361,13 +361,7 @@ final class LicenseManager: ObservableObject {
         )
 
         // Rétablissement des réglages de base si des éléments Pro étaient sélectionnés
-        if Prefs.appLogo.isProOnly {
-            Prefs.defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
-            NSApp.applicationIconImage = AppLogo.noir.image
-        }
-        if Prefs.backgroundStyle == .liquidGlass {
-            Prefs.defaults.set(AppTheme.dark.rawValue, forKey: PrefKey.backgroundStyle)
-        }
+        resetProOnlyPreferencesToFreeDefaults()
 
         AdminManager.shared.log(category: "Licence", message: "Essai gratuit de 7 jours expiré : retour automatique en version gratuite.")
 
@@ -564,13 +558,7 @@ final class LicenseManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: instanceIdKey)
         UserDefaults.standard.synchronize()
 
-        if Prefs.appLogo.isProOnly {
-            Prefs.defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
-            NSApp.applicationIconImage = AppLogo.noir.image
-        }
-        if Prefs.backgroundStyle == .liquidGlass {
-            Prefs.defaults.set(AppTheme.dark.rawValue, forKey: PrefKey.backgroundStyle)
-        }
+        resetProOnlyPreferencesToFreeDefaults()
 
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
         NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: nil)
@@ -587,6 +575,23 @@ final class LicenseManager: ObservableObject {
                 request.httpBody = try? JSONSerialization.data(withJSONObject: body)
                 _ = try? await URLSession.shared.data(for: request)
             }
+        }
+    }
+
+    private func resetProOnlyPreferencesToFreeDefaults() {
+        if Prefs.appLogo.isProOnly {
+            Prefs.defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
+            NSApp.applicationIconImage = AppLogo.noir.image
+        }
+        if Prefs.backgroundStyle == .liquidGlass {
+            Prefs.defaults.set(AppTheme.dark.rawValue, forKey: PrefKey.backgroundStyle)
+        }
+        let rawIconStyle = Prefs.defaults.string(forKey: PrefKey.iconStyle) ?? "original"
+        if (IconAppearanceStyle(rawValue: rawIconStyle)?.requiresPro == true) || Prefs.tintedIcons {
+            Prefs.defaults.set(IconAppearanceStyle.original.rawValue, forKey: PrefKey.iconStyle)
+            Prefs.defaults.set(false, forKey: PrefKey.tintedIcons)
+            IconCache.shared.removeAll()
+            NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
         }
     }
 

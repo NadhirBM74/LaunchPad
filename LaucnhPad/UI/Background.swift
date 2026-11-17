@@ -206,8 +206,6 @@ struct LaunchpadBackground: View, Equatable {
                             endPoint: .bottom
                         )
                     }
-                case .glass:
-                    VisualEffectBackground(material: .fullScreenUI)
                 case .liquidGlass:
                     LiquidGlassBackground(intensity: liquidGlassIntensity)
                 }

@@ -856,11 +856,6 @@ struct AdminTestCenterView: View {
                         Text("Échelle des icônes : \(Int(iconScale * 100))%")
                         Slider(value: $iconScale, in: 0.7...1.4, step: 0.05)
                     }
-
-                    HStack {
-                        Text("Opacité du fond : \(Int(backgroundOpacity * 100))%")
-                        Slider(value: $backgroundOpacity, in: 0.0...0.8, step: 0.05)
-                    }
                 }
             }
         }
@@ -1060,8 +1055,8 @@ struct AdminTestCenterView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.0)") {
-                            updates.setDebugState(.upToDate(version: "1.2.0"))
+                        Button("À jour (v1.2.1)") {
+                            updates.setDebugState(.upToDate(version: "1.2.1"))
                             admin.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

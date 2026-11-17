@@ -88,11 +88,17 @@ struct PremiumFolderIconView: View {
     @AppStorage(PrefKey.iconStyle) private var iconStyleRaw = "original"
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
+    @ObservedObject private var licenseManager = LicenseManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
     private var effectiveIconStyle: IconAppearanceStyle {
         let parsed = IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
-        if tintedIcons && parsed == .original { return .tinted }
+        if tintedIcons && parsed == .original {
+            return licenseManager.isPro ? .tinted : .original
+        }
+        if parsed.requiresPro && !licenseManager.isPro {
+            return .original
+        }
         if parsed == .system {
             return colorScheme == .dark ? .dark : .light
         }

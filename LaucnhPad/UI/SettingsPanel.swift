@@ -51,7 +51,7 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.reorganizeRule) private var reorganizeRule: SortRule = .nameAscending
     @AppStorage(PrefKey.folderPlacement) private var folderPlacement: FolderPlacement = .before
     @AppStorage(PrefKey.sortFolderContents) private var sortFolderContents = false
-    @AppStorage(PrefKey.iconStyle) private var iconStyle = "system"
+    @AppStorage(PrefKey.iconStyle) private var iconStyle = "original"
     @AppStorage(PrefKey.displayMode) private var displayMode: DisplayMode = .fullScreen
     @AppStorage(PrefKey.hideDock) private var hideDock = true
     @AppStorage(PrefKey.appLogo) private var appLogo: AppLogo = .noir
@@ -288,9 +288,6 @@ struct SettingsPanel: View {
             case .light:
                 VisualEffectBackground(material: .underWindowBackground)
                 Color.white.opacity(0.62)
-            case .glass:
-                VisualEffectBackground(material: .fullScreenUI)
-                Color(nsColor: .windowBackgroundColor).opacity(settingsOpacity * 0.45)
             case .liquidGlass:
                 VisualEffectBackground(material: .fullScreenUI)
                     .opacity(0.30 + 0.70 * i)
@@ -520,7 +517,7 @@ struct SettingsPanel: View {
     private var searchableShortcuts: [SettingsSearchShortcut] {
         [
             SettingsSearchShortcut(title: "Styles d'icônes HD 512×512", description: "Originales, Sombre, Clair, Teinté, Transparent, Verre Liquide", icon: "sparkles.rectangle.stack.fill", tab: .apps, keywords: "icone icones transparent verre sombre clair teinte monochrome hd"),
-            SettingsSearchShortcut(title: "Thème et transparence", description: "Liquid Glass, Verre, Sombre ou Clair et intensité du fond", icon: "paintpalette.fill", tab: .interface, keywords: "theme apparence liquid glass sombre clair transparence flou"),
+            SettingsSearchShortcut(title: "Thème et apparence", description: "Liquid Glass, Sombre ou Clair et transparence du verre", icon: "paintpalette.fill", tab: .interface, keywords: "theme apparence liquid glass sombre clair transparence"),
             SettingsSearchShortcut(title: "Taille des icônes & grille", description: "Colonnes, lignes, échelle des icônes et barre de favoris", icon: "square.grid.3x3.fill", tab: .apps, keywords: "grille taille colonnes lignes echelle favoris labels"),
             SettingsSearchShortcut(title: "Gestes Trackpad & Raccourci clavier", description: "Pincement à 3/4 doigts, touche F4 et raccourci global", icon: "hand.pinch.fill", tab: .general, keywords: "geste trackpad pincer clavier raccourci f4 coin actif"),
             SettingsSearchShortcut(title: "Notifications & Mises à jour auto", description: "Alertes de nouvelles versions et bannières visuelles", icon: "bell.badge.fill", tab: .notifications, keywords: "notification alerte mise a jour automatique banner"),
@@ -673,10 +670,17 @@ struct SettingsPanel: View {
         SettingsSectionTitle("Style et qualité des icônes (512×512 HD)")
         SettingsCardBox {
             VStack(alignment: .leading, spacing: 10) {
-                IconAppearanceShowcaseView {
-                    store.reloadIcons()
-                    triggerSettingsToast("Style d'icônes mis à jour en haute définition")
-                }
+                IconAppearanceShowcaseView(
+                    onStyleChanged: {
+                        store.reloadIcons()
+                        triggerSettingsToast("Style d'icônes mis à jour en haute définition")
+                    },
+                    onRequirePro: { title, msg in
+                        confirm(title, msg) {
+                            withAnimation { selectedTab = .license }
+                        }
+                    }
+                )
             }
             .padding(.vertical, 10)
 
@@ -829,42 +833,71 @@ struct SettingsPanel: View {
 
         SettingsSectionTitle(loc("section.language"))
         SettingsCardBox {
-            SettingsRow(loc("lang.title"), subtitle: loc("lang.subtitle")) {
-                SettingsMenuPicker(selection: $locManager.currentLanguage, options: AppLanguage.allCases, title: \.displayName)
+            HStack(spacing: 6) {
+                ForEach(AppLanguage.allCases) { lang in
+                    let isSelected = locManager.currentLanguage == lang
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
+                            locManager.currentLanguage = lang
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            if lang == .auto {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 11, weight: .semibold))
+                            } else {
+                                Text(lang.flag)
+                                    .font(.system(size: 12))
+                            }
+                            Text(lang.shortTitle)
+                                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(isSelected ? SettingsStyle.accent : Color.primary.opacity(0.06))
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(isSelected ? Color.white.opacity(0.22) : Color.primary.opacity(0.08), lineWidth: 0.8)
+                        )
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 12)
         }
 
         SettingsCardBox {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(loc("general.app_logo")).font(.system(size: 14, weight: .medium))
-                            if !licenseManager.isPro {
-                                ProBadge(isUnlocked: false)
-                            }
-                        }
-                        Text(loc("general.app_logo_subtitle"))
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
+            VStack(spacing: 14) {
+                HStack(spacing: 6) {
+                    Text(loc("general.app_logo"))
+                        .font(.system(size: 14, weight: .medium))
+                    if !licenseManager.isPro {
+                        ProBadge(isUnlocked: false)
                     }
                     Spacer()
                 }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(AppLogo.allCases) { logo in
-                            AppLogoOption(
-                                logo: logo,
-                                selected: appLogo == logo,
-                                isProUnlocked: licenseManager.isPro
-                            ) {
-                                handleLogoSelection(logo)
-                            }
+                HStack(spacing: 16) {
+                    ForEach(AppLogo.allCases) { logo in
+                        let effectiveSelected = licenseManager.isPro ? (appLogo == logo) : (logo == .noir)
+                        AppLogoOption(
+                            logo: logo,
+                            selected: effectiveSelected,
+                            isProUnlocked: licenseManager.isPro
+                        ) {
+                            handleLogoSelection(logo)
                         }
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 2)
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 4)
             }
             .padding(.vertical, 14)
         }
@@ -1094,9 +1127,6 @@ struct SettingsPanel: View {
                 .padding(.top, 2)
             }
             .padding(.vertical, 14)
-
-            SettingsSeparator()
-            SettingsSliderRow(loc("interface.dimming"), value: $opacity, range: 0...0.8)
 
             if licenseManager.isPro && backgroundStyle == .liquidGlass {
                 SettingsSeparator()
@@ -1931,6 +1961,8 @@ struct SettingsPanel: View {
                 featureRow(title: loc("license.feature_themes"), statusFree: loc("license.status_included"), statusPro: loc("license.status_included"))
                 SettingsSeparator()
                 featureRow(title: loc("license.feature_liquid_glass"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
+                SettingsSeparator()
+                featureRow(title: loc("license.feature_transparent_icons"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
                 SettingsSeparator()
                 featureRow(title: loc("license.feature_uninstall"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
                 SettingsSeparator()
@@ -2867,8 +2899,6 @@ private struct SettingsCardBox<Content: View>: View {
             Color.white.opacity(0.045)
         case .light:
             Color.white.opacity(0.72)
-        case .glass:
-            Color.white.opacity(0.065)
         case .liquidGlass:
             ZStack {
                 Color.white.opacity(0.05)
@@ -2890,9 +2920,6 @@ private struct SettingsCardBox<Content: View>: View {
         case .light:
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
-        case .glass:
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         case .liquidGlass:
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .strokeBorder(
@@ -2942,12 +2969,14 @@ struct ProBadge: View {
     }
 }
 
-/// Bouton de sélection d'un thème (Sombre, Verre flouté, Liquid Glass)
+/// Bouton de sélection d'un thème (Sombre, Clair, Liquid Glass)
 struct ThemeCardButton: View {
     let theme: AppTheme
     let isSelected: Bool
     let isProUnlocked: Bool
     let action: () -> Void
+
+    private static let clairSunColor = Color(.sRGB, red: 1.0, green: 0.62, blue: 0.0, opacity: 1.0)
 
     var body: some View {
         Button(action: action) {
@@ -2963,11 +2992,14 @@ struct ThemeCardButton: View {
                             VStack(spacing: 5) {
                                 Image(systemName: theme.symbol)
                                     .font(.system(size: 20))
-                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Color.orange : SettingsStyle.accent))
+                                    .symbolRenderingMode(.monochrome)
+                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Self.clairSunColor : SettingsStyle.accent))
+                                    .drawingGroup()
                                 Text(theme.title)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Color.black.opacity(0.85) : .primary))
+                                    .foregroundStyle(theme == .dark ? Color.white.opacity(0.95) : (theme == .light ? Color(.sRGB, red: 0.10, green: 0.10, blue: 0.12, opacity: 0.88) : .primary))
                             }
+                            .environment(\.colorScheme, theme == .light ? .light : .dark)
                         }
 
                     if theme.isProOnly && !isProUnlocked {
@@ -3021,11 +3053,6 @@ struct ThemeCardButton: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-        case .glass:
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Color.primary.opacity(0.06)
-            }
         case .liquidGlass:
             LinearGradient(
                 colors: [
@@ -3049,9 +3076,6 @@ struct ThemeCardButton: View {
         case .light:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
-        case .glass:
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.16), lineWidth: 1)
         case .liquidGlass:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(

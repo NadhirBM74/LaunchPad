@@ -68,6 +68,21 @@ public enum IconAppearanceStyle: String, Codable, CaseIterable, Identifiable, Se
         case .system: return "macwindow"
         }
     }
+
+    /// Indique si le style applique un rendu vitré / transparent sur les icônes (réservé à la licence Pro).
+    public var isTransparentGlassStyle: Bool {
+        switch self {
+        case .transparent, .clearDark, .frostedGlass, .clearLiquid:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Indique si le style d'icône nécessite une licence Pro active.
+    public var requiresPro: Bool {
+        isTransparentGlassStyle || self == .tinted
+    }
 }
 
 // MARK: - Catalogue des Icônes Vectorielles Reproduites en Code Swift

@@ -199,11 +199,16 @@ final class IconCache {
     var useOriginalColors: Bool { currentAppearanceStyle != .system }
 
     var currentAppearanceStyle: IconAppearanceStyle {
-        if UserDefaults.standard.bool(forKey: PrefKey.tintedIcons) {
+        let isPro = UserDefaults.standard.bool(forKey: PrefKey.isProUnlocked)
+        if UserDefaults.standard.bool(forKey: PrefKey.tintedIcons) && isPro {
             return .tinted
         }
         let raw = UserDefaults.standard.string(forKey: PrefKey.iconStyle) ?? "original"
-        return IconAppearanceStyle(rawValue: raw) ?? .original
+        let parsed = IconAppearanceStyle(rawValue: raw) ?? .original
+        if parsed.requiresPro && !isPro {
+            return .original
+        }
+        return parsed
     }
 
     var activeTintColor: Color {

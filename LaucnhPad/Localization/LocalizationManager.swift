@@ -9,7 +9,9 @@ nonisolated private final class LanguageState: @unchecked Sendable {
     private var code: String
 
     nonisolated init() {
-        let saved = UserDefaults.standard.string(forKey: "appLanguage") ?? "auto"
+        let saved = UserDefaults.standard.string(forKey: PrefKey.appLanguage)
+            ?? UserDefaults.standard.string(forKey: "appLanguage")
+            ?? "auto"
         let lang = AppLanguage(rawValue: saved) ?? .auto
         self.code = lang.code
     }

@@ -313,13 +313,6 @@ struct WidgetBannerView: View {
         if backgroundStyle == .liquidGlass {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .liquidGlassCard(cornerRadius: cornerRadius, interactive: false)
-        } else if backgroundStyle == .glass {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.8)
-                )
         } else {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color.black.opacity(0.50))

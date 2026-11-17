@@ -123,7 +123,7 @@ struct LaunchpadRootView: View {
                                 hasFavorites: hasFavorites)
         return ZStack(alignment: .topLeading) {
             if vm.isPanelVisible {
-                LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundOpacity, liquidGlassIntensity: liquidGlassIntensity)
+                LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundStyle.fixedDimming, liquidGlassIntensity: liquidGlassIntensity)
                     .equatable()
                     .frame(width: size.width, height: size.height)
                     .modifier(PresentationEffect(state: vm.presentation, style: .fade))

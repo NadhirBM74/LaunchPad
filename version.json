@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.0",
-  "name": "LaunchPad v1.2.0",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.0",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.0\n\n- 🎵 **Lecteur Musique Épuré Sans Illustration Factice** : Suppression complète de l'image de fond générique pour laisser place à une véritable carte givrée Clair ou Sombre lorsque la pochette d'album n'est pas disponible.\n- 💎 **Icônes Transparentes Véritables en Verre Liquide** : Nouveau moteur de détourage bilinéaire 4 coins avec détection de contours qui supprime réellement les fonds unis ou dégradés tout en préservant les logos en haute définition.\n- ✨ **Finitions Liquid Glass Affinées** : Contours spéculaires dégradés plus fins et transparence cristalline harmonieuse sur l'ensemble des icônes.",
+  "tag_name": "v1.2.1",
+  "name": "LaunchPad v1.2.1",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.1",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.1\n\n- 🎨 **Logos Officiels de LaunchPad Restaurés** : Retrouvez vos véritables logos LaunchPad parfaitement centrés et sans texte superflu, avec le logo de base gratuit pour tous et les déclinaisons exclusives réservées à la licence Pro.\n- ✨ **Transparence des Icônes Réservée à la Licence** : L'accès aux styles d'icônes transparentes et en verre liquide est réservé aux utilisateurs disposant d'une licence, qui peuvent librement choisir d'activer ou non la transparence.\n- 🌓 **Thèmes Épurés & Assombrissement Calibré** : Suppression du thème Verre flouté et du curseur manuel pour appliquer automatiquement l'assombrissement optimal en mode Clair (0,50) et Sombre (0,00).\n- ☀️ **Icône Soleil Éclatante en Liquid Glass** : Correction de l'affichage du soleil du thème Clair afin qu'il conserve son éclat jaune-orangé vif même avec Liquid Glass activé.\n- 🌐 **Sélecteur de Langue Simplifié** : Nouvelle présentation épurée et directe en pilules avec drapeaux pour changer instantanément la langue de l'interface.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.0.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.0/LaunchPad-v1.2.0.zip"
+      "name": "LaunchPad-v1.2.1.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.1/LaunchPad-v1.2.1.zip"
     },
     {
-      "name": "LaunchPad-v1.2.0.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.0/LaunchPad-v1.2.0.dmg"
+      "name": "LaunchPad-v1.2.1.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.1/LaunchPad-v1.2.1.dmg"
     }
   ]
 }

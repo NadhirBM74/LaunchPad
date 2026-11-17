@@ -24,6 +24,30 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    var shortTitle: String {
+        switch self {
+        case .auto: return "Auto"
+        case .fr: return "Français"
+        case .en: return "English"
+        case .es: return "Español"
+        case .de: return "Deutsch"
+        case .it: return "Italiano"
+        case .pt: return "Português"
+        }
+    }
+
+    var flag: String {
+        switch self {
+        case .auto: return ""
+        case .fr: return "🇫🇷"
+        case .en: return "🇬🇧"
+        case .es: return "🇪🇸"
+        case .de: return "🇩🇪"
+        case .it: return "🇮🇹"
+        case .pt: return "🇵🇹"
+        }
+    }
+
     /// Code ISO résolu (2 lettres)
     var code: String {
         switch self {

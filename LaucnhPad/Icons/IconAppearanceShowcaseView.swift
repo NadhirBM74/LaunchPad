@@ -7,12 +7,20 @@ struct IconAppearanceShowcaseView: View {
     @AppStorage(PrefKey.iconStyle) private var iconStyleRaw: String = "original"
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons: Bool = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor: String = "blue"
+    @ObservedObject private var licenseManager = LicenseManager.shared
     @State private var feedbackMessage: String? = nil
     var onStyleChanged: (() -> Void)? = nil
+    var onRequirePro: ((String, String) -> Void)? = nil
 
     private var activeStyle: IconAppearanceStyle {
-        if tintedIcons { return .tinted }
-        return IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
+        if tintedIcons {
+            return licenseManager.isPro ? .tinted : .original
+        }
+        let parsed = IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
+        if parsed.requiresPro && !licenseManager.isPro {
+            return .original
+        }
+        return parsed
     }
 
     private var resolvedTint: Color {
@@ -207,9 +215,14 @@ struct IconAppearanceShowcaseView: View {
                     CustomAppIconView(kind: .photos, style: .transparent, size: 32)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Transparent Cristal")
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Text("Transparent Cristal")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundStyle(.primary)
+                        if !licenseManager.isPro {
+                            ProBadge()
+                        }
+                    }
                     Text("Verre transparent sur toutes vos apps")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
@@ -220,6 +233,10 @@ struct IconAppearanceShowcaseView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(Color.accentColor)
+                } else if !licenseManager.isPro {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 12)
@@ -344,10 +361,15 @@ struct IconAppearanceShowcaseView: View {
 
             VStack(spacing: 8) {
                 VStack(spacing: 1) {
-                    Text("CLEAR COLORED ICONS")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.88))
+                    HStack(spacing: 5) {
+                        Text("CLEAR COLORED ICONS")
+                            .font(.system(size: 8.5, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.88))
+                        if !licenseManager.isPro {
+                            ProBadge()
+                        }
+                    }
                     Text("A unified style with Glass\nand colored icons.")
                         .font(.system(size: 12.5, weight: .heavy))
                         .foregroundStyle(.white)
@@ -441,6 +463,20 @@ struct IconAppearanceShowcaseView: View {
     }
 
     private func selectMode(_ mode: IconAppearanceStyle) {
+        if mode.requiresPro && !licenseManager.isPro {
+            let title = mode.isTransparentGlassStyle
+                ? loc("pro_alert.transparent_title")
+                : loc("pro_alert.tinted_title")
+            let msg = mode.isTransparentGlassStyle
+                ? loc("pro_alert.transparent_msg")
+                : loc("pro_alert.tinted_msg")
+            if let onRequirePro {
+                onRequirePro(title, msg)
+            } else {
+                showFeedback(title)
+            }
+            return
+        }
         withAnimation(AppleDesignSystem.Springs.snappy) {
             if mode == .tinted {
                 tintedIcons = true
