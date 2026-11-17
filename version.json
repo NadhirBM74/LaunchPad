@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.2",
-  "name": "LaunchPad v1.2.2",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.2",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.2\n\n- 🌐 **Sélecteur de Langue par Drapeaux** : Affichage épuré avec uniquement les drapeaux de chaque pays dans les réglages pour un choix visuel instantané sans texte tronqué.\n- 💜 **Badge Licence Pro en Violet** : La rosace animée vérifiée, la pastille PRO et les accents visuels de la licence adoptent désormais le violet signature de l'interface.\n- ✨ **Cohérence Visuelle & Finitions** : Harmonisation complète des badges de statut Pro entre l'onglet Licence, la barre latérale et la bannière À propos.",
+  "tag_name": "v1.2.3",
+  "name": "LaunchPad v1.2.3",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.3",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.3\n\n- ✨ **Barre Latérale Épurée** : Suppression du badge violet redondant sur la ligne Licence de la barre latérale tout en le conservant sur votre profil.\n- 💜 **Icône Licence Violette dans À Propos** : Remplacement du badge PRO textuel par l'icône vérifiée animée violette (ou jaune pendant l'essai) lorsque la licence est active.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.2.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.2/LaunchPad-v1.2.2.zip"
+      "name": "LaunchPad-v1.2.3.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.3/LaunchPad-v1.2.3.zip"
     },
     {
-      "name": "LaunchPad-v1.2.2.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.2/LaunchPad-v1.2.2.dmg"
+      "name": "LaunchPad-v1.2.3.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.3/LaunchPad-v1.2.3.dmg"
     }
   ]
 }

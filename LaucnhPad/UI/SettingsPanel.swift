@@ -428,13 +428,6 @@ struct SettingsPanel: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
-
-                if tab == .license && licenseManager.isPro {
-                    AnimatedVerifiedSealBadge(
-                        isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
-                        size: 15
-                    )
-                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8.5)
@@ -2143,7 +2136,10 @@ struct SettingsPanel: View {
                         Text("LaucnhPad")
                             .font(.system(size: 19, weight: .bold))
                         if licenseManager.isPro {
-                            ProBadge()
+                            AnimatedVerifiedSealBadge(
+                                isTrial: licenseManager.isTrialActive && !licenseManager.isProLifetime,
+                                size: 19
+                            )
                         }
                     }
 
