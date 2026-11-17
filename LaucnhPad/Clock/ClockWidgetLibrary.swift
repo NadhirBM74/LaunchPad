@@ -24,43 +24,11 @@ public enum ClockWidgetStyle: String, Codable, CaseIterable, Identifiable, Senda
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .appleAnalog: return "1. Apple Analog Blurred (Photo Réf. 7)"
-        case .appleDigital: return "2. Apple Digital Minimal"
-        case .flipClock: return "3. Flip Clock (À volets)"
-        case .retroDigital: return "4. Retro Digital Vintage"
-        case .liquidGlass: return "5. Liquid Glass"
-        case .minimalWhite: return "6. Minimal White"
-        case .darkPremium: return "7. Dark Premium Chrono"
-        case .neonClock: return "8. Neon Clock"
-        case .typographyClock: return "9. Typography Editorial"
-        case .circularClock: return "10. Circular Concentric"
-        case .gradientClock: return "11. Gradient Clock"
-        case .worldClock: return "12. World Clock (Fuseaux)"
-        case .weatherClock: return "13. Weather Clock"
-        case .calendarClock: return "14. Calendar Clock"
-        case .fullscreenClock: return "15. Fullscreen StandBy"
-        }
+        loc("clock.style.\(rawValue).title")
     }
 
     public var subtitle: String {
-        switch self {
-        case .appleAnalog: return "Grands chiffres 12, 3, 6, 9 floutés, aiguilles ajourées et pilule de date"
-        case .appleDigital: return "Horloge numérique épurée avec salutation et date"
-        case .flipClock: return "Volets mécaniques rétro avec charnière centrale"
-        case .retroDigital: return "Afficheur numérique vintage à segments lumineux"
-        case .liquidGlass: return "Transparence cristalline et biseau spéculaire Apple"
-        case .minimalWhite: return "Esthétique claire immaculée et typographie fine"
-        case .darkPremium: return "Cadran chronographe carbone et sous-cadran des secondes"
-        case .neonClock: return "Tubes lumineux néon avec halo atmosphérique"
-        case .typographyClock: return "Composition typographique empilée grand format"
-        case .circularClock: return "Anneaux de progression concentriques heures/minutes/secondes"
-        case .gradientClock: return "Dégradés chromatiques intenses et chiffres contrastés"
-        case .worldClock: return "4 fuseaux horaires en direct avec indicateur jour/nuit"
-        case .weatherClock: return "Heure précise combinée à la météo actuelle"
-        case .calendarClock: return "Heure précise combinée au calendrier du mois"
-        case .fullscreenClock: return "Chiffres géants plein cadre façon mode En veille"
-        }
+        loc("clock.style.\(rawValue).desc")
     }
 }
 
@@ -72,6 +40,7 @@ struct PremiumClockWidgetView: View {
     var isPreview: Bool = false
 
     @ObservedObject private var widgetManager = WidgetManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var currentDate = Date()
     @State private var timer: AnyCancellable?
 
@@ -452,18 +421,18 @@ struct PremiumClockWidgetView: View {
                     let rowCount: CGFloat = showSec ? 3.0 : 2.0
                     let tileH = min((h - 62 - CGFloat(rowCount - 1) * 8) / rowCount, 108)
                     VStack(spacing: 8) {
-                        flipTile(value: String(format: "%02d", dispH), label: "HR", tileH: tileH)
-                        flipTile(value: String(format: "%02d", dispM), label: "MIN", tileH: tileH)
+                        flipTile(value: String(format: "%02d", dispH), label: loc("clock.unit.hr"), tileH: tileH)
+                        flipTile(value: String(format: "%02d", dispM), label: loc("clock.unit.min"), tileH: tileH)
                         if showSec {
-                            flipTile(value: String(format: "%02d", dispS), label: "SEC", tileH: tileH)
+                            flipTile(value: String(format: "%02d", dispS), label: loc("clock.unit.sec"), tileH: tileH)
                         }
                     }
                 } else {
                     HStack(spacing: 8) {
-                        flipTile(value: String(format: "%02d", dispH), label: "HR", h: h)
-                        flipTile(value: String(format: "%02d", dispM), label: "MIN", h: h)
+                        flipTile(value: String(format: "%02d", dispH), label: loc("clock.unit.hr"), h: h)
+                        flipTile(value: String(format: "%02d", dispM), label: loc("clock.unit.min"), h: h)
                         if showSec {
-                            flipTile(value: String(format: "%02d", dispS), label: "SEC", h: h)
+                            flipTile(value: String(format: "%02d", dispS), label: loc("clock.unit.sec"), h: h)
                         }
                     }
                 }
@@ -558,7 +527,7 @@ struct PremiumClockWidgetView: View {
                             .foregroundStyle(lcdGreen.opacity(0.88))
                             .shadow(color: lcdGreen.opacity(0.45), radius: 5)
                         if config.clockShowSeconds {
-                            Text(String(format: ":%02d SEC", dispS))
+                            Text(loc("clock.sec_suffix", dispS))
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                                 .foregroundStyle(lcdGreen.opacity(0.75))
                                 .padding(.top, 2)
@@ -989,7 +958,7 @@ struct PremiumClockWidgetView: View {
                             .foregroundStyle(.white)
                             .monospacedDigit()
                         Spacer()
-                        Text("FUSEAUX")
+                        Text(loc("clock.world_label"))
                             .font(.system(size: 8.5, weight: .heavy))
                             .tracking(0.8)
                             .foregroundStyle(accentColor)
@@ -1261,7 +1230,7 @@ struct PremiumClockWidgetView: View {
     }()
 
     private var activeAppLocale: Locale {
-        LocalizationManager.activeLanguageCode == "fr" ? Self.frLocale : Self.enLocale
+        Locale(identifier: LocalizationManager.activeLanguageCode)
     }
 
     private var shortDigitalTimeString: String {
@@ -1319,7 +1288,7 @@ struct PremiumClockWidgetView: View {
         let isDay = (hour >= 6 && hour < 19)
 
         let diffHours = (tz.secondsFromGMT(for: currentDate) - TimeZone.current.secondsFromGMT(for: currentDate)) / 3600
-        let offsetLabel = diffHours == 0 ? "Local" : (diffHours > 0 ? "+\(diffHours)H" : "\(diffHours)H")
+        let offsetLabel = diffHours == 0 ? loc("clock.local") : (diffHours > 0 ? "+\(diffHours)H" : "\(diffHours)H")
 
         return (city, timeStr, offsetLabel, isDay)
     }

@@ -20,17 +20,7 @@ public enum FolderVisualStyle: String, Codable, CaseIterable, Identifiable, Send
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .frostedGlass: return "Verre Givré (Social)"
-        case .clearGlass: return "Verre Clair (Extra)"
-        case .pureWhite: return "Blanc Pur (Work)"
-        case .silkSand: return "Soie Dorée (Backup)"
-        case .fluidMarble: return "Marbre Fluide (Design)"
-        case .brushedSilver: return "Argent Brossé (Projects)"
-        case .matteOnyx: return "Onyx Mat (Work files)"
-        case .obsidianWaves: return "Obsidienne 3D (LaunchMe)"
-        case .customTabbed: return "Dossier Personnalisé"
-        }
+        loc("folder.style.\(rawValue)")
     }
 
     public var isTabbedFolder: Bool {
@@ -595,20 +585,23 @@ private struct FluidMarbleSwirlShape: Shape {
 struct FolderCustomizationBarView: View {
     let folder: FolderData
     @ObservedObject var store: LaunchpadStore
+    @ObservedObject private var locManager = LocalizationManager.shared
     @Binding var isShowingCustomizer: Bool
     @Binding var isShowingAppPicker: Bool
 
-    private let colorPresets: [(hex: String, name: String)] = [
-        ("#E5B892", "Sable"),
-        ("#FF2442", "Carmin"),
-        ("#D8DCE2", "Argent"),
-        ("#141416", "Onyx"),
-        ("#0A84FF", "Bleu"),
-        ("#30D158", "Vert"),
-        ("#BF5AF2", "Violet"),
-        ("#FF9F0A", "Ambre"),
-        ("#64D2FF", "Cyan")
-    ]
+    private var colorPresets: [(hex: String, name: String)] {
+        [
+            ("#E5B892", loc("folder.color.sand")),
+            ("#FF2442", loc("folder.color.carmine_short")),
+            ("#D8DCE2", loc("folder.color.silver")),
+            ("#141416", loc("folder.color.onyx_short")),
+            ("#0A84FF", loc("tint.blue")),
+            ("#30D158", loc("custom_icon.color.green")),
+            ("#BF5AF2", loc("folder.color.violet")),
+            ("#FF9F0A", loc("folder.color.amber")),
+            ("#64D2FF", loc("folder.color.cyan"))
+        ]
+    }
 
     private let symbolPresets: [String] = [
         "",
@@ -629,7 +622,7 @@ struct FolderCustomizationBarView: View {
         VStack(alignment: .leading, spacing: 12) {
             // 1. Styles de dossiers (Référence 2 & 4)
             VStack(alignment: .leading, spacing: 6) {
-                Text("Style du dossier")
+                Text(loc("folder.customize.style"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
 
@@ -682,7 +675,7 @@ struct FolderCustomizationBarView: View {
             // 2. Couleur et Symbole
             HStack(spacing: 18) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Couleur")
+                    Text(loc("folder.customize.color"))
                         .font(.system(size: 10.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.70))
                     HStack(spacing: 6) {
@@ -711,7 +704,7 @@ struct FolderCustomizationBarView: View {
                 Divider().frame(height: 28).background(Color.white.opacity(0.15))
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Icône")
+                    Text(loc("folder.customize.icon"))
                         .font(.system(size: 10.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.70))
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -771,6 +764,7 @@ struct FolderCustomizationBarView: View {
 struct FolderAppPickerSheet: View {
     let folder: FolderData
     @ObservedObject var store: LaunchpadStore
+    @ObservedObject private var locManager = LocalizationManager.shared
     @Binding var isPresented: Bool
     @State private var filterText: String = ""
     @State private var sortedApps: [AppInfo] = []
@@ -790,7 +784,7 @@ struct FolderAppPickerSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Gérer les applications de « \(folder.name) »", systemImage: "folder.badge.gearshape")
+                Label(loc("folder.manage_title", folder.name), systemImage: "folder.badge.gearshape")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
                 Spacer()
@@ -799,7 +793,7 @@ struct FolderAppPickerSheet: View {
                         isPresented = false
                     }
                 } label: {
-                    Text("Terminé")
+                    Text(loc("common.done"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.black)
                         .padding(.horizontal, 12)
@@ -814,7 +808,7 @@ struct FolderAppPickerSheet: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.6))
-                TextField("Rechercher une application…", text: $filterText)
+                TextField(loc("grid.search_placeholder"), text: $filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12.5))
                     .foregroundStyle(.white)

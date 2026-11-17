@@ -324,14 +324,14 @@ struct AddCustomTileCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(loc("overlay.name")).font(.caption).foregroundStyle(.white.opacity(0.7))
-                TextField(kind == .web ? "ex: ChatGPT, Notion, GitHub…" : "ex: Nettoyer le Bureau…", text: $title)
+                TextField(kind == .web ? loc("custom_tile.web_example") : loc("custom_tile.shortcut_example"), text: $title)
                     .textFieldStyle(.roundedBorder)
                     .focused($focusedField, equals: .title)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(kind == .web ? loc("custom_tile.url_site") : loc("custom_tile.exact_name")).font(.caption).foregroundStyle(.white.opacity(0.7))
-                TextField(kind == .web ? "https://chatgpt.com" : "Nom du raccourci macOS", text: $target)
+                TextField(kind == .web ? "https://chatgpt.com" : loc("custom_tile.shortcut_name_placeholder"), text: $target)
                     .textFieldStyle(.roundedBorder)
                     .focused($focusedField, equals: .target)
             }

@@ -114,9 +114,9 @@ final class PermissionManager: ObservableObject {
         // 3. Notification système macOS confirmant l'activation du trackpad
         AppNotificationManager.shared.sendNotification(
             identifier: "launchpad.accessibility.granted",
-            title: "LaunchPad — Prêt ! 🚀",
-            subtitle: "Gestes trackpad activés",
-            body: "Pincez à 3 ou 4 doigts sur le trackpad pour ouvrir LaunchPad à tout moment.",
+            title: loc("permission.ready_title"),
+            subtitle: loc("permission.ready_sub"),
+            body: loc("permission.ready_body"),
             type: .tip
         )
 

@@ -43,7 +43,7 @@ public final class AdminManager: ObservableObject {
 
         guard !trimmedUser.isEmpty, !trimmedPass.isEmpty else {
             log(category: "Auth", message: "Échec de connexion : champs vides", isSuccess: false)
-            return (false, "Veuillez saisir un nom d'utilisateur et un mot de passe.")
+            return (false, loc("admin.err_empty"))
         }
 
         // Autorise 'admin' / '1234'
@@ -51,10 +51,10 @@ public final class AdminManager: ObservableObject {
             isAuthenticated = true
             authenticatedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
             log(category: "Auth", message: "Connexion réussie en tant que '\(authenticatedUser)'", isSuccess: true)
-            return (true, "Connexion réussie au mode Administrateur.")
+            return (true, loc("admin.login_success"))
         } else {
             log(category: "Auth", message: "Identifiants invalides pour l'utilisateur '\(username)'", isSuccess: false)
-            return (false, "Nom d'utilisateur ou mot de passe incorrect. (Par défaut : admin / 1234)")
+            return (false, loc("admin.err_invalid"))
         }
     }
 

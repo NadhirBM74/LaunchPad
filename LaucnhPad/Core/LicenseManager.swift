@@ -350,17 +350,18 @@ final class LicenseManager: ObservableObject {
         let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60
 
-        // Ne déclenche pas d'invalidation SwiftUI si la seconde affichée n'a pas changé
-        if countdown.trialSecondsRemaining != seconds || countdown.trialMinutesRemaining != minutes || countdown.trialHoursRemaining != hours || countdown.trialDaysRemaining != days {
+        // Ne déclenche pas d'invalidation SwiftUI si la seconde affichée n'a pas changé (sauf changement de langue)
+        let langCode = LocalizationManager.activeLanguageCode
+        let expectedString: String = days > 0
+            ? loc("license.countdown_days_fmt", days, hours, minutes, seconds)
+            : loc("license.countdown_hms_fmt", hours, minutes, seconds)
+        if countdown.trialSecondsRemaining != seconds || countdown.trialMinutesRemaining != minutes || countdown.trialHoursRemaining != hours || countdown.trialDaysRemaining != days || countdown.timeRemainingString != expectedString {
+            let _ = langCode
             countdown.trialDaysRemaining = days
             countdown.trialHoursRemaining = hours
             countdown.trialMinutesRemaining = minutes
             countdown.trialSecondsRemaining = seconds
-            if days > 0 {
-                countdown.timeRemainingString = String(format: "%d j %02d h %02d m %02d s", days, hours, minutes, seconds)
-            } else {
-                countdown.timeRemainingString = String(format: "%02d h %02d m %02d s", hours, minutes, seconds)
-            }
+            countdown.timeRemainingString = expectedString
         }
     }
 
@@ -370,7 +371,7 @@ final class LicenseManager: ObservableObject {
 
         self.isTrialActive = false
         self.isPro = false
-        countdown.timeRemainingString = "Expiré"
+        countdown.timeRemainingString = loc("license.expired_status")
         countdown.trialDaysRemaining = 0
         countdown.trialHoursRemaining = 0
         countdown.trialMinutesRemaining = 0

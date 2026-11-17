@@ -15,14 +15,7 @@ public enum MusicWidgetStyle: String, Codable, CaseIterable, Identifiable, Senda
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .fullBleedPill: return "Full Cover + Pilule (Réf. Orange)"
-        case .vinylSplatterWide: return "Vinyle Marbré Cyan (Réf. Haut)"
-        case .vinylWhiteGrooved: return "Vinyle Blanc Studio (Réf. Tall)"
-        case .framedEditorial: return "Cadre Éditorial Clair (Réf. Centre)"
-        case .classicTurntable: return "Platine & Bras de Lecture"
-        case .adaptiveGlass: return "Liquid Glass Adaptatif"
-        }
+        loc("music_style.\(rawValue)")
     }
 }
 
@@ -258,6 +251,7 @@ struct ReferenceMusicWidgetView: View {
 
     @ObservedObject private var musicManager = MusicServiceManager.shared
     @ObservedObject private var widgetManager = WidgetManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
 
@@ -477,15 +471,15 @@ struct ReferenceMusicWidgetView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Lancer \(platform)")
+                .accessibilityLabel(loc("music.launch_app", platform))
 
                 VStack(spacing: 2) {
-                    Text("Lancer \(platform)")
+                    Text(loc("music.launch_app", platform))
                         .font(.system(size: min(14, max(11.5, width * 0.055)), weight: .bold))
                         .foregroundStyle(cardTitleColor)
                         .lineLimit(1)
                     if height > 125 {
-                        Text("Appuyez pour démarrer la musique")
+                        Text(loc("music.tap_to_start"))
                             .font(.system(size: 10.5))
                             .foregroundStyle(cardSubtitleColor)
                             .multilineTextAlignment(.center)

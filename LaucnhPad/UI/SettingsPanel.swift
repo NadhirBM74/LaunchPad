@@ -110,22 +110,14 @@ struct SettingsPanel: View {
         }
 
         var subtitle: String {
-            switch self {
-            case .interface: return "Mode d'affichage, disposition et effets visuels"
-            case .apps: return "Thème de l'application, icônes HD, taille et dossiers"
-            case .notifications: return "Mises à jour automatiques et alertes visuelles"
-            case .general: return "Langue, logo, services musicaux et activation"
-            case .advanced: return "Tri, sauvegarde de disposition et réinitialisation"
-            case .license: return "Essai gratuit 7 jours et activation LaunchPad Pro"
-            case .about: return "Version installée, nouveautés et communauté"
-            }
+            loc("tab.sub.\(rawValue)")
         }
 
         var title: String {
             switch self {
-            case .interface: return "Apparence"
-            case .apps: return "Personnalisation"
-            case .notifications: return "Notifications"
+            case .interface: return loc("tab.appearance")
+            case .apps: return loc("tab.customization")
+            case .notifications: return loc("tab.notifications")
             case .general: return loc("tab.general")
             case .license: return loc("tab.license")
             case .about: return loc("tab.about")
@@ -362,9 +354,11 @@ struct SettingsPanel: View {
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Réglages")
+                    Text(loc("settings.title"))
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
                     HStack(spacing: 4) {
                         Text(licenseManager.appleAccountFirstName.isEmpty ? "LaunchPad" : licenseManager.appleAccountFirstName)
                             .font(.system(size: 11.5, weight: .semibold))
@@ -389,7 +383,7 @@ struct SettingsPanel: View {
                         .background(Color.primary.opacity(0.08), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .help("À propos de LaunchPad")
+                .help(loc("about.tooltip"))
             }
             .padding(.horizontal, 18)
             .padding(.top, 22)
@@ -408,7 +402,7 @@ struct SettingsPanel: View {
                         }
                     } label: {
                         HStack {
-                            Text("Plus")
+                            Text(loc("settings.plus_section"))
                                 .font(.system(size: 13.5, weight: .bold))
                                 .foregroundStyle(.primary.opacity(0.9))
                             Spacer()
@@ -464,7 +458,7 @@ struct SettingsPanel: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Onglet \(tab.title)")
+        .accessibilityLabel(loc("settings.tab_a11y", tab.title))
     }
 
     private var rightPaneHeader: some View {
@@ -485,11 +479,11 @@ struct SettingsPanel: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2.5)
                     .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                Text("Appuyez sur Échap pour quitter")
+                Text(loc("settings.esc_hint"))
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(.secondary)
             }
-            .accessibilityLabel("Appuyez sur la touche Échap pour quitter les réglages")
+            .accessibilityLabel(loc("settings.esc_a11y"))
         }
     }
 
@@ -497,45 +491,45 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var notificationsTab: some View {
-        SettingsSectionTitle("Alertes et mises à jour")
+        SettingsSectionTitle(loc("notif.section.alerts"))
         SettingsCardBox {
             SettingsRow(
-                "Vérifier automatiquement les mises à jour",
-                subtitle: "Vous prévient dès qu'une nouvelle version de LaunchPad est disponible."
+                loc("notif.auto_update"),
+                subtitle: loc("notif.auto_update_desc")
             ) {
                 SettingsAutoUpdateSwitch(autoCheckUpdates: $autoCheckUpdates, triggerToast: triggerSettingsToast)
             }
             SettingsSeparator()
             SettingsRow(
-                "Conseils d'utilisation et nouveautés",
-                subtitle: "Affiche des astuces simples pour découvrir les gestes et les nouveaux widgets."
+                loc("notif.tips"),
+                subtitle: loc("notif.tips_desc")
             ) {
                 SettingsSwitch(isOn: $enableUsageTips)
                     .onChange(of: enableUsageTips) { _, val in
-                        triggerSettingsToast(val ? "Conseils activés" : "Conseils masqués")
+                        triggerSettingsToast(val ? loc("notif.tips_on_toast") : loc("notif.tips_off_toast"))
                     }
             }
             SettingsSeparator()
             SettingsRow(
-                "Retours visuels de confirmation",
-                subtitle: "Affiche une discrète bannière de confirmation après chaque modification."
+                loc("notif.confirmations"),
+                subtitle: loc("notif.confirmations_desc")
             ) {
                 SettingsSwitch(isOn: $enableSoundFeedback)
                     .onChange(of: enableSoundFeedback) { _, val in
-                        triggerSettingsToast(val ? "Confirmations visuelles activées" : "Confirmations visuelles désactivées")
+                        triggerSettingsToast(val ? loc("notif.confirmations_on_toast") : loc("notif.confirmations_off_toast"))
                     }
             }
         }
 
-        SettingsSectionTitle("Notifications macOS")
+        SettingsSectionTitle(loc("notif.section.macos"))
         SettingsCardBox {
             SettingsRow(
-                "Tester l'affichage d'une notification",
-                subtitle: "Vérifie que les bannières de LaunchPad s'affichent correctement à l'écran."
+                loc("notif.test_title"),
+                subtitle: loc("notif.test_desc")
             ) {
-                Button("Envoyer un test") {
+                Button(loc("notif.test_button")) {
                     NotificationCenter.default.post(name: .triggerTestToast, object: nil)
-                    triggerSettingsToast("Notification de test envoyée !")
+                    triggerSettingsToast(loc("notif.test_toast"))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(SettingsStyle.accent)
@@ -543,10 +537,10 @@ struct SettingsPanel: View {
             }
             SettingsSeparator()
             SettingsRow(
-                "Réglages Système macOS",
-                subtitle: "Gérez les bannières et les sons de LaunchPad dans les Réglages de votre Mac."
+                loc("notif.macos_settings"),
+                subtitle: loc("notif.macos_settings_desc")
             ) {
-                Button("Ouvrir les Réglages macOS") {
+                Button(loc("notif.macos_settings_button")) {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
                         NSWorkspace.shared.open(url)
                     }
@@ -561,13 +555,13 @@ struct SettingsPanel: View {
     @ViewBuilder
     private var customizationAndAppsTab: some View {
         if licenseManager.isPro {
-            SettingsSectionTitle("Style et qualité des icônes (512×512 HD)")
+            SettingsSectionTitle(loc("custom.icons_hd_section"))
             SettingsCardBox {
                 VStack(alignment: .leading, spacing: 10) {
                     IconAppearanceShowcaseView(
                         onStyleChanged: {
                             store.reloadIcons()
-                            triggerSettingsToast("Style d'icônes mis à jour en haute définition")
+                            triggerSettingsToast(loc("custom.icon_style_toast"))
                         },
                         onRequirePro: { title, msg in
                             confirm(title, msg) {
@@ -581,13 +575,13 @@ struct SettingsPanel: View {
                 if !CustomIconManager.shared.overrides.isEmpty {
                     SettingsSeparator()
                     SettingsRow(
-                        "Icônes personnalisées individuellement",
-                        subtitle: "\(CustomIconManager.shared.overrides.count) application(s) utilisent une icône sur mesure."
+                        loc("custom.indiv_icons_title"),
+                        subtitle: loc("custom.indiv_icons_sub", CustomIconManager.shared.overrides.count)
                     ) {
-                        Button("Tout rétablir par défaut") {
+                        Button(loc("custom.restore_all_defaults")) {
                             CustomIconManager.shared.removeAllOverrides()
                             store.reloadIcons()
-                            triggerSettingsToast("Toutes les icônes d'origine ont été rétablies")
+                            triggerSettingsToast(loc("custom.restore_all_toast"))
                         }
                         .controlSize(.small)
                     }
@@ -645,14 +639,14 @@ struct SettingsPanel: View {
             }
         }
 
-        SettingsSectionTitle("Taille et disposition de la grille")
+        SettingsSectionTitle(loc("custom.grid_section"))
         SettingsCardBox {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Taille des icônes")
+                        Text(loc("custom.icon_size_title"))
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Choisissez la taille des icônes affichées dans le Launchpad.")
+                        Text(loc("custom.icon_size_desc"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
@@ -663,10 +657,10 @@ struct SettingsPanel: View {
                     Spacer(minLength: 0)
                     HStack(spacing: 10) {
                         ForEach([
-                            ("Petit", 0.80),
-                            ("Moyen", 1.00),
-                            ("Grand", 1.15)
-                        ], id: \.0) { label, value in
+                            (loc("widget.size.small"), 0.80),
+                            (loc("widget.size.medium"), 1.00),
+                            (loc("widget.size.large"), 1.15)
+                        ], id: \.1) { label, value in
                             let isChosen = value == 1.15 ? (iconScale >= 1.11) : abs(iconScale - value) < 0.04
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
@@ -676,7 +670,7 @@ struct SettingsPanel: View {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                                     NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
                                 }
-                                triggerSettingsToast("Taille des icônes : \(label)")
+                                triggerSettingsToast(loc("custom.icon_size_toast", label))
                             } label: {
                                 Text(label)
                                     .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
@@ -698,7 +692,7 @@ struct SettingsPanel: View {
             }
             .padding(.vertical, 6)
             SettingsSeparator()
-            SettingsRow("Nombre de colonnes et de lignes", subtitle: "Ajustez le nombre d'applications affichées par page.") {
+            SettingsRow(loc("custom.grid_dims_title"), subtitle: loc("custom.grid_dims_sub")) {
                 HStack(spacing: 10) {
                     SettingsNumberField(value: $columns, range: 4...10)
                     Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
@@ -706,11 +700,11 @@ struct SettingsPanel: View {
                 }
             }
             SettingsSeparator()
-            SettingsRow("Afficher le nom sous chaque application") {
+            SettingsRow(loc("custom.show_labels")) {
                 SettingsSwitch(isOn: $showLabels)
             }
             SettingsSeparator()
-            SettingsRow("Afficher un point sous les applications ouvertes") {
+            SettingsRow(loc("custom.show_running")) {
                 SettingsSwitch(isOn: $showRunning)
             }
             SettingsSeparator()
@@ -729,14 +723,14 @@ struct SettingsPanel: View {
                             }
                         } else {
                             showFavoritesBar = newValue
-                            triggerSettingsToast(newValue ? "Barre de favoris affichée" : "Barre de favoris masquée")
+                            triggerSettingsToast(newValue ? loc("custom.favorites_shown_toast") : loc("custom.favorites_hidden_toast"))
                         }
                     }
                 ))
             }
         }
 
-        SettingsSectionTitle("Applications et dossiers")
+        SettingsSectionTitle(loc("custom.apps_folders_section"))
         appsTab
     }
 
@@ -921,7 +915,7 @@ struct SettingsPanel: View {
             }
         }
 
-        SettingsSectionTitle("Options avancées (Section secondaire)")
+        SettingsSectionTitle(loc("general.advanced_section"))
         SettingsCardBox {
             Button {
                 withAnimation(AppleDesignSystem.Springs.snappy) {
@@ -933,9 +927,9 @@ struct SettingsPanel: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(SettingsStyle.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Afficher les options avancées et la sauvegarde")
+                        Text(loc("general.advanced_toggle_title"))
                             .font(.system(size: 13.5, weight: .semibold))
-                        Text("Écran cible, tri automatique, sauvegarde de disposition et réinitialisation.")
+                        Text(loc("general.advanced_toggle_sub"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
@@ -970,7 +964,7 @@ struct SettingsPanel: View {
                 SettingsSeparator()
                 SettingsRow(loc("general.include_hidden_search")) { SettingsSwitch(isOn: $showHiddenInSearch) }
                 SettingsSeparator()
-                SettingsRow("Sauvegarder ou restaurer votre disposition", subtitle: "Exportez ou importez vos pages, dossiers et réglages.") {
+                SettingsRow(loc("general.backup_row_title"), subtitle: loc("general.backup_row_sub")) {
                     HStack(spacing: 8) {
                         Button(loc("advanced.import")) { importBackup() }
                         Button(loc("advanced.export")) { exportBackup() }
@@ -981,7 +975,7 @@ struct SettingsPanel: View {
                     Button(loc("advanced.reset_button")) {
                         confirm(loc("advanced.reset_confirm_title"), loc("advanced.reset_confirm_msg")) {
                             store.resetLayout()
-                            triggerSettingsToast("Disposition réinitialisée par défaut")
+                            triggerSettingsToast(loc("general.reset_done_toast"))
                         }
                     }
                 }
@@ -1067,14 +1061,14 @@ struct SettingsPanel: View {
                 SettingsRow(loc("interface.tint_accent")) {
                     HStack(spacing: 8) {
                         ForEach([
-                            ("accent", "Accent"),
-                            ("graphite", "Gris"),
-                            ("blue", "Bleu"),
-                            ("purple", "Violet"),
-                            ("orange", "Orange"),
-                            ("mint", "Menthe"),
-                            ("rose", "Rose"),
-                            ("gold", "Or")
+                            ("accent", loc("tint.accent")),
+                            ("graphite", loc("tint.graphite")),
+                            ("blue", loc("tint.blue")),
+                            ("purple", loc("tint.purple")),
+                            ("orange", loc("tint.orange")),
+                            ("mint", loc("tint.mint")),
+                            ("rose", loc("tint.rose")),
+                            ("gold", loc("tint.gold"))
                         ], id: \.0) { key, label in
                             Button {
                                 tintedIconColor = key
@@ -1133,11 +1127,12 @@ struct SettingsPanel: View {
 
     private struct MusicServicesSettingsView: View {
         @ObservedObject private var musicManager = MusicServiceManager.shared
+        @ObservedObject private var locManager = LocalizationManager.shared
         @State private var hoveredSource: MusicServiceSource? = nil
 
         var body: some View {
             VStack(alignment: .center, spacing: 12) {
-                Text("Source")
+                Text(loc("music.source_header"))
                     .font(.system(size: 14, weight: .semibold))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 14)
@@ -1145,7 +1140,7 @@ struct SettingsPanel: View {
                 HStack(spacing: 48) {
                     Spacer(minLength: 0)
 
-                    sourceOption(source: .system, label: "Auto") {
+                    sourceOption(source: .system, label: loc("music.source.auto_label")) {
                         autoSourceLogo
                     }
 
@@ -1248,7 +1243,7 @@ struct SettingsPanel: View {
             case .system, .none:
                 HStack(spacing: 6) {
                     Circle().fill(Color.green).frame(width: 6, height: 6)
-                    Text("Détection automatique (Spotify, Apple Music et lecteurs Mac)")
+                    Text(loc("music.source.auto_desc"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
@@ -1258,14 +1253,14 @@ struct SettingsPanel: View {
                 case .connected:
                     HStack(spacing: 6) {
                         Circle().fill(Color.green).frame(width: 6, height: 6)
-                        Text("Spotify connecté nativement sur ce Mac")
+                        Text(loc("music.spotify.connected_native"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
                 case .connecting:
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
-                        Text("Connexion à Spotify…")
+                        Text(loc("music.spotify.connecting"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
@@ -1277,7 +1272,7 @@ struct SettingsPanel: View {
                         Text(reason)
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
-                        Button("Autoriser") {
+                        Button(loc("music.spotify.authorize_btn")) {
                             musicManager.openAutomationPrivacySettings()
                         }
                         .buttonStyle(.bordered)
@@ -1293,7 +1288,7 @@ struct SettingsPanel: View {
                             .foregroundStyle(.secondary)
                     }
                 case .notConnected:
-                    Button("Connecter Spotify") {
+                    Button(loc("music.spotify.connect_btn")) {
                         musicManager.connectSpotify()
                     }
                     .buttonStyle(.bordered)
@@ -1305,14 +1300,14 @@ struct SettingsPanel: View {
                 case .connected:
                     HStack(spacing: 6) {
                         Circle().fill(Color.green).frame(width: 6, height: 6)
-                        Text("Apple Music connecté")
+                        Text(loc("music.apple.connected_label"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
                 case .connecting:
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
-                        Text("Autorisation d'Apple Music…")
+                        Text(loc("music.apple.authorizing"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
@@ -1324,7 +1319,7 @@ struct SettingsPanel: View {
                         Text(reason)
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
-                        Button("Réglages") {
+                        Button(loc("settings.title")) {
                             musicManager.openAutomationPrivacySettings()
                         }
                         .buttonStyle(.bordered)
@@ -1340,7 +1335,7 @@ struct SettingsPanel: View {
                             .foregroundStyle(.secondary)
                     }
                 case .notConnected:
-                    Button("Connecter Apple Music") {
+                    Button(loc("music.apple.connect_btn")) {
                         musicManager.connectAppleMusic()
                     }
                     .buttonStyle(.bordered)
@@ -1361,10 +1356,10 @@ struct SettingsPanel: View {
             SettingsSeparator()
             SettingsRow(loc("apps.catalog")) { Button(loc("apps.refresh")) { store.refresh() } }
             SettingsSeparator()
-            SettingsRow("Classer les applications Apple par utilisation", subtitle: "Regroupe automatiquement dans des dossiers (Utilitaires, Productivité, Multimédia…).") {
-                Button("Organiser maintenant") {
+            SettingsRow(loc("apps.organize_apple_title"), subtitle: loc("apps.organize_apple_sub")) {
+                Button(loc("apps.organize_now")) {
                     store.organizeAppleAppsIntoFolders()
-                    triggerSettingsToast("Applications Apple classées en dossiers !")
+                    triggerSettingsToast(loc("apps.organize_done_toast"))
                 }
             }
             SettingsSeparator()
@@ -1648,7 +1643,7 @@ struct SettingsPanel: View {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 11.5, weight: .semibold))
-                            Text(licenseManager.isTrialActive ? "Payer Pro à vie" : "Get Pro")
+                            Text(licenseManager.isTrialActive ? loc("license.pay_pro_lifetime") : loc("license.get_pro"))
                                 .font(.system(size: 13, weight: .semibold))
                         }
                         .padding(.horizontal, 18)
@@ -1701,9 +1696,9 @@ struct SettingsPanel: View {
                         .foregroundStyle(Color.orange)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Essayez LaunchPad Pro pendant 7 jours gratuitement")
+                        Text(loc("license.trial_banner_title"))
                             .font(.system(size: 13.5, weight: .semibold))
-                        Text("Sans engagement • Débloquez instantanément tous les thèmes et widgets")
+                        Text(loc("license.trial_banner_sub"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
@@ -1715,7 +1710,7 @@ struct SettingsPanel: View {
                             licenseManager.startSevenDayTrial()
                         }
                     } label: {
-                        Text("Activer l'essai 7 jours")
+                        Text(loc("license.activate_trial_short"))
                             .font(.system(size: 12.5, weight: .bold))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -1738,7 +1733,7 @@ struct SettingsPanel: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(loc("license.active_key"))
                                 .font(.system(size: 13))
-                            Text(licenseManager.licenseKey.isEmpty ? "Licence Active" : licenseManager.licenseKey)
+                            Text(licenseManager.licenseKey.isEmpty ? loc("license.active_status") : licenseManager.licenseKey)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
@@ -1865,9 +1860,9 @@ struct SettingsPanel: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Besoin d'aide ou d'une clé ?")
+                    Text(loc("license.discord_title"))
                         .font(.system(size: 13, weight: .semibold))
-                    Text("Rejoignez notre Discord pour obtenir du support direct ou poser des questions.")
+                    Text(loc("license.discord_sub"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
@@ -1884,7 +1879,7 @@ struct SettingsPanel: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 14, height: 11)
-                        Text("Rejoindre le Discord")
+                        Text(loc("license.join_discord"))
                             .fontWeight(.semibold)
                     }
                     .font(.system(size: 12))
@@ -2001,7 +1996,7 @@ struct SettingsPanel: View {
                     }
 
                     HStack(spacing: 6) {
-                        Text("Version installée :")
+                        Text(loc("about.installed_version"))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                         Text("v\(UpdateManager.shared.currentAppVersion)")
@@ -2037,9 +2032,9 @@ struct SettingsPanel: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Tutoriel de bienvenue")
+                    Text(loc("about.tutorial_title"))
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Revoir le guide interactif présentant toutes les fonctionnalités de LaunchPad.")
+                    Text(loc("about.tutorial_desc"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2051,7 +2046,7 @@ struct SettingsPanel: View {
                     NotificationCenter.default.post(name: .closeSettings, object: nil)
                     NotificationCenter.default.post(name: .openTutorial, object: nil)
                 } label: {
-                    Label("Lancer le tutoriel", systemImage: "play.circle.fill")
+                    Label(loc("about.launch_tutorial"), systemImage: "play.circle.fill")
                         .font(.system(size: 12.5, weight: .semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -2076,11 +2071,11 @@ struct SettingsPanel: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("Communauté Discord")
+                        Text(loc("about.discord_title"))
                             .font(.system(size: 14, weight: .semibold))
                         HStack(spacing: 4) {
                             Circle().fill(Color.green).frame(width: 6, height: 6)
-                            Text("En ligne")
+                            Text(loc("about.online_badge"))
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.green)
                         }
@@ -2089,7 +2084,7 @@ struct SettingsPanel: View {
                         .background(Color.green.opacity(0.12))
                         .clipShape(Capsule())
                     }
-                    Text("Rejoignez le serveur pour du support direct, proposer des fonctionnalités et échanger.")
+                    Text(loc("about.discord_desc"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2107,7 +2102,7 @@ struct SettingsPanel: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 14, height: 11)
-                        Text("Rejoindre le Discord")
+                        Text(loc("license.join_discord"))
                             .fontWeight(.semibold)
                     }
                     .font(.system(size: 12.5))
@@ -2135,12 +2130,12 @@ struct SettingsPanel: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
-                            Text("Mode Administrateur")
+                            Text(loc("about.admin_title"))
                                 .font(.system(size: 14, weight: .semibold))
                             if adminManager.isAuthenticated {
                                 HStack(spacing: 4) {
                                     Circle().fill(Color.green).frame(width: 6, height: 6)
-                                    Text("DÉVERROUILLÉ")
+                                    Text(loc("about.admin_unlocked_badge"))
                                         .font(.system(size: 10, weight: .bold))
                                 }
                                 .padding(.horizontal, 8)
@@ -2150,7 +2145,7 @@ struct SettingsPanel: View {
                                 .clipShape(Capsule())
                             }
                         }
-                        Text(adminManager.isAuthenticated ? "Connecté en tant que \(adminManager.authenticatedUser) — Accès complet au menu de tests" : "Accès réservé pour tester tous les sous-systèmes, widgets, animations et fonctionnalités.")
+                        Text(adminManager.isAuthenticated ? loc("about.admin_connected_sub", adminManager.authenticatedUser) : loc("about.admin_locked_sub"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -2163,7 +2158,7 @@ struct SettingsPanel: View {
 
                 if adminManager.isAuthenticated {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Le mode administrateur est actuellement actif. Vous pouvez ouvrir le Centre de Test pour expérimenter toutes les fonctionnalités de LaunchPad.")
+                        Text(loc("about.admin_active_desc"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineSpacing(2)
@@ -2183,7 +2178,7 @@ struct SettingsPanel: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "hammer.fill")
-                                    Text("Ouvrir le Menu de Test")
+                                    Text(loc("about.open_test_menu"))
                                         .fontWeight(.semibold)
                                 }
                                 .font(.system(size: 12.5))
@@ -2201,7 +2196,7 @@ struct SettingsPanel: View {
                                     adminErrorMessage = nil
                                 }
                             } label: {
-                                Text("Se déconnecter")
+                                Text(loc("about.logout"))
                                     .font(.system(size: 12.5))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
@@ -2213,7 +2208,7 @@ struct SettingsPanel: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .bottom, spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Nom d'utilisateur")
+                                Text(loc("about.username"))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                                 TextField("admin", text: $adminUsername)
@@ -2222,7 +2217,7 @@ struct SettingsPanel: View {
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Mot de passe")
+                                Text(loc("about.password"))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                                 HStack {
@@ -2257,7 +2252,7 @@ struct SettingsPanel: View {
                                     }
                                 }
                             } label: {
-                                Label("Connexion", systemImage: "key.fill")
+                                Label(loc("about.login"), systemImage: "key.fill")
                                     .font(.system(size: 13, weight: .semibold))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
@@ -2282,7 +2277,7 @@ struct SettingsPanel: View {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
-                            Text("Identifiants par défaut : **admin** / **1234**")
+                            Text(LocalizedStringKey(loc("about.default_creds")))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -2438,14 +2433,30 @@ struct SettingsPanel: View {
 
 struct ShortcutRecorder: View {
     @AppStorage(PrefKey.hotKeyDisplay) private var display = "⌃ Espace"
+    @AppStorage(PrefKey.hotKeyCode) private var hotKeyCode: Int = 49
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var recording = false
     @State private var monitor: Any?
+
+    private var localizedDisplay: String {
+        let _ = locManager.effectiveLanguageCode
+        guard hotKeyCode == 49 else { return display }
+        let spaceTokens = ["Espace", "Space", "Espacio", "Leertaste", "Spazio", "Espaço"]
+        let spaceLabel = loc("hotkey.space")
+        for token in spaceTokens {
+            if display == token { return spaceLabel }
+            if display.hasSuffix(" " + token) {
+                return String(display.dropLast(token.count)) + spaceLabel
+            }
+        }
+        return display
+    }
 
     var body: some View {
         Button {
             recording ? stop() : start()
         } label: {
-            Text(recording ? loc("about.shortcut_recording") : display)
+            Text(recording ? loc("about.shortcut_recording") : localizedDisplay)
                 .monospaced()
                 .frame(minWidth: 140)
         }
@@ -3458,7 +3469,7 @@ struct IconScalePreviewBox: View {
                     symbol: "face.smiling.fill"
                 )
                 sampleTile(
-                    title: "Musique",
+                    title: loc("app_sample.music"),
                     gradient: [Color(red: 0.98, green: 0.22, blue: 0.38), Color(red: 0.88, green: 0.12, blue: 0.55)],
                     symbol: "music.note"
                 )
@@ -3692,6 +3703,7 @@ private struct SettingsAutoUpdateSwitch: View {
     @Binding var autoCheckUpdates: Bool
     let triggerToast: (String) -> Void
     @ObservedObject private var updateManager = UpdateManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     var body: some View {
         SettingsSwitch(isOn: Binding(
@@ -3699,7 +3711,7 @@ private struct SettingsAutoUpdateSwitch: View {
             set: { newVal in
                 updateManager.autoCheckEnabled = newVal
                 autoCheckUpdates = newVal
-                triggerToast(newVal ? "Mises à jour automatiques activées" : "Mises à jour automatiques désactivées")
+                triggerToast(newVal ? loc("update.auto_on_toast") : loc("update.auto_off_toast"))
             }
         ))
     }
@@ -3707,9 +3719,10 @@ private struct SettingsAutoUpdateSwitch: View {
 
 private struct SettingsTrialDaysBadgeView: View {
     @ObservedObject var countdown: TrialCountdownState
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     var body: some View {
-        Text(countdown.trialDaysRemaining > 0 ? "\(countdown.trialDaysRemaining)j restants" : "7 JOURS")
+        Text(countdown.trialDaysRemaining > 0 ? loc("license.trial_days_short", countdown.trialDaysRemaining) : loc("license.trial_7_days_badge"))
             .font(.system(size: 10, weight: .bold))
             .padding(.horizontal, 8)
             .padding(.vertical, 2.5)
@@ -3721,9 +3734,11 @@ private struct SettingsTrialDaysBadgeView: View {
 private struct SettingsTrialCountdownCard: View {
     @ObservedObject var licenseManager: LicenseManager
     @ObservedObject var countdown: TrialCountdownState
+    @ObservedObject private var locManager = LocalizationManager.shared
     let onCancelTrial: () -> Void
 
     var body: some View {
+        let locale = locManager.effectiveLocale
         SettingsCardBox {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -3731,7 +3746,7 @@ private struct SettingsTrialCountdownCard: View {
                         Image(systemName: "clock.badge.checkmark.fill")
                             .foregroundStyle(Color.orange)
                             .font(.system(size: 14))
-                        Text("Décompte de l'essai gratuit de 7 jours")
+                        Text(loc("license.trial_countdown_header"))
                             .font(.system(size: 13, weight: .bold))
                     }
 
@@ -3761,13 +3776,13 @@ private struct SettingsTrialCountdownCard: View {
                 .frame(height: 6)
 
                 HStack {
-                    Text("Activé le \(licenseManager.trialStartDate?.formatted(date: .abbreviated, time: .shortened) ?? "récemment")")
+                    Text(loc("license.activated_on", licenseManager.trialStartDate?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale)) ?? loc("license.activated_recently")))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
 
                     Spacer()
 
-                    Text("Expiration automatique le \(licenseManager.trialEndDate?.formatted(date: .abbreviated, time: .shortened) ?? "dans 7 jours")")
+                    Text(loc("license.expires_on", licenseManager.trialEndDate?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale)) ?? loc("license.expires_in_7_days")))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -3776,7 +3791,7 @@ private struct SettingsTrialCountdownCard: View {
                     .padding(.vertical, 2)
 
                 HStack {
-                    Text("Vous pouvez annuler l'essai à tout moment et repasser en version gratuite.")
+                    Text(loc("license.cancel_trial_hint"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
 
@@ -3785,7 +3800,7 @@ private struct SettingsTrialCountdownCard: View {
                     Button(role: .destructive, action: onCancelTrial) {
                         HStack(spacing: 4) {
                             Image(systemName: "xmark.circle")
-                            Text("Annuler l'essai gratuit")
+                            Text(loc("license.cancel_trial_btn"))
                         }
                         .font(.system(size: 11.5, weight: .medium))
                     }
@@ -3800,6 +3815,7 @@ private struct SettingsTrialCountdownCard: View {
 
 private struct SettingsUpdateCardView: View {
     @ObservedObject private var updateManager = UpdateManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     var body: some View {
         SettingsCardBox {
@@ -3815,14 +3831,14 @@ private struct SettingsUpdateCardView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Mise à jour du logiciel")
+                        Text(loc("update.section_title"))
                             .font(.system(size: 14, weight: .semibold))
                         if let lastChecked = updateManager.lastChecked {
-                            Text("Dernière vérification : \(lastChecked.formatted(date: .abbreviated, time: .shortened))")
+                            Text(loc("update.last_checked", lastChecked.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locManager.effectiveLocale))))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Text("Vérification automatique activée")
+                            Text(loc("update.auto_enabled_badge"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -3843,14 +3859,14 @@ private struct SettingsUpdateCardView: View {
                 case .idle:
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Version actuelle : v\(updateManager.currentAppVersion)")
+                            Text(loc("update.current_version", updateManager.currentAppVersion))
                                 .font(.system(size: 13, weight: .medium))
-                            Text("Rechercher si une nouvelle version est disponible.")
+                            Text(loc("update.check_desc"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Rechercher") {
+                        Button(loc("update.check_btn")) {
                             updateManager.checkForUpdates(manual: true)
                         }
                         .buttonStyle(.bordered)
@@ -3859,7 +3875,7 @@ private struct SettingsUpdateCardView: View {
                 case .checking:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Recherche de mises à jour sur GitHub...")
+                        Text(loc("update.checking"))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     }
@@ -3871,11 +3887,11 @@ private struct SettingsUpdateCardView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                                 .font(.system(size: 16))
-                            Text("LaucnhPad est à jour (v\(version))")
+                            Text(loc("update.up_to_date", version))
                                 .font(.system(size: 13, weight: .medium))
                         }
                         Spacer()
-                        Button("Vérifier à nouveau") {
+                        Button(loc("update.recheck_btn")) {
                             updateManager.checkForUpdates(manual: true)
                         }
                         .buttonStyle(.bordered)
@@ -3887,7 +3903,7 @@ private struct SettingsUpdateCardView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "sparkles")
                                     .foregroundStyle(SettingsStyle.accent)
-                                Text("Mise à jour disponible : v\(version)")
+                                Text(loc("update.available", version))
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(SettingsStyle.accent)
                             }
@@ -3895,7 +3911,7 @@ private struct SettingsUpdateCardView: View {
                             Button {
                                 updateManager.downloadAndInstall()
                             } label: {
-                                Label("Installer la mise à jour", systemImage: "arrow.down.circle.fill")
+                                Label(loc("update.install_btn"), systemImage: "arrow.down.circle.fill")
                                     .font(.system(size: 13, weight: .semibold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -3910,7 +3926,7 @@ private struct SettingsUpdateCardView: View {
                                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Nouveautés de cette version :")
+                                Text(loc("update.whats_new"))
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(.secondary)
                                 Text(LocalizedStringKey(cleanNotes))
@@ -3933,10 +3949,10 @@ private struct SettingsUpdateCardView: View {
                 case .downloading(let progress):
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Téléchargement en cours... \(Int(progress * 100))%")
+                            Text(loc("update.downloading", Int(progress * 100)))
                                 .font(.system(size: 13, weight: .medium))
                             Spacer()
-                            Button("Annuler") {
+                            Button(loc("dialog.cancel")) {
                                 updateManager.cancelDownload()
                             }
                             .buttonStyle(.bordered)
@@ -3952,10 +3968,10 @@ private struct SettingsUpdateCardView: View {
                                 .font(.system(size: 16))
                                 .foregroundStyle(.green)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Mise à jour v\(version) téléchargée avec succès !")
+                                Text(loc("update.downloaded_title", version))
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(.green)
-                                Text("L'ancienne version sera automatiquement remplacée et supprimée.")
+                                Text(loc("update.downloaded_sub"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -3966,7 +3982,7 @@ private struct SettingsUpdateCardView: View {
                             Button {
                                 updateManager.applyUpdateAndRelaunch()
                             } label: {
-                                Label("Redémarrer l'application", systemImage: "arrow.clockwise.circle.fill")
+                                Label(loc("update.restart_btn"), systemImage: "arrow.clockwise.circle.fill")
                                     .font(.system(size: 13, weight: .bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -3982,7 +3998,7 @@ private struct SettingsUpdateCardView: View {
                 case .installing:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Installation et redémarrage automatique en cours...")
+                        Text(loc("update.installing"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(SettingsStyle.accent)
                     }
@@ -3991,7 +4007,7 @@ private struct SettingsUpdateCardView: View {
                 case .error(let message):
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Impossible de vérifier")
+                            Text(loc("update.check_failed"))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(.red)
                             Text(message)
@@ -3999,7 +4015,7 @@ private struct SettingsUpdateCardView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Réessayer") {
+                        Button(loc("update.retry_btn")) {
                             updateManager.checkForUpdates(manual: true)
                         }
                         .buttonStyle(.bordered)
@@ -4011,9 +4027,9 @@ private struct SettingsUpdateCardView: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Recherche automatique")
+                        Text(loc("update.auto_row_title"))
                             .font(.system(size: 13, weight: .medium))
-                        Text("Vérifier régulièrement si une nouvelle version est disponible.")
+                        Text(loc("update.auto_row_sub"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }

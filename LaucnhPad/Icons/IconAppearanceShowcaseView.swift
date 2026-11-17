@@ -8,6 +8,7 @@ struct IconAppearanceShowcaseView: View {
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons: Bool = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor: String = "blue"
     @ObservedObject private var licenseManager = LicenseManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var feedbackMessage: String? = nil
     var onStyleChanged: (() -> Void)? = nil
     var onRequirePro: ((String, String) -> Void)? = nil
@@ -36,15 +37,17 @@ struct IconAppearanceShowcaseView: View {
         }
     }
 
-    private let tintOptions: [(String, String, Color)] = [
-        ("blue", "Bleu", Color(red: 0.08, green: 0.54, blue: 0.98)),
-        ("purple", "Violet", Color(red: 0.65, green: 0.42, blue: 1.0)),
-        ("orange", "Orange", Color(red: 1.0, green: 0.56, blue: 0.14)),
-        ("mint", "Menthe", Color(red: 0.18, green: 0.85, blue: 0.68)),
-        ("rose", "Rose", Color(red: 1.0, green: 0.32, blue: 0.56)),
-        ("gold", "Or", Color(red: 0.98, green: 0.78, blue: 0.22)),
-        ("graphite", "Graphite", Color(white: 0.78))
-    ]
+    private var tintOptions: [(String, String, Color)] {
+        [
+            ("blue", loc("tint.blue"), Color(red: 0.08, green: 0.54, blue: 0.98)),
+            ("purple", loc("tint.purple"), Color(red: 0.65, green: 0.42, blue: 1.0)),
+            ("orange", loc("tint.orange"), Color(red: 1.0, green: 0.56, blue: 0.14)),
+            ("mint", loc("tint.mint"), Color(red: 0.18, green: 0.85, blue: 0.68)),
+            ("rose", loc("tint.rose"), Color(red: 1.0, green: 0.32, blue: 0.56)),
+            ("gold", loc("tint.gold"), Color(red: 0.98, green: 0.78, blue: 0.22)),
+            ("graphite", loc("tint.graphite"), Color(white: 0.78))
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -58,7 +61,7 @@ struct IconAppearanceShowcaseView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("Style actif : \(activeStyle.title)")
+                        Text(loc("icon_showcase.active_style", activeStyle.title))
                             .font(.system(size: 13, weight: .bold))
                         Text("HD 512 px")
                             .font(.system(size: 10, weight: .bold))
@@ -79,17 +82,17 @@ struct IconAppearanceShowcaseView: View {
                     IconCache.shared.removeAll()
                     NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
                     onStyleChanged?()
-                    showFeedback("Icônes HD 512×512 actualisées !")
+                    showFeedback(loc("icon_showcase.refresh_done"))
                 } label: {
-                    Label("Actualiser HD", systemImage: "arrow.clockwise")
+                    Label(loc("icon_showcase.refresh_btn"), systemImage: "arrow.clockwise")
                         .font(.system(size: 11.5, weight: .semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Color.primary.opacity(0.08), in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .help("Vide le cache et régénère toutes les icônes en haute définition 512×512 Retina")
-                .accessibilityLabel("Actualiser les icônes en haute définition")
+                .help(loc("icon_showcase.refresh_help"))
+                .accessibilityLabel(loc("icon_showcase.refresh_a11y"))
             }
             .padding(10)
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -124,7 +127,7 @@ struct IconAppearanceShowcaseView: View {
             // Palette de couleur directe lorsque le mode Teinté est actif
             if activeStyle == .tinted {
                 HStack(spacing: 10) {
-                    Text("Couleur de teinte :")
+                    Text(loc("icon_showcase.tint_label"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
                     ForEach(tintOptions, id: \.0) { key, label, color in
@@ -135,7 +138,7 @@ struct IconAppearanceShowcaseView: View {
                                 IconCache.shared.removeAll()
                                 NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
                                 onStyleChanged?()
-                                showFeedback("Teinte « \(label) » appliquée")
+                                showFeedback(loc("icon_showcase.tint_applied", label))
                             }
                         } label: {
                             HStack(spacing: 5) {
@@ -184,10 +187,10 @@ struct IconAppearanceShowcaseView: View {
                     CustomAppIconView(kind: .photos, style: .classicApple, size: 32)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Couleur de base macOS")
+                    Text(loc("icon_showcase.apple_colors_title"))
                         .font(.system(size: 12.5, weight: .bold))
                         .foregroundStyle(.primary)
-                    Text("Icônes Apple d'origine en 512×512")
+                    Text(loc("icon_showcase.apple_colors_sub"))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -228,14 +231,14 @@ struct IconAppearanceShowcaseView: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("Transparent Cristal")
+                        Text(loc("icon_showcase.crystal_title"))
                             .font(.system(size: 12.5, weight: .bold))
                             .foregroundStyle(.primary)
                         if !licenseManager.isPro {
                             ProBadge()
                         }
                     }
-                    Text("Verre transparent sur toutes vos apps")
+                    Text(loc("icon_showcase.crystal_sub"))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -285,11 +288,11 @@ struct IconAppearanceShowcaseView: View {
     private var systemAppearanceCard: some View {
         VStack(spacing: 10) {
             VStack(spacing: 2) {
-                Text("SYSTEM ICON APPEARANCE")
+                Text(loc("icon_showcase.sys_banner_over"))
                     .font(.system(size: 8.5, weight: .bold))
                     .tracking(0.8)
                     .foregroundStyle(Color(white: 0.25))
-                Text("Dark | Light | Tinted")
+                Text(loc("icon_showcase.sys_banner_modes"))
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundStyle(Color(white: 0.10))
             }
@@ -375,7 +378,7 @@ struct IconAppearanceShowcaseView: View {
             VStack(spacing: 8) {
                 VStack(spacing: 1) {
                     HStack(spacing: 5) {
-                        Text("CLEAR COLORED ICONS")
+                        Text(loc("icon_showcase.clear_banner_over"))
                             .font(.system(size: 8.5, weight: .bold))
                             .tracking(0.8)
                             .foregroundStyle(.white.opacity(0.88))
@@ -383,7 +386,7 @@ struct IconAppearanceShowcaseView: View {
                             ProBadge()
                         }
                     }
-                    Text("A unified style with Glass\nand colored icons.")
+                    Text(loc("icon_showcase.clear_banner_sub"))
                         .font(.system(size: 12.5, weight: .heavy))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
@@ -501,7 +504,7 @@ struct IconAppearanceShowcaseView: View {
             IconCache.shared.removeAll()
             NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
             onStyleChanged?()
-            showFeedback("Style « \(mode.title) » appliqué en 512×512 HD")
+            showFeedback(loc("icon_showcase.style_applied", mode.title))
         }
     }
 }

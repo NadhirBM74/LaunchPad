@@ -22,13 +22,15 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         case custom = "custom"
     }
 
-    private let tips: [String] = [
-        "Maintenez une icône enfoncée ou glissez-la sur une autre pour créer automatiquement un dossier.",
-        "Ajustez la translucidité de l'effet Liquid Glass directement dans Réglages > Interface.",
-        "Tapez directement au clavier dès l'ouverture du LaunchPad pour chercher instantanément une app ou un fichier.",
-        "Activez les coins actifs de l'écran dans Réglages > Avancé pour ouvrir LaunchPad d'un simple geste de souris.",
-        "Appuyez sur ⎋ (Échap) à tout moment pour refermer instantanément le LaunchPad."
-    ]
+    private var tips: [String] {
+        [
+            loc("notif.tip.1"),
+            loc("notif.tip.2"),
+            loc("notif.tip.3"),
+            loc("notif.tip.4"),
+            loc("notif.tip.5")
+        ]
+    }
     private var tipIndex = 0
 
     private override init() {
@@ -165,12 +167,13 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
 
     /// 1. Notification de Bienvenue & Prise en main
     public func sendWelcomeNotification() {
-        let shortcut = Prefs.hotKeyEnabled ? (Prefs.defaults.string(forKey: PrefKey.hotKeyDisplay) ?? "⌃ Espace") : "⌃ Espace"
+        let fallbackShortcut = "⌃ \(loc("hotkey.space"))"
+        let shortcut = Prefs.hotKeyEnabled ? (Prefs.defaults.string(forKey: PrefKey.hotKeyDisplay) ?? fallbackShortcut) : fallbackShortcut
         sendNotification(
             identifier: "launchpad.welcome",
-            title: "Bienvenue sur LaunchPad 🚀",
-            subtitle: "Votre lanceur nouvelle génération",
-            body: "Appuyez sur \(shortcut) ou pincez votre trackpad pour afficher instantanément toutes vos applications.",
+            title: loc("notif.welcome.title"),
+            subtitle: loc("notif.welcome.sub"),
+            body: loc("notif.welcome.body", shortcut),
             type: .welcome
         )
     }
@@ -179,9 +182,9 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public func sendProActivatedNotification() {
         sendNotification(
             identifier: "launchpad.pro.activated",
-            title: "LaunchPad Pro Activé ✨",
-            subtitle: "Toutes les fonctionnalités sont débloquées",
-            body: "Profitez du thème Liquid Glass personnalisable, des widgets interactifs, des icônes exclusives et du multi-fenêtre !",
+            title: loc("notif.pro_active.title"),
+            subtitle: loc("notif.pro_active.sub"),
+            body: loc("notif.pro_active.body"),
             type: .proActivated
         )
     }
@@ -190,9 +193,9 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public func sendTrialStartedNotification(days: Int = 7) {
         sendNotification(
             identifier: "launchpad.trial.started",
-            title: "Essai gratuit de 7 jours activé ⏳",
-            subtitle: "LaunchPad Pro est débloqué sans engagement",
-            body: "Profitez de l'expérience Pro complète pendant \(days) jours. Un compte à rebours est disponible dans l'application.",
+            title: loc("notif.trial_started.title"),
+            subtitle: loc("notif.trial_started.sub"),
+            body: loc("notif.trial_started.body", days),
             type: .trialStarted
         )
     }
@@ -201,9 +204,9 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public func sendTrialExpiredNotification() {
         sendNotification(
             identifier: "launchpad.trial.expired",
-            title: "Votre essai de 7 jours est terminé ⌛️",
-            subtitle: "L'application est repassée en version gratuite",
-            body: "Débloquez la version Pro définitivement pour réactiver le thème Liquid Glass, les widgets vinyle et les dossiers sécurisés.",
+            title: loc("notif.trial_ended.title"),
+            subtitle: loc("notif.trial_ended.sub"),
+            body: loc("notif.trial_ended.body"),
             type: .trialExpired
         )
     }
@@ -213,17 +216,17 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         if isExport {
             sendNotification(
                 identifier: "launchpad.backup.exported",
-                title: "Sauvegarde Réussie 💾",
-                subtitle: "Organisation d'applications enregistrée",
-                body: "Votre grille, vos dossiers et la disposition de vos widgets ont été exportés avec succès.",
+                title: loc("notif.backup_done.title"),
+                subtitle: loc("notif.backup_done.sub"),
+                body: loc("notif.backup_done.body"),
                 type: .backupExported
             )
         } else {
             sendNotification(
                 identifier: "launchpad.backup.restored",
-                title: "Restauration Terminée 🔄",
-                subtitle: "Organisation restaurée avec succès",
-                body: "Vos applications et widgets ont été réorganisés selon votre sauvegarde précédente.",
+                title: loc("notif.restore_done.title"),
+                subtitle: loc("notif.restore_done.sub"),
+                body: loc("notif.restore_done.body"),
                 type: .backupRestored
             )
         }
@@ -232,24 +235,24 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     /// 4. Notification de détection de nouvelles applications
     public func sendNewAppsDiscoveredNotification(count: Int) {
         guard count > 0 else { return }
-        let s = count > 1 ? "s" : ""
         sendNotification(
             identifier: "launchpad.apps.discovered.\(Date().timeIntervalSince1970)",
-            title: "Catalogue mis à jour 📦",
-            subtitle: "\(count) nouvelle\(s) application\(s)",
-            body: "\(count) nouvelle\(s) application\(s) installée\(s) détectée\(s) et prête\(s) au lancement dans votre LaunchPad.",
+            title: loc("notif.catalog_updated.title"),
+            subtitle: loc("notif.catalog_updated.sub", count),
+            body: loc("notif.catalog_updated.body", count),
             type: .newApps
         )
     }
 
     /// 5. Notification d'astuce de productivité (Tip)
     public func sendTipNotification() {
-        let tip = tips[tipIndex % tips.count]
+        let list = tips
+        let tip = list[tipIndex % list.count]
         tipIndex += 1
         sendNotification(
             identifier: "launchpad.tip.\(Date().timeIntervalSince1970)",
-            title: "Astuce LaunchPad 💡",
-            subtitle: "Le saviez-vous ?",
+            title: loc("notif.tip_banner.title"),
+            subtitle: loc("notif.tip_banner.sub"),
             body: tip,
             type: .tip
         )
@@ -259,9 +262,9 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public func sendUpdateAvailableNotification(version: String) {
         sendNotification(
             identifier: "launchpad.update.available.\(version)",
-            title: "Mise à jour disponible 🚀",
-            subtitle: "Version \(version)",
-            body: "Une nouvelle version avec améliorations et correctifs est disponible au téléchargement.",
+            title: loc("notif.update_avail.title"),
+            subtitle: loc("notif.update_avail.sub", version),
+            body: loc("notif.update_avail.body"),
             type: .updateAvailable
         )
     }
@@ -270,11 +273,11 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public func sendWidgetAddedNotification(widgetName: String, replacedExisting: Bool = false) {
         sendNotification(
             identifier: "launchpad.widget.added.\(Date().timeIntervalSince1970)",
-            title: replacedExisting ? "Widget mis à jour ✨" : "Widget ajouté ✅",
+            title: replacedExisting ? loc("notif.widget_updated.title") : loc("notif.widget_added.title"),
             subtitle: widgetName,
             body: replacedExisting
-                ? "Le widget « \(widgetName) » a bien remplacé le précédent sur votre LaunchPad."
-                : "Le widget « \(widgetName) » a bien été ajouté au LaunchPad.",
+                ? loc("notif.widget_replaced.body", widgetName)
+                : loc("notif.widget_added.body", widgetName),
             type: .widgetAdded
         )
     }
@@ -283,9 +286,9 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
     public func sendAdminDiagnosticNotification() {
         sendNotification(
             identifier: "launchpad.admin.diagnostic",
-            title: "Diagnostic Système LaunchPad 🛠️",
-            subtitle: "Tous les sous-systèmes sont opérationnels",
-            body: "Moteur de rendu 120 FPS actif, animations optimisées, cache mémoire valide.",
+            title: loc("notif.test_sys.title"),
+            subtitle: loc("notif.test_sys.sub"),
+            body: loc("notif.test_sys.body"),
             type: .adminDiagnostic
         )
     }

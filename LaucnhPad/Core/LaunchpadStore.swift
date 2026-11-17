@@ -553,7 +553,7 @@ final class LaunchpadStore: ObservableObject {
     func renameFolder(_ folderID: String, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let index = items.firstIndex(where: { $0.id == folderID }), case .folder(var folder) = items[index] else { return }
-        folder.name = trimmed.isEmpty ? "Sans titre" : trimmed
+        folder.name = trimmed.isEmpty ? loc("folder.untitled") : trimmed
         var copy = items
         copy[index] = .folder(folder)
         commit(copy)
@@ -615,15 +615,16 @@ final class LaunchpadStore: ObservableObject {
 
     @discardableResult
     func createCustomFolder(
-        name: String = "Nouveau dossier",
+        name: String? = nil,
         style: FolderVisualStyle = .frostedGlass,
         colorHex: String? = nil,
         iconSymbol: String? = nil,
         apps: [String] = []
     ) -> String {
+        let trimmed = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let folder = FolderData(
             id: FolderData.newID(),
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Nouveau dossier" : name,
+            name: trimmed.isEmpty ? loc("folder.default_name") : trimmed,
             apps: apps,
             isLocked: false,
             style: style,
@@ -867,13 +868,11 @@ final class LaunchpadStore: ObservableObject {
     }
 
     private func buildDefaultCategorizedItems(from apps: [AppInfo]) -> [LayoutItem] {
-        let isFr = LocalizationManager.activeLanguageCode.lowercased() == "fr"
-
-        let utilitiesName = isFr ? "Utilitaires" : "Utilities"
-        let productivityName = isFr ? "Productivité" : "Productivity"
-        let mediaName = isFr ? "Multimédia" : "Media"
-        let internetName = isFr ? "Internet & Maison" : "Internet & Home"
-        let gamesName = isFr ? "Jeux" : "Games"
+        let utilitiesName = loc("category.utilities")
+        let productivityName = loc("category.productivity")
+        let mediaName = loc("category.media")
+        let internetName = loc("category.internet_home")
+        let gamesName = loc("category.games")
 
         let utilityIDs: Set<String> = [
             "com.apple.terminal", "com.apple.activitymonitor", "com.apple.diskutility",
@@ -983,11 +982,11 @@ final class LaunchpadStore: ObservableObject {
     /// en préservant les widgets et les dossiers personnalisés de l'utilisateur.
     private func migrateAppleFoldersToLastPage(in currentItems: [LayoutItem], catalog: [String: AppInfo]) -> [LayoutItem] {
         let appleSystemFolderKeys: Set<String> = [
-            "utilitaires", "utilities",
-            "productivite", "productivity",
-            "multimedia", "media",
-            "internet & maison", "internet & home",
-            "jeux", "games"
+            "utilitaires", "utilities", "utilidades", "dienstprogramme", "utility", "utilitarios",
+            "productivite", "productivity", "productividad", "produktivitat", "produttivita", "produtividade",
+            "multimedia", "media", "medien",
+            "internet & maison", "internet & home", "internet y hogar", "internet e casa",
+            "jeux", "games", "juegos", "spiele", "giochi", "jogos"
         ]
 
         func normalizedFolderKey(_ name: String) -> String {
@@ -1023,7 +1022,7 @@ final class LaunchpadStore: ObservableObject {
         if keys.count == 1, let key = keys.first, ids.allSatisfy({ catalog[$0]?.categoryKey != nil }) {
             return CategoryNames.title(for: key)
         }
-        return "Sans titre"
+        return loc("folder.untitled")
     }
 
     // MARK: Import / export

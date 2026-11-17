@@ -260,9 +260,9 @@ struct LaunchpadRootView: View {
     @ViewBuilder
     private var mainMenuItems: some View {
         Button(loc("menu.settings")) { vm.onOpenSettings() }
-        Button("Galerie de widgets…") { vm.showWidgetGallery = true }
-        Button("Nouveau dossier…") {
-            let folderID = store.createCustomFolder(name: "Nouveau dossier", style: .frostedGlass)
+        Button(loc("menu.widget_gallery")) { vm.showWidgetGallery = true }
+        Button(loc("menu.new_folder")) {
+            let folderID = store.createCustomFolder(name: loc("folder.default_name"), style: .frostedGlass)
             vm.openFolder(folderID)
         }
         Button(loc("menu.reorganize")) { vm.requestReorganize() }
@@ -427,7 +427,7 @@ struct LaunchpadRootView: View {
             SearchMenuButton(foreground: .white.opacity(0.85),
                              onAddWidget: { vm.showWidgetGallery = true },
                              onNewFolder: {
-                                 let folderID = store.createCustomFolder(name: "Nouveau dossier", style: .frostedGlass)
+                                 let folderID = store.createCustomFolder(name: loc("folder.default_name"), style: .frostedGlass)
                                  vm.openFolder(folderID)
                              },
                              onSettings: { vm.onOpenSettings() },
@@ -695,6 +695,7 @@ struct PresentationEffect: ViewModifier {
 // MARK: - Bouton ⋯ de la barre de recherche (comme LaunchOS) : clic = réglages, clic droit = menu principal
 
 struct SearchMenuButton: View {
+    @ObservedObject private var locManager = LocalizationManager.shared
     var foreground: Color = .white.opacity(0.78)
     var onAddWidget: (() -> Void)? = nil
     var onNewFolder: (() -> Void)? = nil
@@ -711,7 +712,7 @@ struct SearchMenuButton: View {
                     HStack(spacing: 4) {
                         Image(systemName: "plus.square.on.square")
                             .font(.system(size: 12.5, weight: .semibold))
-                        Text("Widgets")
+                        Text(loc("widget.add_widget_short"))
                             .font(.system(size: 11.5, weight: .semibold))
                     }
                     .foregroundStyle(foreground.opacity(hoveringWidget ? 1.0 : 0.88))
@@ -721,8 +722,8 @@ struct SearchMenuButton: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hoveringWidget = $0 }
-                .help("Ajouter et personnaliser des widgets")
-                .accessibilityLabel("Ouvrir la galerie de widgets")
+                .help(loc("launchpad.widgets_tooltip"))
+                .accessibilityLabel(loc("launchpad.widgets_a11y"))
             }
 
             Button(action: onSettings) {
@@ -736,14 +737,14 @@ struct SearchMenuButton: View {
             .buttonStyle(.plain)
             .onHover { hoveringSettings = $0 }
             .animation(.easeOut(duration: 0.12), value: hoveringSettings)
-            .help("Ouvrir les réglages de LaunchPad")
-            .accessibilityLabel("Réglages")
+            .help(loc("launchpad.settings_tooltip"))
+            .accessibilityLabel(loc("settings.title"))
             .contextMenu {
                 if let onAddWidget {
-                    Button("Ajouter un widget…", action: onAddWidget)
+                    Button(loc("menu.widget_gallery"), action: onAddWidget)
                 }
                 if let onNewFolder {
-                    Button("Créer un nouveau dossier…", action: onNewFolder)
+                    Button(loc("menu.new_folder"), action: onNewFolder)
                 }
                 Divider()
                 Button(loc("menu.settings"), action: onSettings)
@@ -1083,11 +1084,11 @@ struct ItemContextMenu: View {
                     Button(loc("menu.add_to_dock")) { vm.addToDock(app) }
                 }
                 Divider()
-                Button("Personnaliser l'icône…") {
+                Button(loc("menu.customize_icon")) {
                     CustomIconManager.shared.activePickerAppID = id
                 }
                 if CustomIconManager.shared.hasOverride(for: id) {
-                    Button("Rétablir l'icône d'origine") {
+                    Button(loc("menu.restore_icon")) {
                         CustomIconManager.shared.removeOverride(for: id)
                     }
                 }
@@ -1111,7 +1112,7 @@ struct ItemContextMenu: View {
             }
         case .folder(let folder):
             Button(loc("menu.open_folder")) { vm.openFolder(folder.id) }
-            Menu("Style du dossier") {
+            Menu(loc("menu.folder_style")) {
                 ForEach(FolderVisualStyle.allCases) { styleOpt in
                     Button("\(folder.style == styleOpt ? "✓ " : "")\(styleOpt.title)") {
                         store.updateFolderCustomization(
@@ -1123,16 +1124,16 @@ struct ItemContextMenu: View {
                     }
                 }
             }
-            Menu("Couleur du dossier") {
+            Menu(loc("menu.folder_color")) {
                 ForEach([
-                    ("#E5B892", "Sable Doré"),
-                    ("#FF2442", "Rouge Carmin"),
-                    ("#D8DCE2", "Argent"),
-                    ("#141416", "Noir Onyx"),
-                    ("#0A84FF", "Bleu Apple"),
-                    ("#30D158", "Vert Émeraude"),
-                    ("#BF5AF2", "Violet"),
-                    ("#FF9F0A", "Ambre")
+                    ("#E5B892", loc("folder.color.sand_gold")),
+                    ("#FF2442", loc("folder.color.carmine")),
+                    ("#D8DCE2", loc("folder.color.silver")),
+                    ("#141416", loc("folder.color.onyx")),
+                    ("#0A84FF", loc("folder.color.apple_blue")),
+                    ("#30D158", loc("folder.color.emerald")),
+                    ("#BF5AF2", loc("folder.color.violet")),
+                    ("#FF9F0A", loc("folder.color.amber"))
                 ], id: \.0) { hex, label in
                     Button("\((folder.colorHex?.uppercased() == hex) ? "✓ " : "")\(label)") {
                         store.updateFolderCustomization(
@@ -1175,7 +1176,7 @@ struct ItemContextMenu: View {
             }
 
             if config.kind == .vinylPlayer || config.kind == .mediaWide {
-                Menu("Style de lecteur musical") {
+                Menu(loc("widget.menu.music_style")) {
                     ForEach(MusicWidgetStyle.allCases) { mStyle in
                         Button("\(config.musicStyle == mStyle ? "✓ " : "")\(mStyle.title)") {
                             var updated = config
@@ -1185,7 +1186,7 @@ struct ItemContextMenu: View {
                         }
                     }
                 }
-                Menu("Apparence (Clair / Sombre)") {
+                Menu(loc("widget.menu.appearance")) {
                     ForEach(WidgetAppearanceMode.allCases) { mode in
                         Button("\(config.musicAppearance == mode ? "✓ " : "")\(mode.title)") {
                             var updated = config
@@ -1196,7 +1197,7 @@ struct ItemContextMenu: View {
                     }
                 }
             } else if config.kind == .weather {
-                Menu("Thème météo (18 thèmes)") {
+                Menu(loc("widget.menu.weather_theme")) {
                     ForEach(WeatherWidgetTheme.allCases) { wTheme in
                         Button("\(config.weatherTheme == wTheme ? "✓ " : "")\(wTheme.title)") {
                             var updated = config
@@ -1207,7 +1208,7 @@ struct ItemContextMenu: View {
                     }
                 }
             } else if config.kind == .calendar {
-                Menu("Style de calendrier") {
+                Menu(loc("widget.menu.calendar_style")) {
                     ForEach(CalendarWidgetStyle.allCases) { cStyle in
                         Button("\(config.calendarStyle == cStyle ? "✓ " : "")\(cStyle.title)") {
                             var updated = config
@@ -1218,7 +1219,7 @@ struct ItemContextMenu: View {
                     }
                 }
             } else if config.kind == .clock {
-                Menu("Design de l'horloge (15 styles)") {
+                Menu(loc("widget.menu.clock_style")) {
                     ForEach(ClockWidgetStyle.allCases) { clkStyle in
                         Button("\(config.clockStyle == clkStyle ? "✓ " : "")\(clkStyle.title)") {
                             var updated = config
@@ -1230,7 +1231,7 @@ struct ItemContextMenu: View {
                 }
             }
 
-            Button("Réinitialiser ce widget") {
+            Button(loc("widget.menu.reset")) {
                 WidgetManager.shared.resetWidget(config.kind)
                 if let def = WidgetManager.shared.config(for: config.kind) {
                     var updated = def
@@ -1256,6 +1257,7 @@ struct ItemContextMenu: View {
 struct FolderOverlayView: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
+    @ObservedObject private var locManager = LocalizationManager.shared
     let folder: FolderData
     let grid: GridMetrics
     let rootSize: CGSize
@@ -1303,7 +1305,7 @@ struct FolderOverlayView: View {
                         .background(isShowingCustomizer ? Color.white : Color.white.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .help("Personnaliser le style, la couleur et l'icône du dossier")
+                .help(loc("folder.customize_help"))
 
                 Spacer(minLength: 4)
 
@@ -1312,9 +1314,9 @@ struct FolderOverlayView: View {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(.white.opacity(0.85))
-                            .help("Dossier protégé par Touch ID")
+                            .help(loc("folder.touchid_help"))
                     }
-                    TextField("Nom du dossier", text: $title)
+                    TextField(loc("dialog.folder_name"), text: $title)
                         .textFieldStyle(.plain)
                         .font(.system(size: 22, weight: .semibold))
                         .multilineTextAlignment(.center)
@@ -1338,7 +1340,7 @@ struct FolderOverlayView: View {
                         .background(isShowingAppPicker ? Color.white : Color.white.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .help("Ajouter ou retirer des applications de ce dossier")
+                .help(loc("folder.manage_apps_help"))
             }
             .padding(.horizontal, 24)
             .frame(width: fm.panelRect.width)
@@ -1353,7 +1355,7 @@ struct FolderOverlayView: View {
                         customColorHex: folder.colorHex,
                         customSymbol: folder.iconSymbol
                     )
-                    Text("Ce dossier est vide")
+                    Text(loc("folder.empty"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                     Button {
@@ -1361,7 +1363,7 @@ struct FolderOverlayView: View {
                             isShowingAppPicker = true
                         }
                     } label: {
-                        Label("Ajouter des applications", systemImage: "plus.circle.fill")
+                        Label(loc("folder.add_apps"), systemImage: "plus.circle.fill")
                             .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 14)
@@ -1578,17 +1580,19 @@ struct FavoritesDockView: View {
 struct WidgetGalleryModal: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
+    @ObservedObject private var locManager = LocalizationManager.shared
     let rootSize: CGSize
 
     enum GalleryCategory: String, CaseIterable, Identifiable {
-        case all = "Tous les widgets"
-        case weather = "Météo"
-        case music = "Musique"
-        case clock = "Horloge"
-        case calendar = "Calendrier"
-        case utilities = "Utilitaires"
+        case all
+        case weather
+        case music
+        case clock
+        case calendar
+        case utilities
 
         var id: String { rawValue }
+        var title: String { loc("widget.cat.\(rawValue)") }
         var icon: String {
             switch self {
             case .all: return "square.grid.2x2.fill"
@@ -1617,14 +1621,14 @@ struct WidgetGalleryModal: View {
     @State private var selectedMusicAppearance: WidgetAppearanceMode = WidgetManager.shared.widgets.first(where: { $0.kind == .vinylPlayer })?.musicAppearance ?? .light
     @State private var isCollectionsExpanded: Bool = true
 
-    private static let allCards: [GalleryCardItem] = {
+    private var allCards: [GalleryCardItem] {
         var list: [GalleryCardItem] = []
 
         for theme in WeatherWidgetTheme.allCases {
             list.append(GalleryCardItem(
                 id: "weather-\(theme.rawValue)",
                 title: theme.title,
-                subtitle: "Météo en direct",
+                subtitle: loc("widget.subtitle.weather_live"),
                 category: .weather,
                 config: CustomWidgetConfig(kind: .weather, size: .medium, weatherTheme: theme)
             ))
@@ -1635,7 +1639,7 @@ struct WidgetGalleryModal: View {
             list.append(GalleryCardItem(
                 id: "music-\(style.rawValue)",
                 title: style.title,
-                subtitle: kind == .vinylPlayer ? "Vinyle Apple Music & Spotify" : "Lecteur Musique",
+                subtitle: kind == .vinylPlayer ? loc("widget.subtitle.vinyl") : loc("widget.subtitle.music_player"),
                 category: .music,
                 config: CustomWidgetConfig(kind: kind, size: .medium, musicStyle: style)
             ))
@@ -1645,7 +1649,7 @@ struct WidgetGalleryModal: View {
             list.append(GalleryCardItem(
                 id: "clock-\(style.rawValue)",
                 title: style.title,
-                subtitle: "Horloge",
+                subtitle: loc("widget.cat.clock"),
                 category: .clock,
                 config: CustomWidgetConfig(kind: .clock, size: .small, clockStyle: style)
             ))
@@ -1655,7 +1659,7 @@ struct WidgetGalleryModal: View {
             list.append(GalleryCardItem(
                 id: "calendar-\(style.rawValue)",
                 title: style.title,
-                subtitle: "Calendrier EventKit",
+                subtitle: loc("widget.subtitle.calendar_eventkit"),
                 category: .calendar,
                 config: CustomWidgetConfig(kind: .calendar, size: .medium, calendarStyle: style)
             ))
@@ -1663,36 +1667,37 @@ struct WidgetGalleryModal: View {
 
         list.append(GalleryCardItem(
             id: "util-quickNote",
-            title: "Note rapide",
-            subtitle: "Bloc-notes instantané",
+            title: loc("widget.quickNote.title"),
+            subtitle: loc("widget.subtitle.quick_note"),
             category: .utilities,
             config: CustomWidgetConfig(kind: .quickNote, size: .medium)
         ))
         list.append(GalleryCardItem(
             id: "util-system",
-            title: "État du Mac",
-            subtitle: "Processeur, RAM & Batterie",
+            title: loc("widget.title.mac_status"),
+            subtitle: loc("widget.subtitle.mac_status"),
             category: .utilities,
             config: CustomWidgetConfig(kind: .system, size: .medium)
         ))
 
         return list
-    }()
+    }
 
     private var filteredCards: [GalleryCardItem] {
-        let cards = Self.allCards
+        let cards = allCards
         let byCategory = selectedCategory == .all ? cards : cards.filter { $0.category == selectedCategory }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return byCategory }
         return byCategory.filter {
             $0.title.lowercased().contains(q)
             || $0.subtitle.lowercased().contains(q)
-            || $0.category.rawValue.lowercased().contains(q)
+            || $0.category.title.lowercased().contains(q)
         }
     }
 
     private var activeCard: GalleryCardItem {
-        Self.allCards.first(where: { $0.id == selectedCardID }) ?? filteredCards.first ?? Self.allCards[0]
+        let cards = allCards
+        return cards.first(where: { $0.id == selectedCardID }) ?? filteredCards.first ?? cards[0]
     }
 
     var body: some View {
@@ -1730,7 +1735,7 @@ struct WidgetGalleryModal: View {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 28))
                                     .foregroundStyle(.white.opacity(0.45))
-                                Text("Aucun widget trouvé pour « \(searchText) »")
+                                Text(loc("widget.gallery.no_results", searchText))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(.white.opacity(0.85))
                             }
@@ -1779,10 +1784,10 @@ struct WidgetGalleryModal: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Widgets")
+                    Text(loc("widget.add_widget_short"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("Tous les styles")
+                    Text(loc("widget.gallery.all_styles"))
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -1811,7 +1816,7 @@ struct WidgetGalleryModal: View {
                         }
                     } label: {
                         HStack {
-                            Text("Catégories")
+                            Text(loc("widget.gallery.categories"))
                                 .font(.system(size: 13.5, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.9))
                             Spacer()
@@ -1853,7 +1858,7 @@ struct WidgetGalleryModal: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.68))
                     .frame(width: 20, height: 20)
-                Text(cat.rawValue)
+                Text(cat.title)
                     .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
                     .lineLimit(1)
@@ -1873,10 +1878,10 @@ struct WidgetGalleryModal: View {
     private var rightHeader: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(selectedCategory.rawValue)
+                Text(selectedCategory.title)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                Text("\(filteredCards.count) \(filteredCards.count > 1 ? "modèles disponibles" : "modèle disponible")")
+                Text(filteredCards.count > 1 ? loc("widget.gallery.model_plural", filteredCards.count) : loc("widget.gallery.model_single", filteredCards.count))
                     .font(.system(size: 12.5))
                     .foregroundStyle(.white.opacity(0.58))
             }
@@ -1893,7 +1898,7 @@ struct WidgetGalleryModal: View {
                     .background(Color.white.opacity(0.12), in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Fermer la galerie de widgets")
+            .accessibilityLabel(loc("widget.gallery.close_a11y"))
         }
     }
 
@@ -1902,7 +1907,7 @@ struct WidgetGalleryModal: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
-            TextField("Rechercher dans les widgets (ex : météo, vinyle, néon, flip…)", text: $searchText)
+            TextField(loc("widget.gallery.search_placeholder"), text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(.white)
@@ -1995,14 +2000,14 @@ struct WidgetGalleryModal: View {
             .animation(.easeInOut(duration: 0.22), value: selectedMusicAppearance)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Aperçu en direct • \(friendlySizeLabel(chosenSize))")
+                Text(loc("widget.gallery.live_preview", friendlySizeLabel(chosenSize)))
                     .font(.system(size: 11.5, weight: .bold))
                     .foregroundStyle(Color.cyan)
                 Text(card.title)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text("Format \(Int(pw))×\(Int(ph)) pt • \(card.subtitle)")
+                Text(loc("widget.gallery.format", Int(pw), Int(ph), card.subtitle))
                     .font(.system(size: 11.5))
                     .foregroundStyle(.white.opacity(0.65))
 
@@ -2010,7 +2015,7 @@ struct WidgetGalleryModal: View {
                     HStack(spacing: 5) {
                         Image(systemName: "info.circle.fill")
                             .font(.system(size: 10.5))
-                        Text("1 widget max par catégorie — remplacera le widget actuel")
+                        Text(loc("widget.gallery.max_one_hint"))
                             .font(.system(size: 10.5, weight: .medium))
                     }
                     .foregroundStyle(Color.orange.opacity(0.95))
@@ -2019,7 +2024,7 @@ struct WidgetGalleryModal: View {
 
                 if card.category == .music {
                     HStack(spacing: 6) {
-                        Text("Thème :")
+                        Text(loc("widget.gallery.theme_label"))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.70))
                         ForEach(WidgetAppearanceMode.allCases) { mode in
@@ -2053,7 +2058,7 @@ struct WidgetGalleryModal: View {
     private var bottomActionBar: some View {
         let card = activeCard
         let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
-        let actionLabel = existingInCategory == nil ? "Ajouter" : "Remplacer"
+        let actionLabel = existingInCategory == nil ? loc("custom_tile.add") : loc("widget.gallery.replace")
         let actionIcon = existingInCategory == nil ? "plus.circle.fill" : "arrow.triangle.2.circlepath.circle.fill"
 
         return HStack(spacing: 10) {
@@ -2128,7 +2133,7 @@ struct WidgetGalleryModal: View {
             }
             .buttonStyle(.plain)
             .layoutPriority(1)
-            .accessibilityLabel("Ajouter le widget \(card.title)")
+            .accessibilityLabel(loc("widget.gallery.add_a11y", card.title))
         }
     }
 
@@ -2145,7 +2150,7 @@ struct WidgetGalleryModal: View {
         if !licenseManager.isPro {
             vm.showProUpgradeAlert(
                 feature: loc("widget.gallery.title"),
-                description: "Les widgets interactifs sont inclus dans la version Pro.\n\nVous pouvez activer votre essai gratuit ou votre licence dans les Réglages."
+                description: loc("widget.gallery.pro_desc")
             )
             return
         }
@@ -2182,8 +2187,8 @@ struct WidgetGalleryModal: View {
                     vm.setPage(currentPage)
                 }
                 let toastMessage = hadExistingInCategory
-                    ? "Le widget « \(card.title) » a remplacé le précédent sur le Launchpad"
-                    : "Le widget « \(card.title) » a bien été ajouté au Launchpad"
+                    ? loc("widget.gallery.replaced_toast", card.title)
+                    : loc("widget.gallery.added_toast", card.title)
                 vm.showToast(toastMessage)
                 AppNotificationManager.shared.sendWidgetAddedNotification(
                     widgetName: card.title,
@@ -2197,10 +2202,10 @@ struct WidgetGalleryModal: View {
 
     private func friendlySizeLabel(_ size: WidgetSize) -> String {
         switch size {
-        case .small: return "Petit"
-        case .medium: return "Moyen"
-        case .tall: return "Vertical"
-        case .large: return "Grand"
+        case .small: return loc("widget.size.small")
+        case .medium: return loc("widget.size.medium")
+        case .tall: return loc("widget.size.tall")
+        case .large: return loc("widget.size.large")
         }
     }
 
@@ -2219,6 +2224,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
     let effectiveConfig: CustomWidgetConfig
     let isSelected: Bool
     let isActiveOnBoard: Bool
+    let languageCode: String = LocalizationManager.activeLanguageCode
     let onSelect: () -> Void
 
     @State private var isHovered: Bool = false
@@ -2227,7 +2233,8 @@ private struct WidgetGalleryCardButton: View, Equatable {
         lhs.card == rhs.card &&
         lhs.effectiveConfig == rhs.effectiveConfig &&
         lhs.isSelected == rhs.isSelected &&
-        lhs.isActiveOnBoard == rhs.isActiveOnBoard
+        lhs.isActiveOnBoard == rhs.isActiveOnBoard &&
+        lhs.languageCode == rhs.languageCode
     }
 
     var body: some View {
@@ -2253,7 +2260,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
                     .frame(maxWidth: .infinity)
 
                     if isActiveOnBoard {
-                        Text("Actif")
+                        Text(loc("widget.gallery.active_badge"))
                             .font(.system(size: 9.5, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 7)

@@ -180,11 +180,11 @@ public final class UpdateManager: NSObject, ObservableObject {
 
         if lastHttpCode > 0 {
             throw NSError(domain: "UpdateManager", code: lastHttpCode, userInfo: [
-                NSLocalizedDescriptionKey: "Serveur GitHub temporairement indisponible (code \(lastHttpCode))."
+                NSLocalizedDescriptionKey: loc("update.err.github_temp", lastHttpCode)
             ])
         } else {
             throw NSError(domain: "UpdateManager", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Connexion impossible au serveur de mise à jour. Vérifiez votre accès internet."
+                NSLocalizedDescriptionKey: loc("update.err.no_connection")
             ])
         }
     }
@@ -199,7 +199,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
 
             guard let tagName = json["tag_name"] as? String else {
-                state = .error(message: "Données de version introuvables.")
+                state = .error(message: loc("update.err.no_version_data"))
                 return
             }
 
@@ -284,9 +284,9 @@ public final class UpdateManager: NSObject, ObservableObject {
     private func sendReadyToRestartNotification(version: String) {
         AppNotificationManager.shared.sendNotification(
             identifier: "launchpad.update.ready.\(version)",
-            title: "LaunchPad — Prêt à redémarrer 🚀",
-            subtitle: "Version \(version)",
-            body: "La mise à jour a été téléchargée avec succès. Cliquez pour redémarrer l'application.",
+            title: loc("update.notif.ready_title"),
+            subtitle: loc("update.notif.version_sub", version),
+            body: loc("update.notif.ready_body"),
             type: .updateAvailable
         )
     }
@@ -356,21 +356,21 @@ public final class UpdateManager: NSObject, ObservableObject {
             if let error = error {
                 if (error as NSError).code == NSURLErrorCancelled { return }
                 Task { @MainActor [weak self] in
-                    self?.state = .error(message: "Échec du téléchargement : \(error.localizedDescription)")
+                    self?.state = .error(message: loc("update.err.download_failed", error.localizedDescription))
                 }
                 return
             }
 
             if !isSuccessfulHttp {
                 Task { @MainActor [weak self] in
-                    self?.state = .error(message: "Erreur serveur GitHub (HTTP \(httpStatus)).")
+                    self?.state = .error(message: loc("update.err.github_http", httpStatus))
                 }
                 return
             }
 
             guard let tempUrl = tempUrl, validFile else {
                 Task { @MainActor [weak self] in
-                    self?.state = .error(message: "L'archive téléchargée est incomplète ou corrompue.")
+                    self?.state = .error(message: loc("update.err.corrupt_archive"))
                 }
                 return
             }
@@ -386,7 +386,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             } catch {
                 try? fileManager.removeItem(at: workDir)
                 Task { @MainActor [weak self] in
-                    self?.state = .error(message: "Erreur de préparation : \(error.localizedDescription)")
+                    self?.state = .error(message: loc("update.err.prep_failed", error.localizedDescription))
                 }
                 return
             }
@@ -436,7 +436,7 @@ public final class UpdateManager: NSObject, ObservableObject {
                 ditto.waitUntilExit()
                 guard ditto.terminationStatus == 0 else {
                     await MainActor.run {
-                        self.state = .error(message: "Échec de l'extraction de l'archive ZIP.")
+                        self.state = .error(message: loc("update.err.unzip_failed"))
                     }
                     return
                 }
@@ -464,7 +464,7 @@ public final class UpdateManager: NSObject, ObservableObject {
 
                 guard hdiutil.terminationStatus == 0 else {
                     await MainActor.run {
-                        self.state = .error(message: "Impossible de monter l'image disque DMG.")
+                        self.state = .error(message: loc("update.err.dmg_mount_failed"))
                     }
                     return
                 }
@@ -501,7 +501,7 @@ public final class UpdateManager: NSObject, ObservableObject {
 
             guard let newAppURL = finalNewAppURL else {
                 await MainActor.run {
-                    self.state = .error(message: "L'application extraite est introuvable dans l'archive.")
+                    self.state = .error(message: loc("update.err.app_missing"))
                 }
                 return
             }
@@ -520,7 +520,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
         } catch {
             await MainActor.run {
-                self.state = .error(message: "Erreur d'installation : \(error.localizedDescription)")
+                self.state = .error(message: loc("update.err.install_failed", error.localizedDescription))
             }
         }
     }
@@ -528,7 +528,7 @@ public final class UpdateManager: NSObject, ObservableObject {
     /// Applique la mise à jour, supprime l'ancienne version et relance la nouvelle
     public func applyUpdateAndRelaunch() {
         guard let context = stagedUpdateContext else {
-            state = .error(message: "Aucune mise à jour prête à installer.")
+            state = .error(message: loc("update.err.none_ready"))
             return
         }
 
@@ -610,7 +610,7 @@ public final class UpdateManager: NSObject, ObservableObject {
                 exit(0)
             }
         } catch {
-            state = .error(message: "Erreur lors du redémarrage : \(error.localizedDescription)")
+            state = .error(message: loc("update.err.restart_failed", error.localizedDescription))
         }
     }
 

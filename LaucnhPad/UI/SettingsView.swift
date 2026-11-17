@@ -97,7 +97,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let window = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: SettingsPanel.size.width, height: SettingsPanel.size.height),
                                   styleMask: [.titled, .fullSizeContentView],
                                   backing: .buffered, defer: false)
-            window.title = "Réglages LaucnhPad"
+            window.title = loc("about.window_title")
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.standardWindowButton(.closeButton)?.isHidden = true
@@ -113,6 +113,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             self.window = window
         }
         guard let window else { return }
+        window.title = loc("about.window_title")
         if window.contentViewController == nil {
             window.contentViewController = NSHostingController(rootView: SettingsPanel(store: store))
         }

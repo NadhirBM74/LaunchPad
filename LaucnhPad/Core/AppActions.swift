@@ -114,7 +114,7 @@ nonisolated struct RelatedFile: Identifiable, Hashable, Sendable {
 
 nonisolated enum UninstallScanner {
     static func scan(app: AppInfo) -> [RelatedFile] {
-        var result = [RelatedFile(url: app.url, kind: "Application", size: size(of: app.url), isBundle: true, selectedByDefault: true)]
+        var result = [RelatedFile(url: app.url, kind: loc("app_actions.type.app"), size: size(of: app.url), isBundle: true, selectedByDefault: true)]
         guard let bundleID = app.bundleID, bundleID.count >= 3, !bundleID.contains("/"), !app.isSystem else { return result }
         let manager = FileManager.default
         let library = manager.homeDirectoryForCurrentUser.appendingPathComponent("Library", isDirectory: true)
@@ -129,43 +129,43 @@ nonisolated enum UninstallScanner {
         }
 
         let exact: [(String, String)] = [
-            ("Application Support/\(bundleID)", "Support d’application"),
-            ("Caches/\(bundleID)", "Caches"),
-            ("Containers/\(bundleID)", "Conteneur"),
-            ("Preferences/\(bundleID).plist", "Préférences"),
-            ("Saved Application State/\(bundleID).savedState", "État enregistré"),
-            ("WebKit/\(bundleID)", "Données WebKit"),
-            ("HTTPStorages/\(bundleID)", "Stockage HTTP"),
-            ("HTTPStorages/\(bundleID).binarycookies", "Stockage HTTP"),
-            ("Cookies/\(bundleID).binarycookies", "Cookies"),
-            ("Application Scripts/\(bundleID)", "Scripts d’application"),
-            ("Logs/\(bundleID)", "Journaux"),
+            ("Application Support/\(bundleID)", loc("app_actions.type.support")),
+            ("Caches/\(bundleID)", loc("app_actions.type.caches")),
+            ("Containers/\(bundleID)", loc("app_actions.type.container")),
+            ("Preferences/\(bundleID).plist", loc("app_actions.type.prefs")),
+            ("Saved Application State/\(bundleID).savedState", loc("app_actions.type.saved_state")),
+            ("WebKit/\(bundleID)", loc("app_actions.type.webkit")),
+            ("HTTPStorages/\(bundleID)", loc("app_actions.type.http")),
+            ("HTTPStorages/\(bundleID).binarycookies", loc("app_actions.type.http")),
+            ("Cookies/\(bundleID).binarycookies", loc("app_actions.type.cookies")),
+            ("Application Scripts/\(bundleID)", loc("app_actions.type.scripts")),
+            ("Logs/\(bundleID)", loc("app_actions.type.logs")),
         ]
         for (relative, kind) in exact { add(library.appendingPathComponent(relative), kind) }
 
         for url in entries("Preferences") where url.lastPathComponent.hasPrefix(bundleID + ".") && url.pathExtension == "plist" {
-            add(url, "Préférences")
+            add(url, loc("app_actions.type.prefs"))
         }
         for url in entries("Preferences/ByHost") where url.lastPathComponent.hasPrefix(bundleID + ".") {
-            add(url, "Préférences")
+            add(url, loc("app_actions.type.prefs"))
         }
         for url in entries("LaunchAgents") where url.lastPathComponent.hasPrefix(bundleID) {
-            add(url, "Agent de lancement")
+            add(url, loc("app_actions.type.launch_agent"))
         }
         for url in entries("Containers") where url.lastPathComponent.hasPrefix(bundleID + ".") {
-            add(url, "Conteneur (extension)")
+            add(url, loc("app_actions.type.ext_container"))
         }
         // Les conteneurs de groupe sont souvent partagés entre apps d'un même éditeur : décochés par défaut.
         for url in entries("Group Containers") where url.lastPathComponent.hasSuffix("." + bundleID) || url.lastPathComponent == bundleID {
-            add(url, "Conteneur de groupe", selected: false)
+            add(url, loc("app_actions.type.group_container"), selected: false)
         }
 
         // Correspondances par nom : moins sûres, donc décochées par défaut.
         let name = app.url.deletingPathExtension().lastPathComponent
         if name.count >= 3 {
-            add(library.appendingPathComponent("Application Support/\(name)"), "Support d’application", selected: false)
-            add(library.appendingPathComponent("Caches/\(name)"), "Caches", selected: false)
-            add(library.appendingPathComponent("Logs/\(name)"), "Journaux", selected: false)
+            add(library.appendingPathComponent("Application Support/\(name)"), loc("app_actions.type.support"), selected: false)
+            add(library.appendingPathComponent("Caches/\(name)"), loc("app_actions.type.caches"), selected: false)
+            add(library.appendingPathComponent("Logs/\(name)"), loc("app_actions.type.logs"), selected: false)
         }
         return result
     }

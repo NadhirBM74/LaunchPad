@@ -513,7 +513,7 @@ final class MenuBarManager: NSObject {
         menu.addItem(open)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: loc("menu.settings"), action: #selector(settingsAction), keyEquivalent: ","))
-        let adminItem = NSMenuItem(title: "Centre de Test (Admin)", action: #selector(adminTestAction), keyEquivalent: "t")
+        let adminItem = NSMenuItem(title: loc("menu.admin_test"), action: #selector(adminTestAction), keyEquivalent: "t")
         menu.addItem(adminItem)
         menu.addItem(NSMenuItem(title: loc("menu.refresh"), action: #selector(refreshAction), keyEquivalent: ""))
         menu.addItem(.separator())

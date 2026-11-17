@@ -22,35 +22,11 @@ public enum IconAppearanceStyle: String, Codable, CaseIterable, Identifiable, Se
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .original: return "Originales HD"
-        case .dark: return "Sombre"
-        case .light: return "Clair"
-        case .tinted: return "Teinté"
-        case .monochrome: return "Monochrome"
-        case .transparent: return "Transparent"
-        case .clearDark: return "Verre Sombre"
-        case .frostedGlass: return "Verre Givré"
-        case .clearLiquid: return "Verre Liquide"
-        case .classicApple: return "Pack Studio Apple"
-        case .system: return "Automatique (macOS)"
-        }
+        loc("icon_style.\(rawValue).title")
     }
 
     public var subtitle: String {
-        switch self {
-        case .original: return "Les vraies icônes en couleur de vos applications en très haute définition"
-        case .dark: return "Fond sombre élégant qui met en valeur les couleurs de chaque icône"
-        case .light: return "Rendu lumineux et éclatant adapté aux ambiances claires"
-        case .tinted: return "Harmonise toutes vos icônes avec votre couleur préférée"
-        case .monochrome: return "Style épuré en nuances d'argent et de graphite à fort contraste"
-        case .transparent: return "Fond en verre transparent laissant apparaître votre fond d'écran"
-        case .clearDark: return "Surface vitrée sombre translucide avec icônes colorées"
-        case .frostedGlass: return "Verre dépoli lumineux avec reflet diagonal soyeux"
-        case .clearLiquid: return "Effet verre liquide Apple avec contour lumineux"
-        case .classicApple: return "Icônes revisitées (App Store sable chaud, Calendrier à points)"
-        case .system: return "Utilise le style d'icônes configuré dans les Réglages Système de votre Mac"
-        }
+        loc("icon_style.\(rawValue).desc")
     }
 
     public var badgeIcon: String {
@@ -123,12 +99,12 @@ public enum CustomAppIconKind: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .freeform: return "Freeform"
         case .photos: return "Photos"
-        case .home: return "Maison"
+        case .home: return loc("app_sample.home")
         case .keynote: return "Keynote"
-        case .weather: return "Météo"
-        case .maps: return "Plans"
+        case .weather: return loc("app_sample.weather")
+        case .maps: return loc("app_sample.maps")
         case .appStore: return "App Store"
-        case .calendar: return "Calendar"
+        case .calendar: return loc("widget.cat.calendar")
         case .phone: return "Phone"
         case .facetime: return "FaceTime"
         case .telegram: return "Telegram"
@@ -136,19 +112,19 @@ public enum CustomAppIconKind: String, CaseIterable, Identifiable, Sendable {
         case .books: return "Books"
         case .safari: return "Safari"
         case .mail: return "Mail"
-        case .music: return "Music"
+        case .music: return loc("app_sample.music")
         case .spotify: return "Spotify"
         case .finder: return "Finder"
-        case .settings: return "Réglages"
-        case .notes: return "Notes"
-        case .reminders: return "Rappels"
-        case .clock: return "Horloge"
+        case .settings: return loc("app_sample.settings")
+        case .notes: return loc("app_sample.notes")
+        case .reminders: return loc("app_sample.reminders")
+        case .clock: return loc("app_sample.clock")
         case .tv: return "TV"
         case .podcasts: return "Podcasts"
-        case .calculator: return "Calculette"
+        case .calculator: return loc("app_sample.calculator")
         case .terminal: return "Terminal"
         case .xcode: return "Xcode"
-        case .findMy: return "Localiser"
+        case .findMy: return loc("app_sample.findmy")
         }
     }
 
@@ -1651,6 +1627,7 @@ public struct AppCustomIconPickerSheet: View {
     @Binding public var isPresented: Bool
 
     @ObservedObject private var customManager = CustomIconManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var selectedSymbol: String = "star.fill"
     @State private var selectedColorHex: String = "#0A84FF"
     @State private var statusFeedback: String? = nil
@@ -1662,16 +1639,18 @@ public struct AppCustomIconPickerSheet: View {
         "bubble.left.and.bubble.right.fill", "book.fill", "hammer.fill", "heart.fill", "shield.fill"
     ]
 
-    private let colorPalette: [(String, String, Color)] = [
-        ("#0A84FF", "Bleu", Color(red: 0.04, green: 0.52, blue: 1.0)),
-        ("#BF5AF2", "Violet", Color(red: 0.75, green: 0.35, blue: 0.95)),
-        ("#FF9F0A", "Orange", Color(red: 1.0, green: 0.62, blue: 0.04)),
-        ("#30D158", "Vert", Color(red: 0.19, green: 0.82, blue: 0.35)),
-        ("#FF2D55", "Rose", Color(red: 1.0, green: 0.18, blue: 0.33)),
-        ("#22D3EE", "Turquoise", Color(red: 0.13, green: 0.83, blue: 0.93)),
-        ("#181920", "Obsidienne", Color(red: 0.10, green: 0.10, blue: 0.14)),
-        ("#F5F6FA", "Blanc Pur", Color(red: 0.95, green: 0.96, blue: 0.98))
-    ]
+    private var colorPalette: [(String, String, Color)] {
+        [
+            ("#0A84FF", loc("custom_icon.color.blue"), Color(red: 0.04, green: 0.52, blue: 1.0)),
+            ("#BF5AF2", loc("custom_icon.color.purple"), Color(red: 0.75, green: 0.35, blue: 0.95)),
+            ("#FF9F0A", loc("custom_icon.color.orange"), Color(red: 1.0, green: 0.62, blue: 0.04)),
+            ("#30D158", loc("custom_icon.color.green"), Color(red: 0.19, green: 0.82, blue: 0.35)),
+            ("#FF2D55", loc("custom_icon.color.pink"), Color(red: 1.0, green: 0.18, blue: 0.33)),
+            ("#22D3EE", loc("custom_icon.color.cyan"), Color(red: 0.13, green: 0.83, blue: 0.93)),
+            ("#181920", loc("custom_icon.color.obsidian"), Color(red: 0.10, green: 0.10, blue: 0.14)),
+            ("#F5F6FA", loc("custom_icon.color.pure_white"), Color(red: 0.95, green: 0.96, blue: 0.98))
+        ]
+    }
 
     public init(appID: String, appName: String, isPresented: Binding<Bool>) {
         self.appID = appID
@@ -1688,10 +1667,10 @@ public struct AppCustomIconPickerSheet: View {
                     .frame(width: 56, height: 56)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Personnaliser l'icône de « \(appName) »")
+                    Text(loc("icon_picker.title", appName))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("Choisissez une image sur votre Mac ou créez une icône sur mesure.")
+                    Text(loc("icon_picker.subtitle"))
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.68))
                 }
@@ -1704,7 +1683,7 @@ public struct AppCustomIconPickerSheet: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Fermer")
+                .accessibilityLabel(loc("icon_picker.close"))
             }
 
             Divider().background(Color.white.opacity(0.14))
@@ -1712,10 +1691,10 @@ public struct AppCustomIconPickerSheet: View {
             // Option 1 : Importer un fichier image
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("1. Utiliser une image de votre Mac")
+                    Text(loc("icon_picker.step1"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
-                    Text("Formats acceptés : PNG, ICNS, JPG, HEIC (haute résolution conseillée)")
+                    Text(loc("icon_picker.formats"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.white.opacity(0.62))
                 }
@@ -1723,7 +1702,7 @@ public struct AppCustomIconPickerSheet: View {
                 Button {
                     chooseImageFromDisk()
                 } label: {
-                    Label("Choisir une image…", systemImage: "photo.badge.plus")
+                    Label(loc("icon_picker.choose_image"), systemImage: "photo.badge.plus")
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(.black)
                         .padding(.horizontal, 14)
@@ -1737,7 +1716,7 @@ public struct AppCustomIconPickerSheet: View {
 
             // Option 2 : Créer une icône avec symbole et couleur d'arrière-plan
             VStack(alignment: .leading, spacing: 10) {
-                Text("2. Ou choisir un symbole et une couleur de fond")
+                Text(loc("icon_picker.step2"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
 
@@ -1756,14 +1735,14 @@ public struct AppCustomIconPickerSheet: View {
                         }
                         .buttonStyle(.plain)
                         .help(label)
-                        .accessibilityLabel("Couleur \(label)")
+                        .accessibilityLabel(loc("icon_picker.color_a11y", label))
                     }
                     Spacer()
                     Button {
                         customManager.setCustomSymbol(symbol: selectedSymbol, colorHex: selectedColorHex, for: appID)
-                        statusFeedback = "Nouvelle icône appliquée !"
+                        statusFeedback = loc("icon_picker.applied_symbol")
                     } label: {
-                        Text("Appliquer ce symbole")
+                        Text(loc("icon_picker.apply_symbol"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -1799,9 +1778,9 @@ public struct AppCustomIconPickerSheet: View {
                 if customManager.hasOverride(for: appID) {
                     Button(role: .destructive) {
                         customManager.removeOverride(for: appID)
-                        statusFeedback = "Icône d'origine restaurée."
+                        statusFeedback = loc("icon_picker.restored")
                     } label: {
-                        Label("Rétablir l'icône d'origine", systemImage: "arrow.counterclockwise")
+                        Label(loc("menu.restore_icon"), systemImage: "arrow.counterclockwise")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.red.opacity(0.9))
                     }
@@ -1816,7 +1795,7 @@ public struct AppCustomIconPickerSheet: View {
                 Button {
                     isPresented = false
                 } label: {
-                    Text("Terminé")
+                    Text(loc("common.done"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
@@ -1841,14 +1820,14 @@ public struct AppCustomIconPickerSheet: View {
 
     private func chooseImageFromDisk() {
         let panel = NSOpenPanel()
-        panel.title = "Choisir une icône pour \(appName)"
+        panel.title = loc("icon_picker.panel_title", appName)
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image, .icns, .png, .jpeg, .heic, .tiff]
         if panel.runModal() == .OK, let url = panel.url {
             if customManager.setCustomImage(from: url, for: appID) {
-                statusFeedback = "Image personnalisée appliquée !"
+                statusFeedback = loc("icon_picker.applied_image")
             }
         }
     }

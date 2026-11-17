@@ -21,6 +21,7 @@ struct TutorialCardView: View {
     var initialStepIndex: Int = 0
     var onDismiss: (() -> Void)? = nil
 
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var currentStepIndex: Int
 
     init(vm: LaunchpadViewModel? = nil, initialStepIndex: Int = 0, onDismiss: (() -> Void)? = nil) {
@@ -30,71 +31,74 @@ struct TutorialCardView: View {
         self._currentStepIndex = State(initialValue: initialStepIndex)
     }
 
-    private static let steps: [TutorialStep] = [
-        TutorialStep(
-            id: 0,
-            badge: "OUVERTURE RAPIDE",
-            tabTitle: "1. Ouverture",
-            title: "Comment ouvrir et fermer LaunchPad",
-            subtitle: "Accédez à toutes vos applications en une fraction de seconde grâce aux gestes naturels de macOS.",
-            icon: "hand.draw.fill",
-            iconColor: Color(red: 0.22, green: 0.64, blue: 1.0),
-            instruction: "Pincez à 3 ou 4 doigts sur le trackpad ou appuyez sur ⌃ Espace"
-        ),
-        TutorialStep(
-            id: 1,
-            badge: "RECHERCHE INSTANTANÉE",
-            tabTitle: "2. Recherche",
-            title: "Comment chercher et lancer une app au clavier",
-            subtitle: "Trouvez et lancez n'importe quelle application sans même toucher à votre souris.",
-            icon: "magnifyingglass",
-            iconColor: Color(red: 0.85, green: 0.40, blue: 1.0),
-            instruction: "Tapez directement le nom d'une app, puis appuyez sur Entrée"
-        ),
-        TutorialStep(
-            id: 2,
-            badge: "ORGANISATION DES PAGES",
-            tabTitle: "3. Déplacer",
-            title: "Comment déplacer une app & changer de page",
-            subtitle: "Réorganisez vos applications librement sur la grille ou déplacez-les vers une autre page.",
-            icon: "arrow.up.and.down.and.arrow.left.and.right",
-            iconColor: Color(red: 0.38, green: 0.85, blue: 0.55),
-            instruction: "Glissez une icône vers le bord droit ou gauche pour changer de page"
-        ),
-        TutorialStep(
-            id: 3,
-            badge: "CRÉATION DE DOSSIERS",
-            tabTitle: "4. Dossiers",
-            title: "Comment créer un dossier en 1 seconde",
-            subtitle: "Regroupez vos applications par catégorie simplement en les superposant.",
-            icon: "folder.badge.plus",
-            iconColor: Color(red: 1.0, green: 0.60, blue: 0.20),
-            instruction: "Superposez deux icônes pour créer automatiquement un dossier"
-        ),
-        TutorialStep(
-            id: 4,
-            badge: "WIDGETS & PRO",
-            tabTitle: "5. Widgets",
-            title: "Comment utiliser les Widgets & le style Liquid Glass",
-            subtitle: "Contrôlez votre musique avec la platine vinyle en direct et profitez des reflets de verre dépoli.",
-            icon: "opticaldisc.fill",
-            iconColor: Color(red: 1.0, green: 0.80, blue: 0.15),
-            instruction: "Profitez de la platine vinyle interactive et des widgets dynamiques"
-        ),
-        TutorialStep(
-            id: 5,
-            badge: "OFFRE PRO & ESSAI 7 JOURS",
-            tabTitle: "6. Essai Pro",
-            title: "Essayez LaunchPad Pro gratuitement pendant 7 jours",
-            subtitle: "Démarrez votre essai de 7 jours sans engagement ou débloquez la version Pro permanente.",
-            icon: "crown.fill",
-            iconColor: Color(red: 1.0, green: 0.75, blue: 0.15),
-            instruction: "Activez votre essai 7 jours en un clic ou choisissez la version Pro à vie"
-        )
-    ]
+    private var steps: [TutorialStep] {
+        [
+            TutorialStep(
+                id: 0,
+                badge: loc("tuto.step1.badge"),
+                tabTitle: loc("tuto.step1.tab"),
+                title: loc("tuto.step1.title"),
+                subtitle: loc("tuto.step1.sub"),
+                icon: "hand.draw.fill",
+                iconColor: Color(red: 0.22, green: 0.64, blue: 1.0),
+                instruction: loc("tuto.step1.inst")
+            ),
+            TutorialStep(
+                id: 1,
+                badge: loc("tuto.step2.badge"),
+                tabTitle: loc("tuto.step2.tab"),
+                title: loc("tuto.step2.title"),
+                subtitle: loc("tuto.step2.sub"),
+                icon: "magnifyingglass",
+                iconColor: Color(red: 0.85, green: 0.40, blue: 1.0),
+                instruction: loc("tuto.step2.inst")
+            ),
+            TutorialStep(
+                id: 2,
+                badge: loc("tuto.step3.badge"),
+                tabTitle: loc("tuto.step3.tab"),
+                title: loc("tuto.step3.title"),
+                subtitle: loc("tuto.step3.sub"),
+                icon: "arrow.up.and.down.and.arrow.left.and.right",
+                iconColor: Color(red: 0.38, green: 0.85, blue: 0.55),
+                instruction: loc("tuto.step3.inst")
+            ),
+            TutorialStep(
+                id: 3,
+                badge: loc("tuto.step4.badge"),
+                tabTitle: loc("tuto.step4.tab"),
+                title: loc("tuto.step4.title"),
+                subtitle: loc("tuto.step4.sub"),
+                icon: "folder.badge.plus",
+                iconColor: Color(red: 1.0, green: 0.60, blue: 0.20),
+                instruction: loc("tuto.step4.inst")
+            ),
+            TutorialStep(
+                id: 4,
+                badge: loc("tuto.step5.badge"),
+                tabTitle: loc("tuto.step5.tab"),
+                title: loc("tuto.step5.title"),
+                subtitle: loc("tuto.step5.sub"),
+                icon: "opticaldisc.fill",
+                iconColor: Color(red: 1.0, green: 0.80, blue: 0.15),
+                instruction: loc("tuto.step5.inst")
+            ),
+            TutorialStep(
+                id: 5,
+                badge: loc("tuto.step6.badge"),
+                tabTitle: loc("tuto.step6.tab"),
+                title: loc("tuto.step6.title"),
+                subtitle: loc("tuto.step6.sub"),
+                icon: "crown.fill",
+                iconColor: Color(red: 1.0, green: 0.75, blue: 0.15),
+                instruction: loc("tuto.step6.inst")
+            )
+        ]
+    }
 
     var body: some View {
-        let currentStep = Self.steps[currentStepIndex]
+        let allSteps = steps
+        let currentStep = allSteps[currentStepIndex]
 
         VStack(spacing: 0) {
             // Barre supérieure : Badge étape, Titre & Bouton Fermer
@@ -114,7 +118,7 @@ struct TutorialCardView: View {
                     .background(currentStep.iconColor.opacity(0.16))
                     .clipShape(Capsule())
 
-                    Text("Étape \(currentStepIndex + 1) sur \(Self.steps.count)")
+                    Text(loc("tuto.step_progress", currentStepIndex + 1, allSteps.count))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -141,13 +145,13 @@ struct TutorialCardView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .help("Rejoindre la communauté Discord")
+                .help(loc("tuto.join_discord"))
 
                 Button {
                     dismiss()
                 } label: {
                     HStack(spacing: 4) {
-                        Text("Passer")
+                        Text(loc("tuto.skip"))
                             .font(.system(size: 12, weight: .medium))
                         Image(systemName: "xmark")
                             .font(.system(size: 10, weight: .bold))
@@ -255,7 +259,7 @@ struct TutorialCardView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 11, weight: .bold))
-                            Text("Précédent")
+                            Text(loc("tuto.prev"))
                                 .font(.system(size: 12.5, weight: .semibold))
                         }
                         .foregroundStyle(.white)
@@ -273,7 +277,7 @@ struct TutorialCardView: View {
 
                 // Indicateur de points d'étapes (Apple style discret)
                 HStack(spacing: 6) {
-                    ForEach(0..<Self.steps.count, id: \.self) { idx in
+                    ForEach(0..<allSteps.count, id: \.self) { idx in
                         Capsule()
                             .fill(idx == currentStepIndex ? currentStep.iconColor : Color.white.opacity(0.25))
                             .frame(width: idx == currentStepIndex ? 18 : 6, height: 6)
@@ -283,7 +287,7 @@ struct TutorialCardView: View {
 
                 Spacer()
 
-                if currentStepIndex < Self.steps.count - 1 {
+                if currentStepIndex < allSteps.count - 1 {
                     Button {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             currentStepIndex += 1
@@ -291,7 +295,7 @@ struct TutorialCardView: View {
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Text("Étape suivante")
+                            Text(loc("tuto.next"))
                                 .font(.system(size: 13, weight: .bold))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .bold))
@@ -326,8 +330,8 @@ struct TutorialCardView: View {
                             }
                             Text(
                                 isLifetime
-                                    ? "Commencer avec LaunchPad Pro ✨"
-                                    : (isTrial ? "Commencer avec l'Essai Pro 7 jours 🚀" : "Commencer à utiliser LaunchPad")
+                                    ? loc("tuto.start_pro")
+                                    : (isTrial ? loc("tuto.start_trial") : loc("tuto.start_free"))
                             )
                             .font(.system(size: 13, weight: .bold))
                         }
@@ -375,11 +379,12 @@ struct TutorialCardView: View {
 private struct AnimStep0OpenClose: View {
     let accentColor: Color
 
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var pinchProgress: CGFloat = 0.0
     @State private var isKeyPressed = false
     @State private var launchpadOpacity: Double = 0.0
     @State private var launchpadScale: CGFloat = 0.85
-    @State private var statusMessage = "1. Pincez ou pressez ⌃ Espace"
+    @State private var statusKey = "tuto.open.status1"
     @State private var loopTask: Task<Void, Never>? = nil
 
     var body: some View {
@@ -440,7 +445,7 @@ private struct AnimStep0OpenClose: View {
                     HStack(spacing: 2) {
                         Text("⌃")
                             .font(.system(size: 11, weight: .bold))
-                        Text("ctrl")
+                        Text(loc("tuto.open.key_ctrl"))
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .padding(.horizontal, 7)
@@ -461,7 +466,7 @@ private struct AnimStep0OpenClose: View {
                     HStack(spacing: 4) {
                         Text("␣")
                             .font(.system(size: 11, weight: .bold))
-                        Text("Espace")
+                        Text(loc("tuto.open.key_space"))
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .padding(.horizontal, 10)
@@ -476,7 +481,7 @@ private struct AnimStep0OpenClose: View {
                 }
                 .foregroundStyle(.white)
 
-                Text(statusMessage)
+                Text(loc(statusKey))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white.opacity(0.75))
                     .frame(width: 155)
@@ -523,9 +528,9 @@ private struct AnimStep0OpenClose: View {
                                 .font(.system(size: 9, weight: .bold))
                             Text("Finder")
                                 .font(.system(size: 8, weight: .bold))
-                            Text("Fichier")
+                            Text(loc("tuto.open.menu_file"))
                                 .font(.system(size: 7.5, weight: .regular))
-                            Text("Édition")
+                            Text(loc("tuto.open.menu_edit"))
                                 .font(.system(size: 7.5, weight: .regular))
 
                             Spacer()
@@ -579,7 +584,7 @@ private struct AnimStep0OpenClose: View {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 8))
                                     .foregroundStyle(.white.opacity(0.6))
-                                Text("Rechercher...")
+                                Text(loc("tuto.open.search_hint"))
                                     .font(.system(size: 8))
                                     .foregroundStyle(.white.opacity(0.5))
                                 Spacer()
@@ -595,12 +600,12 @@ private struct AnimStep0OpenClose: View {
                             LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 14), count: 4), spacing: 8) {
                                 miniLaunchIcon(name: "Safari", icon: "safari.fill", color: .cyan)
                                 miniLaunchIcon(name: "Photos", icon: "photo.stack.fill", color: .pink)
-                                miniLaunchIcon(name: "Musique", icon: "music.note", color: .red)
+                                miniLaunchIcon(name: loc("app_sample.music"), icon: "music.note", color: .red)
                                 miniLaunchIcon(name: "Terminal", icon: "terminal.fill", color: .gray)
                                 miniLaunchIcon(name: "Xcode", icon: "hammer.fill", color: .blue)
                                 miniLaunchIcon(name: "Mail", icon: "envelope.fill", color: .indigo)
-                                miniLaunchIcon(name: "Notes", icon: "note.text", color: .yellow)
-                                miniLaunchIcon(name: "Réglages", icon: "gearshape.fill", color: .gray)
+                                miniLaunchIcon(name: loc("app_sample.notes"), icon: "note.text", color: .yellow)
+                                miniLaunchIcon(name: loc("app_sample.settings"), icon: "gearshape.fill", color: .gray)
                             }
 
                             Spacer()
@@ -609,7 +614,7 @@ private struct AnimStep0OpenClose: View {
                         // Badge de confirmation vert "LaunchPad Ouvert"
                         HStack(spacing: 4) {
                             Circle().fill(Color.green).frame(width: 6, height: 6)
-                            Text("LaunchPad Ouvert")
+                            Text(loc("tuto.open.badge"))
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.white)
                         }
@@ -696,7 +701,7 @@ private struct AnimStep0OpenClose: View {
             launchpadScale = 0.85
             pinchProgress = 0.0
             isKeyPressed = false
-            statusMessage = "1. Pincez ou pressez ⌃ Espace"
+            statusKey = "tuto.open.status1"
         }
 
         // 1. GESTE D'OUVERTURE : Doigts pincent + touches s'enfoncent -> LaunchPad zoome et s'affiche SIMULTANÉMENT !
@@ -707,7 +712,7 @@ private struct AnimStep0OpenClose: View {
             isKeyPressed = true
             launchpadOpacity = 1.0
             launchpadScale = 1.0
-            statusMessage = "✦ Le geste ouvre LaunchPad !"
+            statusKey = "tuto.open.status2"
         }
 
         // 2. Relâchement des doigts : LaunchPad reste grand ouvert et stable
@@ -716,13 +721,13 @@ private struct AnimStep0OpenClose: View {
         withAnimation(.easeOut(duration: 0.3)) {
             pinchProgress = 0.0
             isKeyPressed = false
-            statusMessage = "✦ LaunchPad est ouvert et prêt"
+            statusKey = "tuto.open.status3"
         }
 
         // 3. ANNONCE DE LA FERMETURE (l'utilisateur lit ce qui va se passer)
         try? await Task.sleep(for: .seconds(1.7))
         guard !Task.isCancelled else { return }
-        statusMessage = "2. Pincez à nouveau pour fermer..."
+        statusKey = "tuto.open.status4"
 
         // 4. GESTE DE FERMETURE EN DIRECT : Doigts pincent + touches s'enfoncent -> LaunchPad se referme SIMULTANÉMENT !
         try? await Task.sleep(for: .seconds(0.7))
@@ -732,7 +737,7 @@ private struct AnimStep0OpenClose: View {
             isKeyPressed = true
             launchpadOpacity = 0.0
             launchpadScale = 0.85
-            statusMessage = "✦ Le geste referme LaunchPad !"
+            statusKey = "tuto.open.status5"
         }
 
         // 5. Relâchement des doigts sur le bureau : état final au repos
@@ -741,7 +746,7 @@ private struct AnimStep0OpenClose: View {
         withAnimation(.easeOut(duration: 0.3)) {
             pinchProgress = 0.0
             isKeyPressed = false
-            statusMessage = "✦ Retour au bureau macOS"
+            statusKey = "tuto.open.status6"
         }
     }
 }
@@ -750,6 +755,7 @@ private struct AnimStep0OpenClose: View {
 
 private struct AnimStep1SearchLaunch: View {
     let accentColor: Color
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     @State private var typed = ""
     @State private var isLaunched = false
@@ -763,7 +769,7 @@ private struct AnimStep1SearchLaunch: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(accentColor)
 
-                Text(typed.isEmpty ? "Recherche au clavier..." : typed)
+                Text(typed.isEmpty ? loc("tuto.search.placeholder") : typed)
                     .font(.system(size: 13, weight: typed.isEmpty ? .regular : .bold))
                     .foregroundStyle(typed.isEmpty ? .white.opacity(0.35) : .white)
 
@@ -787,9 +793,9 @@ private struct AnimStep1SearchLaunch: View {
 
             // 4 Applications : les non-correspondantes se floutent, Safari s'ouvre
             HStack(spacing: 24) {
-                appTile(name: "Notes", icon: "note.text", color: .yellow, isMatch: typed.isEmpty)
+                appTile(name: loc("app_sample.notes"), icon: "note.text", color: .yellow, isMatch: typed.isEmpty)
                 appTile(name: "Safari", icon: "safari.fill", color: .blue, isMatch: true, isTarget: typed == "Safari")
-                appTile(name: "Musique", icon: "music.note", color: .pink, isMatch: typed.isEmpty)
+                appTile(name: loc("app_sample.music"), icon: "music.note", color: .pink, isMatch: typed.isEmpty)
                 appTile(name: "Terminal", icon: "terminal.fill", color: .gray, isMatch: typed.isEmpty)
             }
 
@@ -797,7 +803,7 @@ private struct AnimStep1SearchLaunch: View {
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
                     Text("↵").font(.system(size: 13, weight: .bold))
-                    Text("Entrée").font(.system(size: 11, weight: .bold))
+                    Text(loc("tuto.search.key_return")).font(.system(size: 11, weight: .bold))
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
@@ -806,7 +812,7 @@ private struct AnimStep1SearchLaunch: View {
                 .foregroundStyle(.white)
                 .scaleEffect(isLaunched ? 1.08 : 1.0)
 
-                Text(isLaunched ? "Application lancée instantanément !" : "Appuyez sur Entrée pour exécuter")
+                Text(isLaunched ? loc("tuto.search.launched") : loc("tuto.search.press_enter"))
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(isLaunched ? Color.green : .white.opacity(0.85))
             }
@@ -879,6 +885,7 @@ private struct AnimStep1SearchLaunch: View {
 
 private struct AnimStep2DragAndPage: View {
     let accentColor: Color
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     @State private var phase: Int = 0 // 0: repos, 1: levé, 2: bord droit, 3: flip page, 4: dépose, 5: succès
     @State private var activePage: Int = 0
@@ -943,15 +950,15 @@ private struct AnimStep2DragAndPage: View {
     private var statusText: String {
         switch phase {
         case 0:
-            return "Cliquez et maintenez une application..."
+            return loc("tuto.move.status1")
         case 1:
-            return "L'icône se soulève..."
+            return loc("tuto.move.status2")
         case 2:
-            return "Glissez vers le bord droit de l'écran..."
+            return loc("tuto.move.status3")
         case 3:
-            return "La Page 2 s'affiche automatiquement !"
+            return loc("tuto.move.status4")
         case 4, 5:
-            return "Déposez l'application dans son nouvel emplacement !"
+            return loc("tuto.move.status5")
         default:
             return ""
         }
@@ -1000,7 +1007,7 @@ private struct AnimStep2DragAndPage: View {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .strokeBorder(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
                                     .frame(width: 48, height: 48)
-                                Text("Page 1")
+                                Text(loc("tuto.move.page_n", 1))
                                     .font(.system(size: 10))
                                     .foregroundStyle(.white.opacity(0.25))
                             }
@@ -1033,7 +1040,7 @@ private struct AnimStep2DragAndPage: View {
                                             .font(.system(size: 14, weight: .bold))
                                             .foregroundStyle(accentColor.opacity(0.7))
                                     )
-                                Text("Déposer")
+                                Text(loc("tuto.move.drop"))
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(accentColor)
                             }
@@ -1169,6 +1176,7 @@ private struct AnimStep2DragAndPage: View {
 
 private struct AnimStep3CreateFolder: View {
     let accentColor: Color
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     @State private var dragX: CGFloat = 55.0
     @State private var musicX: CGFloat = -55.0
@@ -1206,7 +1214,7 @@ private struct AnimStep3CreateFolder: View {
                             }
                         }
 
-                        Text("Médias")
+                        Text(loc("tuto.folder.sample_name"))
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(accentColor)
                     }
@@ -1221,7 +1229,7 @@ private struct AnimStep3CreateFolder: View {
                             .frame(width: 48, height: 48)
                             .overlay(Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white))
 
-                        Text("Musique")
+                        Text(loc("app_sample.music"))
                             .font(.system(size: 10.5, weight: .medium))
                             .foregroundStyle(.white.opacity(0.75))
                     }
@@ -1274,7 +1282,7 @@ private struct AnimStep3CreateFolder: View {
                 Image(systemName: isFolderOpen ? "folder.badge.plus" : "square.stack.3d.down.right.fill")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(accentColor)
-                Text(isFolderOpen ? "Dossier 'Médias' créé instantanément au centre !" : "Glissez une application directement sur une autre")
+                Text(isFolderOpen ? loc("tuto.folder.created") : loc("tuto.folder.drag_hint"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isFolderOpen ? accentColor : .white.opacity(0.85))
             }
@@ -1334,6 +1342,7 @@ private struct AnimStep3CreateFolder: View {
 
 private struct AnimStep4WidgetsVinyl: View {
     let accentColor: Color
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     @State private var rotation: Double = 0
     @State private var noteOffset: CGFloat = 0
@@ -1383,10 +1392,10 @@ private struct AnimStep4WidgetsVinyl: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Platine Vinyle")
+                    Text(loc("tuto.widgets.vinyl_title"))
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("Rotation en direct Apple Music & Spotify")
+                    Text(loc("tuto.widgets.vinyl_sub"))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.white.opacity(0.7))
                         .frame(maxWidth: 130)
@@ -1436,10 +1445,10 @@ private struct AnimStep4WidgetsVinyl: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 18))
                         .foregroundStyle(accentColor)
-                    Text("Liquid Glass")
+                    Text(loc("tuto.widgets.glass_title"))
                         .font(.system(size: 12.5, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("Reflets & verre dépoli")
+                    Text(loc("tuto.widgets.glass_sub"))
                         .font(.system(size: 10))
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -1465,6 +1474,7 @@ private struct AnimStep5ProTrial: View {
     let accentColor: Color
 
     @ObservedObject private var licenseManager = LicenseManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var showingKeyInput = false
     @State private var enteredKey = ""
     @State private var feedbackText: String? = nil
@@ -1479,7 +1489,7 @@ private struct AnimStep5ProTrial: View {
                         HStack(spacing: 4) {
                             Image(systemName: licenseManager.isTrialActive ? "hourglass" : "gift.fill")
                                 .font(.system(size: 10.5, weight: .bold))
-                            Text(licenseManager.isTrialActive ? "ESSAI EN COURS" : "OFFRE 7 JOURS")
+                            Text(licenseManager.isTrialActive ? loc("tuto.pro.trial_in_progress") : loc("tuto.pro.trial_offer"))
                                 .font(.system(size: 9.5, weight: .bold))
                                 .tracking(0.5)
                         }
@@ -1494,7 +1504,7 @@ private struct AnimStep5ProTrial: View {
                         if licenseManager.isTrialActive {
                             HStack(spacing: 4) {
                                 AnimatedVerifiedSealBadge(isTrial: true, size: 14)
-                                Text("Actif")
+                                Text(loc("tuto.pro.active"))
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(Color(red: 1.00, green: 0.80, blue: 0.12))
                             }
@@ -1504,14 +1514,14 @@ private struct AnimStep5ProTrial: View {
                     if licenseManager.isTrialActive {
                         // Compte à rebours dynamique en grand (isolé sur countdown)
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Décompte en temps réel :")
+                            Text(loc("tuto.pro.live_countdown"))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.75))
 
                             TrialCountdownBoxesView(countdown: licenseManager.countdown)
 
                             HStack {
-                                Text("Retour automatique en gratuit.")
+                                Text(loc("tuto.pro.auto_revert"))
                                     .font(.system(size: 9.5))
                                     .foregroundStyle(.white.opacity(0.65))
 
@@ -1522,7 +1532,7 @@ private struct AnimStep5ProTrial: View {
                                         licenseManager.cancelTrial()
                                     }
                                 } label: {
-                                    Text("Annuler l'essai")
+                                    Text(loc("tuto.pro.cancel_trial"))
                                         .font(.system(size: 9.5, weight: .semibold))
                                         .foregroundStyle(Color.red.opacity(0.85))
                                         .underline()
@@ -1532,11 +1542,11 @@ private struct AnimStep5ProTrial: View {
                         }
                     } else if licenseManager.isProLifetime {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("LaunchPad Pro Débloqué")
+                            Text(loc("tuto.pro.unlocked_title"))
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
 
-                            Text("Vous possédez la licence permanente complète. Profitez de toutes les fonctionnalités illimitées !")
+                            Text(loc("tuto.pro.unlocked_desc"))
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(.white.opacity(0.75))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1545,11 +1555,11 @@ private struct AnimStep5ProTrial: View {
                     } else {
                         // Présentation de l'essai 7 jours
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Essai Gratuit 7 Jours")
+                            Text(loc("tuto.pro.trial_card_title"))
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
 
-                            Text("Activez toutes les fonctions Pro (Liquid Glass, Vinyle, Touch ID, Sauvegarde). Sans carte bancaire.")
+                            Text(loc("tuto.pro.trial_card_desc"))
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(.white.opacity(0.75))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1566,7 +1576,7 @@ private struct AnimStep5ProTrial: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "bolt.fill")
                                     .font(.system(size: 11, weight: .bold))
-                                Text("Activer l'Essai 7 Jours")
+                                Text(loc("tuto.pro.activate_trial"))
                                     .font(.system(size: 11.5, weight: .bold))
                             }
                             .foregroundStyle(.black)
@@ -1600,7 +1610,7 @@ private struct AnimStep5ProTrial: View {
                         HStack(spacing: 4) {
                             Image(systemName: "crown.fill")
                                 .font(.system(size: 10.5, weight: .bold))
-                            Text(licenseManager.isProLifetime ? "DÉBLOQUÉ À VIE" : "ACCÈS ILLIMITÉ")
+                            Text(licenseManager.isProLifetime ? loc("tuto.pro.lifetime_badge") : loc("tuto.pro.unlimited_badge"))
                                 .font(.system(size: 9.5, weight: .bold))
                                 .tracking(0.5)
                         }
@@ -1619,28 +1629,28 @@ private struct AnimStep5ProTrial: View {
 
                     if licenseManager.isProLifetime {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Licence Permanente Active")
+                            Text(loc("tuto.pro.perm_active_title"))
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
 
                             if !licenseManager.licenseKey.isEmpty {
-                                Text("Clé : \(licenseManager.licenseKey)")
+                                Text(loc("tuto.pro.key_fmt", licenseManager.licenseKey))
                                     .font(.system(size: 10.5, design: .monospaced))
                                     .foregroundStyle(.white.opacity(0.7))
                             }
 
-                            Text("Accès complet et illimité sans aucune restriction de durée.")
+                            Text(loc("tuto.pro.perm_active_desc"))
                                 .font(.system(size: 10))
                                 .foregroundStyle(.white.opacity(0.65))
                         }
                         .padding(.vertical, 6)
                     } else {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Payer la Version Pro")
+                            Text(loc("tuto.pro.pay_title"))
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
 
-                            Text("Débloquez LaunchPad Pro pour toujours sur votre Mac. Mises à jour gratuites incluses.")
+                            Text(loc("tuto.pro.pay_desc"))
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(.white.opacity(0.75))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1648,7 +1658,7 @@ private struct AnimStep5ProTrial: View {
 
                         if showingKeyInput {
                             HStack(spacing: 5) {
-                                TextField("Clé (ex: 1234)", text: $enteredKey)
+                                TextField(loc("tuto.pro.key_placeholder"), text: $enteredKey)
                                     .textFieldStyle(.plain)
                                     .font(.system(size: 11, design: .monospaced))
                                     .padding(.horizontal, 7)
@@ -1657,7 +1667,7 @@ private struct AnimStep5ProTrial: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 6))
                                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2)))
 
-                                Button("OK") {
+                                Button(loc("dialog.ok")) {
                                     validateKey()
                                 }
                                 .font(.system(size: 11, weight: .bold))
@@ -1683,7 +1693,7 @@ private struct AnimStep5ProTrial: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "cart.fill")
                                         .font(.system(size: 10))
-                                    Text("Acheter Pro")
+                                    Text(loc("tuto.pro.buy_btn"))
                                         .font(.system(size: 11, weight: .bold))
                                 }
                                 .foregroundStyle(.white)
@@ -1713,7 +1723,7 @@ private struct AnimStep5ProTrial: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .help("Saisir une clé de licence ou le code démo 1234")
+                            .help(loc("tuto.pro.key_help"))
                         }
                     }
                 }
@@ -1732,7 +1742,7 @@ private struct AnimStep5ProTrial: View {
     private func validateKey() {
         let res = licenseManager.validate(code: enteredKey)
         if res.success {
-            feedbackText = "Licence activée !"
+            feedbackText = loc("tuto.pro.activated_feedback")
             feedbackIsError = false
             showingKeyInput = false
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
@@ -1745,17 +1755,18 @@ private struct AnimStep5ProTrial: View {
 
 private struct TrialCountdownBoxesView: View {
     @ObservedObject var countdown: TrialCountdownState
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                countdownBox(val: String(format: "%02d", countdown.trialDaysRemaining), unit: "Jours")
+                countdownBox(val: String(format: "%02d", countdown.trialDaysRemaining), unit: loc("tuto.unit.days"))
                 Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                countdownBox(val: String(format: "%02d", countdown.trialHoursRemaining), unit: "Heures")
+                countdownBox(val: String(format: "%02d", countdown.trialHoursRemaining), unit: loc("tuto.unit.hours"))
                 Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                countdownBox(val: String(format: "%02d", countdown.trialMinutesRemaining), unit: "Min")
+                countdownBox(val: String(format: "%02d", countdown.trialMinutesRemaining), unit: loc("tuto.unit.min"))
                 Text(":").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.5))
-                countdownBox(val: String(format: "%02d", countdown.trialSecondsRemaining), unit: "Sec")
+                countdownBox(val: String(format: "%02d", countdown.trialSecondsRemaining), unit: loc("tuto.unit.sec"))
             }
 
             // Jauge de progression

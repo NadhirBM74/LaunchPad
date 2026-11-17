@@ -551,6 +551,7 @@ struct VinylPlayerWidgetView: View {
     var isPreview: Bool = false
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var musicManager = MusicServiceManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle = AppTheme.liquidGlass
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
@@ -833,7 +834,7 @@ struct VinylPlayerWidgetView: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .help(musicManager.isMuted ? "Réactiver le son" : "Couper le son")
+            .help(musicManager.isMuted ? loc("music.unmute") : loc("music.mute"))
             .position(
                 x: (availW + cardWidth) / 2 - (isUltraCompact ? 11 : 14),
                 y: cardTopY + (isUltraCompact ? 11 : 14)
@@ -1028,7 +1029,7 @@ struct VinylPlayerWidgetView: View {
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help(musicManager.isMuted ? "Réactiver le son" : "Couper le son")
+                    .help(musicManager.isMuted ? loc("music.unmute") : loc("music.mute"))
                 }
 
                 Spacer(minLength: 2)
@@ -1201,7 +1202,7 @@ struct VinylPlayerWidgetView: View {
                                 .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
-                        .help(musicManager.isMuted ? "Réactiver le son" : "Couper le son")
+                        .help(musicManager.isMuted ? loc("music.unmute") : loc("music.mute"))
                     }
 
                     // Barre de progression minimaliste assortie à la couleur du morceau
@@ -2007,6 +2008,7 @@ private struct VinylSeekBarView: View {
 struct WeatherWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     var body: some View {
         WidgetContainerView(size: config.size, targetSize: targetSize) {
@@ -2108,7 +2110,7 @@ struct WeatherWidgetView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(.white.opacity(0.40))
 
-                        Text("H:\(config.weatherTemp + 3)° B:\(max(0, config.weatherTemp - 4))°")
+                        Text(loc("weather.hi_lo", config.weatherTemp + 3, max(0, config.weatherTemp - 4)))
                             .font(.system(size: detailFont, weight: .medium))
                             .foregroundStyle(.white.opacity(0.60))
                     }
@@ -2162,7 +2164,7 @@ struct WeatherWidgetView: View {
                         .textCase(.uppercase)
 
                     HStack(spacing: isCompact ? 4 : 6) {
-                        hourlySlot(time: "Maintenant", icon: conditionIcon(config.weatherCondition), temp: config.weatherTemp, isCompact: isCompact)
+                        hourlySlot(time: loc("weather.now_short"), icon: conditionIcon(config.weatherCondition), temp: config.weatherTemp, isCompact: isCompact)
                         hourlySlot(time: "+2h", icon: "sun.max.fill", temp: config.weatherTemp + 1, isCompact: isCompact)
                         if !isCompact {
                             hourlySlot(time: "+4h", icon: "cloud.sun.fill", temp: config.weatherTemp, isCompact: isCompact)
@@ -2212,7 +2214,7 @@ struct WeatherWidgetView: View {
                     weatherStatTile(icon: "wind", title: loc("widget.weather.wind"), value: "14 km/h", color: .teal)
                 }
                 HStack(spacing: 8) {
-                    weatherStatTile(icon: "sun.max.trianglebadge.exclamationmark", title: loc("widget.weather.uv"), value: "3 Modéré", color: .orange)
+                    weatherStatTile(icon: "sun.max.trianglebadge.exclamationmark", title: loc("widget.weather.uv"), value: "3 \(loc("weather.uv_moderate"))", color: .orange)
                     weatherStatTile(icon: "eye.fill", title: loc("widget.weather.visibility"), value: "10 km", color: .blue)
                 }
             }
@@ -2322,6 +2324,7 @@ struct MediaWideWidgetView: View {
     var targetSize: CGSize? = nil
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var musicManager = MusicServiceManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     private var track: NowPlayingTrack {
         musicManager.currentTrack
@@ -2414,7 +2417,7 @@ struct MediaWideWidgetView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 0.5) {
-                                Text(track.title.isEmpty ? "Morceau" : track.title)
+                                Text(track.title.isEmpty ? loc("widget.music.track") : track.title)
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
@@ -2572,11 +2575,11 @@ struct MediaWideWidgetView: View {
                 return .browser(name: track.sourceAppName.isEmpty ? "Safari" : track.sourceAppName, isSafari: true)
             }
             if bundle.contains("chrome") || bundle.contains("brave") || bundle.contains("arc") || bundle.contains("firefox") || bundle.contains("edgemac") || bundle.contains("opera") || bundle.contains("vivaldi") || bundle.contains("zen") {
-                let name = track.sourceAppName.isEmpty ? "Web" : track.sourceAppName
+                let name = track.sourceAppName.isEmpty ? loc("music.source.web") : track.sourceAppName
                 return .browser(name: name, isSafari: false)
             }
             if bundle.contains("vlc") || bundle.contains("iina") || bundle.contains("quicktime") || bundle == "com.apple.tv" {
-                let name = track.sourceAppName.isEmpty ? "Vidéo" : track.sourceAppName
+                let name = track.sourceAppName.isEmpty ? loc("music.source.video") : track.sourceAppName
                 return .videoPlayer(name: name)
             }
             if !track.sourceBundleID.isEmpty || !track.sourceAppName.isEmpty {
@@ -3024,6 +3027,7 @@ struct MediaWideWidgetView: View {
 struct ClockWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var currentDate = Date()
     @State private var timer: AnyCancellable?
 
@@ -3310,6 +3314,7 @@ struct SystemWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
     @ObservedObject private var stats = SystemStatsMonitor.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
 
     var body: some View {
         WidgetContainerView(size: config.size, targetSize: targetSize) {
@@ -3349,7 +3354,7 @@ struct SystemWidgetView: View {
                         gradient: LinearGradient(colors: [Color(red: 0.75, green: 0.45, blue: 1.0), Color.purple], startPoint: .topLeading, endPoint: .bottomTrailing),
                         icon: "memorychip",
                         value: String(format: "%.1f", stats.ramUsedGB),
-                        label: "RAM Go",
+                        label: loc("units.ram_gb_label"),
                         size: ringSize
                     )
                 }
@@ -3403,7 +3408,7 @@ struct SystemWidgetView: View {
                         label: loc("widget.system.processor"),
                         size: ringSize
                     ),
-                    subtitle: "\(stats.cpuPercent < 40 ? "Charge normale" : "Activité élevée")",
+                    subtitle: "\(stats.cpuPercent < 40 ? loc("widget.system.normal_load") : loc("widget.system.high_activity"))",
                     isCompact: isCompact
                 )
 
@@ -3417,7 +3422,7 @@ struct SystemWidgetView: View {
                         label: loc("widget.system.memory"),
                         size: ringSize
                     ),
-                    subtitle: String(format: "%.1f / %.0f Go", stats.ramUsedGB, stats.ramTotalGB > 0 ? stats.ramTotalGB : 16),
+                    subtitle: loc("units.ram_used_total", stats.ramUsedGB, stats.ramTotalGB > 0 ? stats.ramTotalGB : 16),
                     isCompact: isCompact
                 )
 
@@ -3470,6 +3475,7 @@ struct QuickNoteWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
     @AppStorage(PrefKey.widgetQuickNoteText) private var noteText = ""
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var draftText = ""
     @State private var saveDebounceTask: Task<Void, Never>?
     @State private var copiedResetTask: Task<Void, Never>?
@@ -3576,7 +3582,7 @@ struct QuickNoteWidgetView: View {
                     if !draftText.isEmpty {
                         HStack {
                             Spacer()
-                            Text("\(draftText.count) car.")
+                            Text(loc("widget.quickNote.chars_count", draftText.count))
                                 .font(.system(size: isCompact ? 8.5 : 9.5, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.65))
                         }
@@ -3606,9 +3612,13 @@ struct WidgetHostView: View, Equatable {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
     var isPreview: Bool = false
+    let languageCode: String = LocalizationManager.activeLanguageCode
 
     static func == (lhs: WidgetHostView, rhs: WidgetHostView) -> Bool {
-        lhs.config == rhs.config && lhs.targetSize == rhs.targetSize && lhs.isPreview == rhs.isPreview
+        lhs.config == rhs.config &&
+        lhs.targetSize == rhs.targetSize &&
+        lhs.isPreview == rhs.isPreview &&
+        lhs.languageCode == rhs.languageCode
     }
 
     var body: some View {

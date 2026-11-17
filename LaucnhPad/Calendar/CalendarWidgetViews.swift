@@ -16,14 +16,7 @@ public enum CalendarWidgetStyle: String, Codable, CaseIterable, Identifiable, Se
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .compactDate: return "1. Date Compacte (Photo Réf. 6)"
-        case .dotMatrix: return "2. Matrice de Points (Photo Réf. 2)"
-        case .monthlyGrid: return "3. Calendrier Mensuel Interactif"
-        case .upcomingEvents: return "4. Prochains Événements"
-        case .weeklyView: return "5. Vue Hebdomadaire"
-        case .agenda: return "6. Présentation Agenda"
-        }
+        loc("calendar.style.\(rawValue).title")
     }
 }
 
@@ -80,6 +73,16 @@ public final class CalendarEventService: ObservableObject {
 
     private init() {
         loadFallbackSchedule()
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("LaunchpadLanguageDidChange"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, !self.isAuthorized else { return }
+                self.loadFallbackSchedule()
+            }
+        }
         Task { @MainActor [weak self] in
             self?.refreshEvents(force: true)
         }
@@ -142,7 +145,7 @@ public final class CalendarEventService: ObservableObject {
                     let uniqueID = "\(baseID)_\(Int(ev.startDate.timeIntervalSince1970))"
                     return LaunchpadCalendarEvent(
                         id: uniqueID,
-                        title: ev.title ?? "Événement",
+                        title: ev.title ?? loc("calendar.event_default"),
                         startDate: ev.startDate,
                         endDate: ev.endDate,
                         colorHex: hex,
@@ -179,25 +182,25 @@ public final class CalendarEventService: ObservableObject {
         self.events = [
             LaunchpadCalendarEvent(
                 id: "ev-1",
-                title: "Design Review & UI",
+                title: loc("calendar.demo.design_review"),
                 startDate: e1Start,
                 endDate: e1End,
                 colorHex: "#FF2D55",
-                location: "Studio Apple",
+                location: loc("calendar.demo.studio"),
                 isAllDay: false
             ),
             LaunchpadCalendarEvent(
                 id: "ev-2",
-                title: "Point Produit LaunchPad",
+                title: loc("calendar.demo.product_sync"),
                 startDate: e2Start,
                 endDate: e2End,
                 colorHex: "#0A84FF",
-                location: "Visio",
+                location: loc("calendar.demo.video_call"),
                 isAllDay: false
             ),
             LaunchpadCalendarEvent(
                 id: "ev-3",
-                title: "Session Code SwiftUI",
+                title: loc("calendar.demo.swiftui_session"),
                 startDate: e3Start,
                 endDate: e3End,
                 colorHex: "#30D158",
@@ -217,6 +220,7 @@ struct PremiumCalendarWidgetView: View {
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var calendarService = CalendarEventService.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @State private var currentDate = Date()
     @State private var displayedMonthOffset: Int = 0
     @State private var selectedDayOffset: Int = 0
@@ -564,7 +568,7 @@ struct PremiumCalendarWidgetView: View {
                     }
                 }
 
-                let symbols = ["L", "M", "M", "J", "V", "S", "D"]
+                let symbols = weekdaySymbolsMonFirst
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { idx in
                         Text(symbols[idx])
@@ -647,7 +651,7 @@ struct PremiumCalendarWidgetView: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     if !isNarrow {
-                        Text("\(calendarService.events.count) évén.")
+                        Text(loc("calendar.events_count", calendarService.events.count))
                             .font(.system(size: 8.5, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.55))
                             .padding(.horizontal, 6)
@@ -761,7 +765,7 @@ struct PremiumCalendarWidgetView: View {
                         Circle()
                             .fill(Color(red: 1.0, green: 0.18, blue: 0.16))
                             .frame(width: 6, height: 6)
-                        Text(isNarrow ? "AGENDA" : "AGENDA DU JOUR")
+                        Text(isNarrow ? loc("calendar.agenda_short") : loc("calendar.agenda_full"))
                             .font(.system(size: isNarrow ? 8.5 : (isCompact ? 9 : 10), weight: .heavy))
                             .tracking(0.6)
                             .foregroundStyle(.white.opacity(0.85))
@@ -809,7 +813,7 @@ struct PremiumCalendarWidgetView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     if ev.isOngoing(at: currentDate) {
-                        Text("EN COURS")
+                        Text(loc("calendar.in_progress"))
                             .font(.system(size: 6.5, weight: .black))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 4)
@@ -859,7 +863,15 @@ struct PremiumCalendarWidgetView: View {
     private static let enLocale = Locale(identifier: "en_US")
 
     private var activeAppLocale: Locale {
-        LocalizationManager.activeLanguageCode == "fr" ? Self.frLocale : Self.enLocale
+        Locale(identifier: LocalizationManager.activeLanguageCode)
+    }
+
+    private var weekdaySymbolsMonFirst: [String] {
+        var cal = Calendar.current
+        cal.locale = activeAppLocale
+        let syms = cal.veryShortStandaloneWeekdaySymbols
+        guard syms.count == 7 else { return ["M", "T", "W", "T", "F", "S", "S"] }
+        return (Array(syms[1...6]) + [syms[0]]).map { $0.uppercased() }
     }
 
     private func shortWeekdayString(for date: Date) -> String {

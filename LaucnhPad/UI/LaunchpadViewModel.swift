@@ -331,7 +331,7 @@ final class LaunchpadViewModel: ObservableObject {
         NotificationCenter.default.publisher(for: .accessibilityPermissionDidChange)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.showToast("✅ Autorisation d'accessibilité accordée !")
+                self?.showToast(loc("permission.granted_toast"))
             }
             .store(in: &cancellables)
     }
@@ -811,12 +811,12 @@ final class LaunchpadViewModel: ObservableObject {
     func openFolder(_ id: String) {
         guard let folder = store.visibleFolder(id) else { return }
         if folder.isLocked {
-            authenticateWithTouchID(reason: "Déverrouiller le dossier « \(folder.name) »") { [weak self] success in
+            authenticateWithTouchID(reason: loc("touchid.unlock_reason", folder.name)) { [weak self] success in
                 guard let self else { return }
                 if success {
                     self.performOpenFolder(id)
                 } else {
-                    self.showToast("Authentification requise pour ouvrir ce dossier")
+                    self.showToast(loc("toast.auth_required_folder"))
                 }
             }
         } else {
@@ -835,7 +835,7 @@ final class LaunchpadViewModel: ObservableObject {
 
     func authenticateWithTouchID(reason: String, completion: @escaping @MainActor @Sendable (Bool) -> Void) {
         let context = LAContext()
-        context.localizedCancelTitle = "Annuler"
+        context.localizedCancelTitle = loc("dialog.cancel")
         var error: NSError?
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
             isAuthenticatingBiometrics = true
@@ -1235,8 +1235,8 @@ final class LaunchpadViewModel: ObservableObject {
         guard app.isRemovable else { return }
         if !LicenseManager.shared.isPro {
             showProUpgradeAlert(
-                feature: "Désinstallation complète",
-                description: "La désinstallation complète (suppression de l'application et de tous ses fichiers résiduels : caches, préférences, conteneurs) est réservée à la version Pro.\n\nActivez votre licence avec le code 1234 dans les Réglages pour débloquer cette fonctionnalité."
+                feature: loc("pro_alert.uninstall_title"),
+                description: loc("pro_alert.uninstall_msg")
             )
             return
         }
@@ -1303,7 +1303,7 @@ final class LaunchpadViewModel: ObservableObject {
                 showToast(loc("toast.touchid_locked", folder.name))
             }
         } else {
-            authenticateWithTouchID(reason: "Touch ID : \(folder.name)") { [weak self] success in
+            authenticateWithTouchID(reason: loc("touchid.protect_reason", folder.name)) { [weak self] success in
                 guard let self else { return }
                 if success {
                     _ = self.store.toggleFolderLock(folder.id)
@@ -1407,9 +1407,9 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     func requestForceQuit(_ app: AppInfo) {
-        dialog = DialogModel(title: "Forcer « \(app.name) » à quitter ?",
-                             message: "Les modifications non enregistrées seront perdues.",
-                             confirmTitle: "Forcer à quitter", destructive: true) { AppActions.forceQuit(app) }
+        dialog = DialogModel(title: loc("dialog.force_quit_title", app.name),
+                             message: loc("dialog.force_quit_msg"),
+                             confirmTitle: loc("dialog.force_quit_btn"), destructive: true) { AppActions.forceQuit(app) }
     }
 
     func requestRename(id: String, isFolder: Bool) {
@@ -1428,7 +1428,7 @@ final class LaunchpadViewModel: ObservableObject {
     func hide(_ ids: [String]) {
         withAnimation(motion(.spring(response: 0.3, dampingFraction: 0.85))) { store.hide(ids) }
         selection.removeAll()
-        showToast(ids.count > 1 ? "Éléments masqués — réaffichez-les depuis Réglages › Apps" : "Masqué — réaffichez-le depuis Réglages › Apps")
+        showToast(ids.count > 1 ? loc("toast.hidden_plural") : loc("toast.hidden_single"))
     }
 
     func makeFolderFromSelection() {
@@ -1448,7 +1448,7 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     func addToDock(_ app: AppInfo) {
-        showToast(AppActions.addToDock(app) ? "« \(app.name) » ajoutée au Dock" : "« \(app.name) » est déjà dans le Dock")
+        showToast(AppActions.addToDock(app) ? loc("toast.added_to_dock", app.name) : loc("toast.already_in_dock", app.name))
     }
 
     func showInfo(_ app: AppInfo) {
@@ -1465,9 +1465,9 @@ final class LaunchpadViewModel: ObservableObject {
         let rule = SortRule(rawValue: Prefs.defaults.string(forKey: PrefKey.reorganizeRule) ?? "") ?? .nameAscending
         let placement = FolderPlacement(rawValue: Prefs.defaults.string(forKey: PrefKey.folderPlacement) ?? "") ?? .before
         let sortFolders = Prefs.defaults.bool(forKey: PrefKey.sortFolderContents)
-        dialog = DialogModel(title: "Réorganiser la disposition ?",
-                             message: "Règle : \(rule.title).\nLa disposition actuelle sera remplacée. Pensez à exporter une sauvegarde depuis les réglages.",
-                             confirmTitle: "Réorganiser", destructive: false) { [weak self] in
+        dialog = DialogModel(title: loc("advanced.reorganize_confirm_title"),
+                             message: loc("dialog.reorganize_rule_msg", rule.title),
+                             confirmTitle: loc("advanced.reorganize_button"), destructive: false) { [weak self] in
             guard let self else { return }
             withAnimation(self.motion(.spring(response: 0.4, dampingFraction: 0.86))) {
                 self.store.reorganize(rule: rule, placement: placement, sortFolderContents: sortFolders)

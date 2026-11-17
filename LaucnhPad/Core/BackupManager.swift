@@ -44,12 +44,12 @@ nonisolated enum BackupError: LocalizedError {
     case unreadable, unsupported, databaseNotFound, databaseUnreadable(String), launchOSNotFound, launchOSEmpty
     var errorDescription: String? {
         switch self {
-        case .unreadable: "Impossible de lire le fichier de sauvegarde."
-        case .unsupported: "Cette version de sauvegarde n’est pas prise en charge."
-        case .databaseNotFound: "Base de données du Launchpad système introuvable (elle n’existe plus depuis macOS 26)."
-        case .databaseUnreadable(let detail): "Impossible d’ouvrir la base Launchpad : \(detail)"
-        case .launchOSNotFound: "Aucune disposition LaunchOS trouvée sur ce Mac."
-        case .launchOSEmpty: "La disposition LaunchOS ne contient aucune app installée sur ce Mac."
+        case .unreadable: loc("backup.err.unreadable")
+        case .unsupported: loc("backup.err.unsupported")
+        case .databaseNotFound: loc("backup.err.db_not_found")
+        case .databaseUnreadable(let detail): loc("backup.err.db_unreadable", detail)
+        case .launchOSNotFound: loc("backup.err.launchos_not_found")
+        case .launchOSEmpty: loc("backup.err.launchos_empty")
         }
     }
 }
@@ -100,7 +100,7 @@ enum BackupManager {
     }
 
     static var suggestedFileName: String {
-        "LaucnhPad-Sauvegarde-\(fileNameDateFormatter.string(from: Date())).json"
+        "\(loc("backup.filename_prefix"))-\(fileNameDateFormatter.string(from: Date())).json"
     }
 
     /// Importe la disposition du Launchpad système (macOS ≤ 15) en rapprochant les bundle IDs.
@@ -117,7 +117,7 @@ enum BackupManager {
             case .folder(let title, let bundleIDs):
                 let ids = bundleIDs.compactMap { byBundle[$0] }
                 guard !ids.isEmpty else { continue }
-                items.append(.folder(FolderData(id: FolderData.newID(), name: title.isEmpty ? "Sans titre" : title, apps: ids)))
+                items.append(.folder(FolderData(id: FolderData.newID(), name: title.isEmpty ? loc("folder.untitled") : title, apps: ids)))
                 appCount += ids.count
                 folderCount += 1
             }
@@ -146,7 +146,7 @@ nonisolated enum SystemLaunchpadReader {
         var db: OpaquePointer?
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
             if let db { sqlite3_close(db) }
-            throw BackupError.databaseUnreadable("ouverture impossible")
+            throw BackupError.databaseUnreadable(loc("backup.err.open_failed"))
         }
         defer { sqlite3_close(db) }
 
@@ -181,7 +181,7 @@ nonisolated enum SystemLaunchpadReader {
 
         guard let root = rows.first(where: { $0.uuid == "ROOTPAGE" })
                 ?? rows.filter({ $0.type == 1 }).max(by: { (children[$0.id]?.count ?? 0) < (children[$1.id]?.count ?? 0) }) else {
-            throw BackupError.databaseUnreadable("racine introuvable")
+            throw BackupError.databaseUnreadable(loc("backup.err.root_missing"))
         }
 
         func appsUnder(_ id: Int64, depth: Int = 0) -> [String] {
@@ -223,8 +223,8 @@ enum BackupPanels {
 
     static func chooseExportURL() -> URL? {
         let panel = NSSavePanel()
-        panel.title = "Exporter la sauvegarde"
-        panel.message = "Choisissez où enregistrer le fichier de sauvegarde"
+        panel.title = loc("backup.panel.export_title")
+        panel.message = loc("backup.panel.export_msg")
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = BackupManager.suggestedFileName
         raise(panel)
@@ -233,8 +233,8 @@ enum BackupPanels {
 
     static func chooseImportURL() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Importer une sauvegarde"
-        panel.message = "Sélectionnez un fichier de sauvegarde LaucnhPad"
+        panel.title = loc("backup.panel.import_title")
+        panel.message = loc("backup.panel.import_msg")
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         raise(panel)
@@ -243,7 +243,7 @@ enum BackupPanels {
 
     static func chooseFolder() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Ajouter un dossier d’applications"
+        panel.title = loc("backup.panel.add_folder_title")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
@@ -289,7 +289,7 @@ nonisolated enum LaunchOSReader {
         var db: OpaquePointer?
         guard sqlite3_open_v2(copy.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
             if let db { sqlite3_close(db) }
-            throw BackupError.databaseUnreadable("ouverture impossible")
+            throw BackupError.databaseUnreadable(loc("backup.err.open_failed"))
         }
         defer { sqlite3_close(db) }
 
@@ -361,7 +361,7 @@ extension BackupManager {
             case .folder(let name, let apps):
                 let ids = apps.compactMap(resolve)
                 guard !ids.isEmpty else { continue }
-                items.append(.folder(FolderData(id: FolderData.newID(), name: name.isEmpty ? "Sans titre" : name, apps: ids)))
+                items.append(.folder(FolderData(id: FolderData.newID(), name: name.isEmpty ? loc("folder.untitled") : name, apps: ids)))
                 appCount += ids.count
                 folderCount += 1
             }

@@ -1668,32 +1668,18 @@ enum AppleAppLocalizer {
 // MARK: - Noms de catégories
 
 enum CategoryNames {
+    private static let knownKeys: Set<String> = [
+        "business", "developer-tools", "education", "entertainment", "finance",
+        "games", "graphics-design", "healthcare-fitness", "lifestyle", "medical",
+        "music", "news", "photography", "productivity", "reference",
+        "social-networking", "sports", "travel", "utilities", "video",
+        "weather", "books", "kids"
+    ]
+
     static func title(for key: String) -> String {
-        switch key {
-        case "business": "Économie et entreprise"
-        case "developer-tools": "Outils de développement"
-        case "education": "Éducation"
-        case "entertainment": "Divertissement"
-        case "finance": "Finance"
-        case "games": "Jeux"
-        case "graphics-design": "Graphisme et design"
-        case "healthcare-fitness": "Santé et forme"
-        case "lifestyle": "Style de vie"
-        case "medical": "Médecine"
-        case "music": "Musique"
-        case "news": "Actualités"
-        case "photography": "Photographie"
-        case "productivity": "Productivité"
-        case "reference": "Références"
-        case "social-networking": "Réseaux sociaux"
-        case "sports": "Sports"
-        case "travel": "Voyages"
-        case "utilities": "Utilitaires"
-        case "video": "Vidéo"
-        case "weather": "Météo"
-        case "books": "Livres"
-        case "kids": "Enfants"
-        default: key.replacingOccurrences(of: "-", with: " ").capitalized
+        if knownKeys.contains(key) {
+            return loc("app_cat.\(key)")
         }
+        return key.replacingOccurrences(of: "-", with: " ").capitalized
     }
 }

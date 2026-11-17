@@ -691,7 +691,7 @@ public final class MusicServiceManager: ObservableObject {
             spotifyLimitationNotice = nil
             spotifyStatus = .connected(details: "Spotify macOS")
         case OSStatus(errAEEventNotPermitted):
-            spotifyStatus = .restricted(reason: "Autorisation macOS requise")
+            spotifyStatus = .restricted(reason: loc("music.spotify.auth_required"))
         default:
             if UserDefaults.standard.bool(forKey: "SpotifyLocalConnected") {
                 spotifyStatus = .connected(details: "Spotify macOS")
@@ -704,7 +704,7 @@ public final class MusicServiceManager: ObservableObject {
     /// Connecte Spotify nativement sur macOS sans compte développeur ni navigateur OAuth.
     public func connectSpotify() {
         guard let spotifyURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") else {
-            self.spotifyStatus = .error(message: "Spotify n'est pas installé sur ce Mac.")
+            self.spotifyStatus = .error(message: loc("music.spotify.not_installed"))
             return
         }
 
@@ -746,7 +746,7 @@ public final class MusicServiceManager: ObservableObject {
                 self.refreshNowPlaying(force: true)
             case OSStatus(errAEEventNotPermitted):
                 UserDefaults.standard.set(false, forKey: "SpotifyLocalConnected")
-                self.spotifyStatus = .restricted(reason: "Autorisation Automatisation refusée")
+                self.spotifyStatus = .restricted(reason: loc("music.spotify.automation_denied"))
             default:
                 // Dernier essai direct via AppleScript si Spotify démarre encore
                 let res = await Self.runOsascript("tell application \"Spotify\" to get player state")
@@ -756,7 +756,7 @@ public final class MusicServiceManager: ObservableObject {
                     self.refreshNowPlaying(force: true)
                 } else {
                     UserDefaults.standard.set(true, forKey: "SpotifyLocalConnected")
-                    self.spotifyStatus = .connected(details: "Spotify prêt sur ce Mac")
+                    self.spotifyStatus = .connected(details: loc("music.spotify.ready_mac"))
                     self.refreshNowPlaying(force: true)
                 }
             }
@@ -804,8 +804,8 @@ public final class MusicServiceManager: ObservableObject {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                let errString = String(data: data, encoding: .utf8) ?? "Erreur inconnue"
-                self.spotifyStatus = .error(message: "Échange de jeton échoué : \(errString)")
+                let errString = String(data: data, encoding: .utf8) ?? loc("music.err.unknown")
+                self.spotifyStatus = .error(message: loc("music.err.token_exchange", errString))
                 return
             }
 
@@ -932,7 +932,7 @@ public final class MusicServiceManager: ObservableObject {
                 self.spotifyStatus = .connected(details: "\(displayName) • \(loc("music.spotify.free_notice"))")
             }
         } catch {
-            self.spotifyStatus = .connected(details: "Connecté")
+            self.spotifyStatus = .connected(details: loc("music.status.connected"))
         }
     }
 
@@ -1635,7 +1635,7 @@ public final class MusicServiceManager: ObservableObject {
         if preferredService == .appleMusic || appleMusicStatus.isConnected {
             return "Apple Music"
         }
-        return "Musique"
+        return loc("music.apple.default_name")
     }
 
     /// Lance et démarre la lecture sur la plateforme musicale connectée (Spotify ou Apple Music).

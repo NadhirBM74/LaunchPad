@@ -27,49 +27,11 @@ public enum WeatherWidgetTheme: String, Codable, CaseIterable, Identifiable, Sen
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .appleMinimal: return "1. Apple Minimal (Réf.)"
-        case .glassmorphism: return "2. Glassmorphism"
-        case .darkPremium: return "3. Dark Premium (Réf.)"
-        case .lightMinimal: return "4. Light Minimal (Réf.)"
-        case .gradient: return "5. Gradient Pastel (Réf.)"
-        case .weatherIllustrated: return "6. Split Illustrated (Réf.)"
-        case .dynamicSky: return "7. Dynamic Sky (Réf.)"
-        case .editorial: return "8. Editorial Typo (Réf.)"
-        case .neon: return "9. Neon Nocturne"
-        case .liquidGlass: return "10. Liquid Glass"
-        case .dashboard: return "11. Dashboard Pro"
-        case .compact: return "12. Compact Essential"
-        case .analogWeather: return "13. Analog Instrument"
-        case .nature: return "14. Nature Landscape"
-        case .aurora: return "15. Aurora Borealis"
-        case .monochrome: return "16. Monochrome Swiss"
-        case .retro: return "17. Retro Station"
-        case .dynamicIsland: return "18. Dynamic Island"
-        }
+        loc("weather.theme.\(rawValue).title")
     }
 
     public var subtitle: String {
-        switch self {
-        case .appleMinimal: return "Fond sombre cuivré, typographie géante et icône fine"
-        case .glassmorphism: return "Transparences givrées, flou optique et profondeur"
-        case .darkPremium: return "Prévisions 7 jours avec barres thermiques colorées"
-        case .lightMinimal: return "Fond blanc lumineux, dôme minimaliste et soleil"
-        case .gradient: return "Carte pastel rose/bleue, soleil 3D et prévisions horaires"
-        case .weatherIllustrated: return "En-tête jaune solaire et tableau de bord sombre"
-        case .dynamicSky: return "Horizon crépusculaire dynamique selon la météo"
-        case .editorial: return "Composition typographique « 69° now in New York »"
-        case .neon: return "Lueurs électriques cyan/magenta sur fond nocturne"
-        case .liquidGlass: return "Réfraction cristalline et capsules vitrées Apple"
-        case .dashboard: return "Toutes les métriques : UV, vent, humidité, soleil, 7 jours"
-        case .compact: return "L'essentiel météo en un coup d'œil"
-        case .analogWeather: return "Cadrans barométriques et thermomètre à aiguille"
-        case .nature: return "Silhouettes de montagnes et ciel atmosphérique"
-        case .aurora: return "Voiles d'aurores boréales animés"
-        case .monochrome: return "Grille typographique noir et blanc haute précision"
-        case .retro: return "Afficheur LCD ambre inspiré des stations vintage"
-        case .dynamicIsland: return "Capsules noires profondes et indicateurs néon"
-        }
+        loc("weather.theme.\(rawValue).desc")
     }
 }
 
@@ -100,12 +62,12 @@ struct RichWeatherData {
         let cond = config.weatherCondition
         let condDisplay: String = {
             switch cond.lowercased() {
-            case "sunny": return "Sunny"
-            case "clear": return "Clear"
-            case "rainy": return "Drizzle"
-            case "snowy": return "Snow"
-            case "stormy": return "Storm"
-            default: return "Drizzle"
+            case "sunny": return loc("widget.weather.cond.sunny")
+            case "clear": return loc("widget.weather.cond.clear")
+            case "rainy": return loc("widget.weather.cond.drizzle")
+            case "snowy": return loc("widget.weather.cond.snow")
+            case "stormy": return loc("widget.weather.cond.storm")
+            default: return loc("widget.weather.cond.drizzle")
             }
         }()
 
@@ -117,14 +79,24 @@ struct RichWeatherData {
             ("10:00", t + 1, "sun.max")
         ]
 
+        let dayFmt = DateFormatter()
+        dayFmt.locale = Locale(identifier: LocalizationManager.activeLanguageCode)
+        dayFmt.dateFormat = "EEE"
+        let cal = Calendar.current
+        let now = Date()
+        func localizedWeekday(offset: Int) -> String {
+            let d = cal.date(byAdding: .day, value: offset, to: now) ?? now
+            return dayFmt.string(from: d).replacingOccurrences(of: ".", with: "").capitalized
+        }
+
         let daily: [(String, String, Int, Int, CGFloat, CGFloat)] = [
-            ("Thu", "cloud.rain", t, t + 18, 0.15, 0.92),
-            ("Fri", "cloud.rain", t - 1, t + 11, 0.10, 0.68),
-            ("Sat", "sun.max", t - 5, t + 12, 0.05, 0.72),
-            ("Sun", "sun.max", t - 4, t + 12, 0.08, 0.74),
-            ("Mon", "cloud.sun", t - 4, t + 1, 0.10, 0.48),
-            ("Tue", "cloud.sun", t - 5, t + 12, 0.06, 0.72),
-            ("Wed", "sun.max", t, t + 11, 0.14, 0.68)
+            (localizedWeekday(offset: 0), "cloud.rain", t, t + 18, 0.15, 0.92),
+            (localizedWeekday(offset: 1), "cloud.rain", t - 1, t + 11, 0.10, 0.68),
+            (localizedWeekday(offset: 2), "sun.max", t - 5, t + 12, 0.05, 0.72),
+            (localizedWeekday(offset: 3), "sun.max", t - 4, t + 12, 0.08, 0.74),
+            (localizedWeekday(offset: 4), "cloud.sun", t - 4, t + 1, 0.10, 0.48),
+            (localizedWeekday(offset: 5), "cloud.sun", t - 5, t + 12, 0.06, 0.72),
+            (localizedWeekday(offset: 6), "sun.max", t, t + 11, 0.14, 0.68)
         ]
 
         return RichWeatherData(
@@ -176,6 +148,7 @@ struct PremiumWeatherWidgetView: View {
     var isPreview: Bool = false
 
     @ObservedObject private var widgetManager = WidgetManager.shared
+    @ObservedObject private var locManager = LocalizationManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage(PrefKey.reduceMotion) private var userReduceMotion = false
     @State private var animateWeather = false
@@ -527,7 +500,7 @@ struct PremiumWeatherWidgetView: View {
                             .font(.system(size: isCompact ? 9 : 11, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                        Text("H:\(data.high)° L:\(data.low)°")
+                        Text(loc("weather.hi_lo", data.high, data.low))
                             .font(.system(size: isCompact ? 7.5 : 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.58))
                             .lineLimit(1)
@@ -639,7 +612,7 @@ struct PremiumWeatherWidgetView: View {
                         .foregroundStyle(Color(white: 0.12))
                 }
                 if isTall {
-                    Text("↑\(data.high)°  ↓\(data.low)° • Ressenti \(data.feelsLike)°")
+                    Text("↑\(data.high)°  ↓\(data.low)° • \(loc("widget.weather.feels")) \(data.feelsLike)°")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color(white: 0.35))
                         .lineLimit(1)
@@ -709,7 +682,7 @@ struct PremiumWeatherWidgetView: View {
                             .foregroundStyle(fgColor)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
-                        Text("H:\(data.high)° L:\(data.low)°")
+                        Text(loc("weather.hi_lo", data.high, data.low))
                             .font(.system(size: isCompact ? 8.5 : 10.5, weight: .medium))
                             .foregroundStyle(subColor)
                             .lineLimit(1)
@@ -849,14 +822,14 @@ struct PremiumWeatherWidgetView: View {
                     VStack(spacing: 8) {
                         VStack(spacing: 4) {
                             HStack {
-                                Text("Feels")
+                                Text(loc("widget.weather.feels").capitalized)
                                     .foregroundStyle(.white.opacity(0.70))
                                 Spacer()
                                 Text("+\(data.feelsLike)° 🌡")
                                     .foregroundStyle(.white)
                             }
                             HStack {
-                                Text("Humidity")
+                                Text(loc("widget.weather.humidity"))
                                     .foregroundStyle(.white.opacity(0.70))
                                 Spacer()
                                 Text("\(data.humidity)% 💧")
@@ -872,7 +845,7 @@ struct PremiumWeatherWidgetView: View {
                             ForEach(Array(data.daily.prefix(4).enumerated()), id: \.offset) { idx, d in
                                 if idx > 0 { Spacer(minLength: 2) }
                                 VStack(spacing: 5) {
-                                    Text(idx == 0 ? "Today" : d.day)
+                                    Text(idx == 0 ? loc("widget.clock.today") : d.day)
                                         .font(.system(size: 9.5, weight: .medium))
                                         .foregroundStyle(.white.opacity(0.65))
                                     Image(systemName: d.symbol)
@@ -892,7 +865,7 @@ struct PremiumWeatherWidgetView: View {
                     }
                 } else {
                     HStack {
-                        Label("Feels +\(data.feelsLike)°", systemImage: "thermometer.medium")
+                        Label("\(loc("widget.weather.feels").capitalized) +\(data.feelsLike)°", systemImage: "thermometer.medium")
                         Spacer()
                         Label("\(data.humidity)%", systemImage: "drop.fill")
                     }
@@ -971,7 +944,7 @@ struct PremiumWeatherWidgetView: View {
                         .foregroundStyle(.white)
                 }
                 if isTall {
-                    Text("↑\(data.high)°  ↓\(data.low)° • Ressenti \(data.feelsLike)°")
+                    Text("↑\(data.high)°  ↓\(data.low)° • \(loc("widget.weather.feels")) \(data.feelsLike)°")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
@@ -1018,11 +991,11 @@ struct PremiumWeatherWidgetView: View {
                     HStack(spacing: 6) {
                         Text("\(data.temp)°")
                             .foregroundStyle(.white)
-                        Text("now")
+                        Text(loc("widget.weather.now").lowercased())
                             .foregroundStyle(.white.opacity(0.46))
                     }
                     HStack(spacing: 6) {
-                        Text("in")
+                        Text(loc("widget.weather.in"))
                             .foregroundStyle(.white.opacity(0.46))
                         Text(data.city.components(separatedBy: " ").first ?? data.city)
                             .foregroundStyle(.white)
@@ -1031,7 +1004,7 @@ struct PremiumWeatherWidgetView: View {
                         Text(data.city.components(separatedBy: " ").dropFirst().joined(separator: " "))
                             .foregroundStyle(.white)
                     }
-                    Text("feels")
+                    Text(loc("widget.weather.feels"))
                         .foregroundStyle(.white.opacity(0.46))
                     HStack(spacing: 8) {
                         Text("\(data.feelsLike)°")
@@ -1046,7 +1019,7 @@ struct PremiumWeatherWidgetView: View {
                     HStack(spacing: 5) {
                         Text("\(data.temp)°")
                             .foregroundStyle(.white)
-                        Text("now in")
+                        Text(loc("weather.now_in"))
                             .foregroundStyle(.white.opacity(0.46))
                     }
                     HStack(spacing: 5) {
@@ -1054,13 +1027,13 @@ struct PremiumWeatherWidgetView: View {
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         if isWide {
-                            Text("feels")
+                            Text(loc("widget.weather.feels"))
                                 .foregroundStyle(.white.opacity(0.46))
                         }
                     }
                     if !isWide {
                         HStack(spacing: 5) {
-                            Text("feels")
+                            Text(loc("widget.weather.feels"))
                                 .foregroundStyle(.white.opacity(0.46))
                             Text("\(data.feelsLike)°")
                                 .foregroundStyle(.white)
@@ -1147,7 +1120,7 @@ struct PremiumWeatherWidgetView: View {
                         .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.88))
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    Text("H:\(data.high)° L:\(data.low)°")
+                    Text(loc("weather.hi_lo", data.high, data.low))
                         .font(.system(size: isCompact ? 8.5 : 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color.cyan.opacity(0.85))
                         .lineLimit(1)
@@ -1266,12 +1239,12 @@ struct PremiumWeatherWidgetView: View {
                 }
 
                 HStack(spacing: 6) {
-                    miniDashboardCell(icon: "drop.fill", label: "HUMIDITÉ", val: "\(data.humidity)%", color: .cyan, compact: isCompact || w < 190)
-                    miniDashboardCell(icon: "wind", label: "VENT", val: data.windSpeed, color: .mint, compact: isCompact || w < 190)
+                    miniDashboardCell(icon: "drop.fill", label: loc("weather.humidity_upper"), val: "\(data.humidity)%", color: .cyan, compact: isCompact || w < 190)
+                    miniDashboardCell(icon: "wind", label: loc("weather.wind_upper"), val: data.windSpeed, color: .mint, compact: isCompact || w < 190)
                 }
                 HStack(spacing: 6) {
-                    miniDashboardCell(icon: "sun.max.fill", label: "UV", val: "\(data.uvIndex) Mod.", color: .yellow, compact: isCompact || w < 190)
-                    miniDashboardCell(icon: "umbrella.fill", label: "PLUIE", val: "\(data.precipProb)%", color: .blue, compact: isCompact || w < 190)
+                    miniDashboardCell(icon: "sun.max.fill", label: "UV", val: "\(data.uvIndex) \(loc("weather.uv_mod_short"))", color: .yellow, compact: isCompact || w < 190)
+                    miniDashboardCell(icon: "umbrella.fill", label: loc("weather.rain_upper"), val: "\(data.precipProb)%", color: .blue, compact: isCompact || w < 190)
                 }
 
                 if isTall {
@@ -1357,7 +1330,7 @@ struct PremiumWeatherWidgetView: View {
                         .padding(.vertical, 2.5)
                         .background(Color.white, in: Capsule())
                     Spacer(minLength: 2)
-                    Text("H:\(data.high)° L:\(data.low)°")
+                    Text(loc("weather.hi_lo", data.high, data.low))
                         .font(.system(size: isCompact ? 8.5 : 10.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
                         .lineLimit(1)
@@ -1425,9 +1398,9 @@ struct PremiumWeatherWidgetView: View {
                         }
                         .font(.system(size: 10.5, weight: .semibold))
                         HStack {
-                            Text("Vent \(data.windSpeed)")
+                            Text("\(loc("weather.wind_prefix")) \(data.windSpeed)")
                             Spacer()
-                            Text("Pluie \(data.precipProb)%")
+                            Text("\(loc("weather.rain_label")) \(data.precipProb)%")
                         }
                         .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.68))
@@ -1498,7 +1471,7 @@ struct PremiumWeatherWidgetView: View {
                     .padding(8)
                     .background(Color.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-                Text("↑\(data.high)° ↓\(data.low)° • Vent \(data.windSpeed)")
+                Text("↑\(data.high)° ↓\(data.low)° • \(loc("weather.wind_prefix")) \(data.windSpeed)")
                     .font(.system(size: isCompact ? 8.5 : 10.5, weight: .medium))
                     .opacity(0.85)
                     .lineLimit(1)
@@ -1565,7 +1538,7 @@ struct PremiumWeatherWidgetView: View {
                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
-                Text("H:\(data.high)° L:\(data.low)° • \(data.humidity)%")
+                Text("\(loc("weather.hi_lo", data.high, data.low)) • \(data.humidity)%")
                     .font(.system(size: isCompact ? 9 : 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.70))
                     .lineLimit(1)
@@ -1696,7 +1669,7 @@ struct PremiumWeatherWidgetView: View {
                 HStack {
                     Text("RH:\(data.humidity)%")
                     Spacer()
-                    Text("H:\(data.high)° L:\(data.low)°")
+                    Text(loc("weather.hi_lo", data.high, data.low))
                 }
                 .font(.system(size: isCompact ? 8 : 10, weight: .bold, design: .monospaced))
                 .opacity(0.80)
@@ -1740,7 +1713,7 @@ struct PremiumWeatherWidgetView: View {
                             .font(.system(size: isCompact ? 15 : 20, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                        Text("Ressenti \(data.feelsLike)° • Pluie \(data.precipProb)%")
+                        Text("\(loc("widget.weather.feels").capitalized) \(data.feelsLike)° • \(loc("weather.rain_label")) \(data.precipProb)%")
                             .font(.system(size: isCompact ? 8.5 : 10.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.58))
                             .lineLimit(1)

@@ -11,8 +11,8 @@ nonisolated struct CustomTile: Codable, Hashable, Identifiable, Sendable {
 
         var title: String {
             switch self {
-            case .web: return "Signet Web"
-            case .shortcut: return "Raccourci Apple"
+            case .web: return loc("overlay.web_bookmark")
+            case .shortcut: return loc("overlay.apple_shortcut")
             }
         }
     }

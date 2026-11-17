@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.12",
-  "name": "LaunchPad v1.2.12",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.12",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.12\n\n- 💬 **Libellé d'Autorisation Corrigé** : Affichage du texte traduit Plus tard au lieu de la clé brute dans la fenêtre de demande d'autorisation d'Accessibilité.",
+  "tag_name": "v1.2.13",
+  "name": "LaunchPad v1.2.13",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.13",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.13\n\n- 🌍 **Traduction Intégrale Multi-Langues** : L'ensemble de l'interface (Réglages, menus contextuels, tutoriel et fenêtres d'autorisation) est désormais entièrement traduit dans les 6 langues prises en charge (français, anglais, espagnol, allemand, italien et portugais).\n- ⚡ **Changement de Langue Instantané** : Les titres d'onglets, la barre latérale, la galerie de widgets, l'écran À propos et les raccourcis s'actualisent en direct sans redémarrer l'application.\n- 🧩 **Widgets & Calendriers Localisés** : Les widgets Météo, Horloge, Calendrier, Musique et Statistiques système affichent désormais leurs libellés, jours et unités dans la langue sélectionnée.\n- 📂 **Dossiers & Catégories Universels** : Les dossiers créés automatiquement, leurs styles d'affichage et les notifications système s'adaptent fidèlement à votre langue active.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.12.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.12/LaunchPad-v1.2.12.zip"
+      "name": "LaunchPad-v1.2.13.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.13/LaunchPad-v1.2.13.zip"
     },
     {
-      "name": "LaunchPad-v1.2.12.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.12/LaunchPad-v1.2.12.dmg"
+      "name": "LaunchPad-v1.2.13.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.13/LaunchPad-v1.2.13.dmg"
     }
   ]
 }

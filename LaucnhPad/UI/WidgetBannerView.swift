@@ -210,7 +210,7 @@ struct WidgetBannerView: View {
             systemStatGauge(
                 icon: "memorychip",
                 title: loc("widgets.ram"),
-                value: String(format: "%.1f Go", stats.ramUsedGB),
+                value: loc("units.gb_value", stats.ramUsedGB),
                 progress: Double(stats.ramPercent) / 100.0,
                 color: Color(red: 0.68, green: 0.58, blue: 1.0)
             )

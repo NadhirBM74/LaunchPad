@@ -8,12 +8,12 @@ nonisolated enum WidgetCategoryGroup: String, Sendable, Equatable {
 
     var displayName: String {
         switch self {
-        case .music: return "Musique"
-        case .weather: return "Météo"
-        case .calendar: return "Calendrier"
-        case .clock: return "Horloge"
-        case .system: return "Système"
-        case .quickNote: return "Note rapide"
+        case .music: return loc("widget.cat.music")
+        case .weather: return loc("widget.cat.weather")
+        case .calendar: return loc("widget.cat.calendar")
+        case .clock: return loc("widget.cat.clock")
+        case .system: return loc("widget.system.title")
+        case .quickNote: return loc("widget.quickNote.title")
         }
     }
 }
@@ -23,7 +23,7 @@ nonisolated enum WidgetAppearanceMode: String, Codable, CaseIterable, Identifiab
     case dark = "dark"
 
     var id: String { rawValue }
-    var title: String { self == .light ? "Clair" : "Sombre" }
+    var title: String { loc("widget.appearance.\(rawValue)") }
     var icon: String { self == .light ? "sun.max.fill" : "moon.fill" }
 }
 
@@ -54,7 +54,7 @@ nonisolated enum WidgetKind: String, Codable, CaseIterable, Identifiable, Sendab
         let localized = loc(key)
         if localized == key {
             switch self {
-            case .calendar: return "Calendrier & Agenda"
+            case .calendar: return loc("widget.calendar.title")
             default: return rawValue.capitalized
             }
         }
@@ -66,7 +66,7 @@ nonisolated enum WidgetKind: String, Codable, CaseIterable, Identifiable, Sendab
         let localized = loc(key)
         if localized == key {
             switch self {
-            case .calendar: return "Date du jour, grille mensuelle et événements"
+            case .calendar: return loc("widget.calendar.desc")
             default: return ""
             }
         }
@@ -157,7 +157,7 @@ nonisolated enum WidgetSize: String, Codable, CaseIterable, Identifiable, Sendab
     }
 
     var slotDescription: String {
-        let label = slotCount <= 1 ? (loc("widget.slot.single") == "widget.slot.single" ? "emplacement" : loc("widget.slot.single")) : loc("widget.slots")
+        let label = slotCount <= 1 ? loc("widget.slot.single") : loc("widget.slots")
         switch self {
         case .small: return "1×1 (\(slotCount) \(label))"
         case .medium: return "2×1 (\(slotCount) \(label))"
