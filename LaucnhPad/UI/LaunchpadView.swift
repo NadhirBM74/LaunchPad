@@ -465,17 +465,13 @@ struct LaunchpadRootView: View {
     }
 
     private var pageDots: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<vm.pageCount, id: \.self) { index in
-                Circle()
-                    .fill(Color.white.opacity(index == vm.page ? 0.95 : 0.35))
-                    .frame(width: 7.5, height: 7.5)
-                    .shadow(color: backgroundStyle == .liquidGlass && index == vm.page ? Color.white.opacity(0.65) : Color.clear, radius: 4)
-                    .padding(5)
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.setPage(index) }
-            }
-        }
+        PageDotsPill(
+            pageCount: vm.pageCount,
+            currentPage: vm.page,
+            intensity: liquidGlassIntensity,
+            reduceMotion: reduceMotion,
+            onSelectPage: { vm.setPage($0) }
+        )
         .opacity(vm.pageCount > 1 ? 1 : 0)
     }
 
@@ -754,6 +750,57 @@ struct SearchMenuButton: View {
                 Button(loc("menu.quit")) { NSApp.terminate(nil) }
             }
         }
+    }
+}
+
+/// Indicateur de pages en pilule Liquid Glass (inspiré du sélecteur de pages Apple).
+private struct PageDotsPill: View {
+    let pageCount: Int
+    let currentPage: Int
+    let intensity: Double
+    let reduceMotion: Bool
+    let onSelectPage: (Int) -> Void
+
+    @State private var hoveredIndex: Int?
+    @State private var isHoveringPill = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<pageCount, id: \.self) { index in
+                let isActive = (index == currentPage)
+                let isHovered = (hoveredIndex == index)
+                Circle()
+                    .fill(Color.white.opacity(isActive ? 0.96 : (isHovered ? 0.62 : 0.34)))
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(isHovered ? 1.15 : 1.0)
+                    .shadow(color: isActive ? Color.white.opacity(0.45) : Color.clear, radius: 3)
+                    .frame(width: 18, height: 22)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        hoveredIndex = hovering ? index : (hoveredIndex == index ? nil : hoveredIndex)
+                    }
+                    .onTapGesture { onSelectPage(index) }
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 24)
+        .background {
+            Capsule()
+                .fill(Color.white.opacity(isHoveringPill ? 0.06 : 0.02))
+        }
+        .liquidGlass(
+            in: Capsule(),
+            interactive: true,
+            tint: nil,
+            prominence: .clear,
+            borderLineWidth: 0.75,
+            intensity: intensity
+        )
+        .shadow(color: Color.black.opacity(0.24), radius: 8, y: 3)
+        .onHover { isHoveringPill = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: hoveredIndex)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isHoveringPill)
+        .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.85), value: currentPage)
     }
 }
 

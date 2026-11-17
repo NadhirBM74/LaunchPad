@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.14",
-  "name": "LaunchPad v1.2.14",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.14",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.14\n\n- 🎨 **Arrière-Plan Flouté Épuré** : Suppression du voile blanc en haut de l'écran en mode Liquid Glass et Clair tout en conservant le flou d'arrière-plan en temps réel.",
+  "tag_name": "v1.2.15",
+  "name": "LaunchPad v1.2.15",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.15",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.15\n\n- 🔘 **Indicateur de Pages Liquid Glass** : Les points de pagination en bas de l'écran sont désormais regroupés dans une pilule en verre translucide avec liseré lumineux et retour subtil au survol.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.14.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.14/LaunchPad-v1.2.14.zip"
+      "name": "LaunchPad-v1.2.15.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.15/LaunchPad-v1.2.15.zip"
     },
     {
-      "name": "LaunchPad-v1.2.14.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.14/LaunchPad-v1.2.14.dmg"
+      "name": "LaunchPad-v1.2.15.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.15/LaunchPad-v1.2.15.dmg"
     }
   ]
 }
