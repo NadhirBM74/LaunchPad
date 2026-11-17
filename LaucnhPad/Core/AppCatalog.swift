@@ -1,5 +1,6 @@
 import AppKit
 import CoreServices
+import ImageIO
 import SwiftUI
 
 // MARK: - Modèle d'application
@@ -195,17 +196,17 @@ final class IconCache {
     }
 
     /// Style courant (lu une fois par accès : changer le réglage vide le cache).
-    var useOriginalColors: Bool { UserDefaults.standard.string(forKey: PrefKey.iconStyle) == "original" }
+    var useOriginalColors: Bool { currentAppearanceStyle != .system }
 
     var currentAppearanceStyle: IconAppearanceStyle {
         if UserDefaults.standard.bool(forKey: PrefKey.tintedIcons) {
             return .tinted
         }
-        let raw = UserDefaults.standard.string(forKey: PrefKey.iconStyle) ?? "dark"
-        return IconAppearanceStyle(rawValue: raw) ?? .dark
+        let raw = UserDefaults.standard.string(forKey: PrefKey.iconStyle) ?? "original"
+        return IconAppearanceStyle(rawValue: raw) ?? .original
     }
 
-    private var activeTintColor: Color {
+    var activeTintColor: Color {
         let key = UserDefaults.standard.string(forKey: PrefKey.tintedIconColor) ?? "blue"
         switch key {
         case "graphite": return Color(white: 0.78)
@@ -219,9 +220,16 @@ final class IconCache {
     }
 
     func icon(for path: String) -> NSImage {
-        if let image = images[path] { return image }
+        // Vérification du cache avec contrôle qualité : on rejette toute icône en cache de moins de 512 px
+        if let cached = images[path] {
+            let maxPx = cached.representations.map(\.pixelsWide).max() ?? 0
+            if maxPx >= IconRenderer.pixelSize {
+                return cached
+            }
+        }
+
         let style = currentAppearanceStyle
-        if !path.hasPrefix("web:") && !path.hasPrefix("shortcut:") && style != .original && style != .system {
+        if !path.hasPrefix("web:") && !path.hasPrefix("shortcut:") {
             let appName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
             if let customImg = CustomAppIconRenderer.renderIcon(
                 for: path,
@@ -235,19 +243,32 @@ final class IconCache {
                 return customImg
             }
         }
-        let image = IconRenderer.sourceIcon(for: path, original: useOriginalColors)
-        image.size = NSSize(width: 256, height: 256)
-        images[path] = image
-        return image
+
+        // Fallback pour signets web et raccourcis à 512×512 Retina
+        if let cg = IconRenderer.renderStyledHighResIcon(for: path, style: style, tintRGB: (0.08, 0.54, 0.98)) {
+            let hdImage = CustomAppIconRenderer.wrapCGImageAsRetinaNSImage(cg)
+            images[path] = hdImage
+            return hdImage
+        }
+
+        let fallback = IconRenderer.sourceIcon(for: path, original: useOriginalColors)
+        fallback.size = NSSize(width: 256, height: 256)
+        images[path] = fallback
+        return fallback
     }
 
-    func contains(_ path: String) -> Bool { images[path] != nil }
+    func contains(_ path: String) -> Bool {
+        guard let cached = images[path] else { return false }
+        let maxPx = cached.representations.map(\.pixelsWide).max() ?? 0
+        return maxPx >= IconRenderer.pixelSize
+    }
 
     func store(_ rendered: [String: CGImage]) {
         let style = currentAppearanceStyle
         guard style == .system || style == .original else { return }
         for (path, cgImage) in rendered where images[path] == nil {
-            images[path] = NSImage(cgImage: cgImage, size: NSSize(width: 256, height: 256))
+            if CustomIconManager.shared.hasOverride(for: path) { continue }
+            images[path] = CustomAppIconRenderer.wrapCGImageAsRetinaNSImage(cgImage)
         }
     }
 
@@ -256,78 +277,406 @@ final class IconCache {
 }
 
 nonisolated enum IconRenderer {
-    static let pixelSize = 256
+    /// Résolution Retina haute densité 512×512 pixels physiques (pour affichage net jusqu'à 256pt @2x)
+    static let pixelSize = 512
+    private static let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
 
-    /// Icône système (respecte le style Clair/Teinté de macOS, comme le Dock) ou icône d'origine en couleur (.icns du bundle).
+    /// Icône source haute définition : extrait en priorité l'asset 1024×1024 / 512×512 en couleur depuis Assets.car ou .icns
     static func sourceIcon(for path: String, original: Bool) -> NSImage {
         if path.hasPrefix("web:") || path.hasPrefix("shortcut:") {
             return CustomTileRenderer.icon(forID: path)
         }
-        if original, let image = bundleIcon(for: path) { return image }
-        return NSWorkspace.shared.icon(forFile: path)
+        if original, let image = bundleIcon(for: path) {
+            return image
+        }
+        let ws = NSWorkspace.shared.icon(forFile: path)
+        ws.size = NSSize(width: pixelSize, height: pixelSize)
+        return ws
     }
 
+    /// Extrait la meilleure représentation haute résolution (jusqu'à 1024×1024) depuis Assets.car ou les fichiers .icns du bundle
     static func bundleIcon(for path: String) -> NSImage? {
         let url = URL(fileURLWithPath: path)
-        let info = AppScanner.infoDictionary(for: url)
+        let bundle = Bundle(url: url)
+        let info = bundle?.infoDictionary ?? AppScanner.infoDictionary(for: url)
+
         var candidates: [String] = []
-        if let file = info?["CFBundleIconFile"] as? String, !file.isEmpty { candidates.append(file) }
-        if let name = info?["CFBundleIconName"] as? String, !name.isEmpty { candidates.append(name) }
-        candidates.append("AppIcon")
+        if let name = info?["CFBundleIconName"] as? String, !name.isEmpty {
+            candidates.append(name)
+        }
+        if let file = info?["CFBundleIconFile"] as? String, !file.isEmpty {
+            if !candidates.contains(file) { candidates.append(file) }
+            let stripped = (file as NSString).deletingPathExtension
+            if !stripped.isEmpty && !candidates.contains(stripped) {
+                candidates.append(stripped)
+            }
+        }
+        if !candidates.contains("AppIcon") {
+            candidates.append("AppIcon")
+        }
+
+        // 1. Lecture directe depuis Assets.car / Bundle resources (fournit 1024×1024 ou 512×512 en pleine couleur)
+        if let bundle {
+            for candidate in candidates {
+                if let bImg = bundle.image(forResource: candidate), bImg.isValid, !bImg.representations.isEmpty {
+                    let copy = (bImg.copy() as? NSImage) ?? bImg
+                    copy.size = NSSize(width: pixelSize, height: pixelSize)
+                    return copy
+                }
+            }
+        }
+
+        // 2. Lecture directe des fichiers .icns dans Contents/Resources/
         let resources = url.appendingPathComponent("Contents/Resources", isDirectory: true)
         for candidate in candidates {
             let fileName = (candidate as NSString).pathExtension.isEmpty ? candidate + ".icns" : candidate
             let iconURL = resources.appendingPathComponent(fileName)
             let size = (try? FileManager.default.attributesOfItem(atPath: iconURL.path)[.size] as? Int) ?? 0
-            // Certains .icns ne sont que des fichiers de quelques Ko sans image (ex. Livres) : on les ignore.
-            if size > 10_000, let image = NSImage(contentsOf: iconURL), image.isValid, !image.representations.isEmpty {
+            if size > 4_000, let image = NSImage(contentsOf: iconURL), image.isValid, !image.representations.isEmpty {
+                image.size = NSSize(width: pixelSize, height: pixelSize)
                 return image
+            }
+        }
+
+        // 3. Recherche du plus grand fichier .icns dans Contents/Resources/ si le nom diffère
+        if let files = try? FileManager.default.contentsOfDirectory(at: resources, includingPropertiesForKeys: [.fileSizeKey]) {
+            let icnsFiles = files.filter { $0.pathExtension.lowercased() == "icns" }
+            var bestImg: NSImage? = nil
+            var bestPixels = 0
+            for fileURL in icnsFiles {
+                if let img = NSImage(contentsOf: fileURL) {
+                    let maxP = img.representations.map { $0.pixelsWide * $0.pixelsHigh }.max() ?? 0
+                    if maxP > bestPixels {
+                        bestPixels = maxP
+                        bestImg = img
+                    }
+                }
+            }
+            if let bestImg, bestPixels >= 128 * 128 {
+                bestImg.size = NSSize(width: pixelSize, height: pixelSize)
+                return bestImg
             }
         }
         return nil
     }
 
-    /// Rend chaque icône dans un bitmap pour éviter le coût du premier affichage sur le fil principal.
+    /// Rastérise un NSImage à sa résolution maximale (512×512 ou 1024×1024 réduite proprement en 512×512)
+    static func rasterizeNSImageHighRes(_ icon: NSImage, targetSize: Int = pixelSize) -> CGImage? {
+        let copy = (icon.copy() as? NSImage) ?? icon
+        copy.size = NSSize(width: targetSize, height: targetSize)
+
+        var proposedRect = NSRect(x: 0, y: 0, width: targetSize, height: targetSize)
+        if let directCG = copy.cgImage(
+            forProposedRect: &proposedRect,
+            context: nil,
+            hints: [.interpolation: NSImageInterpolation.high.rawValue]
+        ), directCG.width >= 256, !isBlank(directCG) {
+            if directCG.width == targetSize && directCG.height == targetSize {
+                return directCG
+            }
+            // Redimensionnement bicubique haute précision vers 512×512
+            guard let cs = sRGBColorSpace,
+                  let ctx = CGContext(
+                      data: nil,
+                      width: targetSize,
+                      height: targetSize,
+                      bitsPerComponent: 8,
+                      bytesPerRow: targetSize * 4,
+                      space: cs,
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { return directCG }
+            ctx.interpolationQuality = .high
+            ctx.draw(directCG, in: CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+            return ctx.makeImage() ?? directCG
+        }
+
+        // Fallback de dessin direct dans un contexte 512×512
+        guard let cs = sRGBColorSpace,
+              let ctx = CGContext(
+                  data: nil,
+                  width: targetSize,
+                  height: targetSize,
+                  bitsPerComponent: 8,
+                  bytesPerRow: targetSize * 4,
+                  space: cs,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        ctx.interpolationQuality = .high
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        copy.draw(
+            in: NSRect(x: 0, y: 0, width: targetSize, height: targetSize),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1.0
+        )
+        NSGraphicsContext.restoreGraphicsState()
+        return ctx.makeImage()
+    }
+
+    /// Extrait, normalise les proportions squircle (sans effet boîte-dans-boîte) et applique le style choisi en 512×512
+    static func renderStyledHighResIcon(
+        for path: String,
+        style: IconAppearanceStyle,
+        tintRGB: (r: Double, g: Double, b: Double)
+    ) -> CGImage? {
+        let preferOriginal = (style != .system)
+        let primarySource = sourceIcon(for: path, original: preferOriginal)
+        var rawCG = rasterizeNSImageHighRes(primarySource, targetSize: pixelSize)
+
+        if rawCG == nil || (rawCG.map(isBlank) ?? true) {
+            let wsFallback = NSWorkspace.shared.icon(forFile: path)
+            wsFallback.size = NSSize(width: pixelSize, height: pixelSize)
+            rawCG = rasterizeNSImageHighRes(wsFallback, targetSize: pixelSize)
+        }
+        guard let validCG = rawCG else { return nil }
+        return normalizeAndStyleCGImage(
+            validCG,
+            style: style,
+            tintRGB: tintRGB,
+            forceSquircleClip: false
+        )
+    }
+
+    /// Normalise les marges transparentes de l'icône et applique le shader de style directement aux pixels 512×512
+    static func normalizeAndStyleCGImage(
+        _ sourceCG: CGImage,
+        style: IconAppearanceStyle,
+        tintRGB: (r: Double, g: Double, b: Double),
+        forceSquircleClip: Bool
+    ) -> CGImage? {
+        let size = pixelSize
+        guard let cs = sRGBColorSpace else { return sourceCG }
+
+        // 1. Lecture des pixels sources en 512×512 pour détecter la boîte englobante visible (alphaBounds)
+        var srcPixels = [UInt8](repeating: 0, count: size * size * 4)
+        guard let srcCtx = CGContext(
+            data: &srcPixels,
+            width: size,
+            height: size,
+            bitsPerComponent: 8,
+            bytesPerRow: size * 4,
+            space: cs,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return sourceCG }
+        srcCtx.interpolationQuality = .high
+        srcCtx.draw(sourceCG, in: CGRect(x: 0, y: 0, width: size, height: size))
+
+        var minX = size, minY = size, maxX = 0, maxY = 0
+        for y in 0..<size {
+            let row = y * size * 4
+            for x in 0..<size {
+                if srcPixels[row + x * 4 + 3] > 24 {
+                    if x < minX { minX = x }
+                    if x > maxX { maxX = x }
+                    if y < minY { minY = y }
+                    if y > maxY { maxY = y }
+                }
+            }
+        }
+
+        // Cadre squircle standard macOS : 81.6% de la toile 512×512 (soit 418×418 px centré, marge = 47 px)
+        let standardInset: CGFloat = CGFloat(size) * 0.091
+        let standardBody: CGFloat = CGFloat(size) - standardInset * 2
+        let standardCorner: CGFloat = standardBody * 0.225
+        let targetBodyRect = CGRect(x: standardInset, y: standardInset, width: standardBody, height: standardBody)
+
+        let visibleW = maxX >= minX ? CGFloat(maxX - minX + 1) : standardBody
+        let visibleH = maxY >= minY ? CGFloat(maxY - minY + 1) : standardBody
+        let maxVisibleDim = max(visibleW, visibleH)
+
+        // Si l'icône déborde des marges standards (> 87% du canevas, ex. Wallper ou image plein cadre)
+        // ou si elle est trop petite (< 72%), on la recadre proportionnellement dans le squircle standard
+        let needsRescale = forceSquircleClip || maxVisibleDim > CGFloat(size) * 0.87 || maxVisibleDim < CGFloat(size) * 0.72
+        let needsCornerClip = forceSquircleClip || maxVisibleDim > CGFloat(size) * 0.87
+
+        var normPixels = [UInt8](repeating: 0, count: size * size * 4)
+        guard let normCtx = CGContext(
+            data: &normPixels,
+            width: size,
+            height: size,
+            bitsPerComponent: 8,
+            bytesPerRow: size * 4,
+            space: cs,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return sourceCG }
+        normCtx.interpolationQuality = .high
+
+        if needsCornerClip {
+            let clipPath = CGPath(
+                roundedRect: targetBodyRect,
+                cornerWidth: standardCorner,
+                cornerHeight: standardCorner,
+                transform: nil
+            )
+            normCtx.addPath(clipPath)
+            normCtx.clip()
+        }
+
+        if needsRescale && maxVisibleDim > 0 {
+            let scale = standardBody / maxVisibleDim
+            let centerX = CGFloat(minX + maxX) * 0.5
+            let centerY = CGFloat(size) - CGFloat(minY + maxY) * 0.5
+            let drawW = CGFloat(size) * scale
+            let drawH = CGFloat(size) * scale
+            let drawX = CGFloat(size) * 0.5 - centerX * scale
+            let drawY = CGFloat(size) * 0.5 - centerY * scale
+            normCtx.draw(sourceCG, in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
+        } else {
+            normCtx.draw(sourceCG, in: CGRect(x: 0, y: 0, width: size, height: size))
+        }
+
+        // 2. Application du filtre de style pixel par pixel en 512×512 (sans jamais créer de double boîte !)
+        if style != .original && style != .system && style != .classicApple {
+            applyPixelStyleShader(&normPixels, size: size, style: style, tintRGB: tintRGB)
+        }
+
+        guard let styledCG = normCtx.makeImage() else { return sourceCG }
+
+        // 3. Composition finale avec ombre portée macOS douce et bordure spéculaire optionnelle
+        guard let finalCtx = CGContext(
+            data: nil,
+            width: size,
+            height: size,
+            bitsPerComponent: 8,
+            bytesPerRow: size * 4,
+            space: cs,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return styledCG }
+        finalCtx.interpolationQuality = .high
+
+        let fSize = CGFloat(size)
+        finalCtx.saveGState()
+        finalCtx.setShadow(
+            offset: CGSize(width: 0, height: -fSize * 0.012),
+            blur: fSize * 0.034,
+            color: CGColor(gray: 0, alpha: style == .light ? 0.22 : 0.32)
+        )
+        finalCtx.draw(styledCG, in: CGRect(x: 0, y: 0, width: fSize, height: fSize))
+        finalCtx.restoreGState()
+
+        return finalCtx.makeImage() ?? styledCG
+    }
+
+    /// Shader 512×512 ultra-rapide adaptant les surfaces des icônes tierces sans les réduire dans une boîte
+    private static func applyPixelStyleShader(
+        _ px: inout [UInt8],
+        size: Int,
+        style: IconAppearanceStyle,
+        tintRGB: (r: Double, g: Double, b: Double)
+    ) {
+        let total = size * size
+        for idx in 0..<total {
+            let offset = idx * 4
+            let a = Double(px[offset + 3]) / 255.0
+            guard a > 0.02 else { continue }
+
+            // Dé-prémultiplication alpha
+            var r = min(1.0, Double(px[offset]) / (255.0 * a))
+            var g = min(1.0, Double(px[offset + 1]) / (255.0 * a))
+            var b = min(1.0, Double(px[offset + 2]) / (255.0 * a))
+            var outA = a
+
+            let maxC = max(r, max(g, b))
+            let minC = min(r, min(g, b))
+            let delta = maxC - minC
+            let sat = maxC > 0.001 ? (delta / maxC) : 0.0
+            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+            switch style {
+            case .dark:
+                // Convertit les fonds blancs/clairs neutres en obsidienne sombre (#16171E) tout en préservant à 100% les couleurs vives
+                if sat < 0.22 && lum > 0.62 {
+                    let t = min(1.0, max(0.0, (lum - 0.62) / 0.38)) * (1.0 - sat / 0.22)
+                    let darkR = 0.09 + (1.0 - lum) * 0.14
+                    let darkG = 0.095 + (1.0 - lum) * 0.14
+                    let darkB = 0.12 + (1.0 - lum) * 0.16
+                    r = r * (1.0 - t) + darkR * t
+                    g = g * (1.0 - t) + darkG * t
+                    b = b * (1.0 - t) + darkB * t
+                }
+
+            case .light:
+                // Éclaircit les fonds noirs neutres vers une surface nacrée claire tout en gardant les éléments colorés intacts
+                if sat < 0.20 && lum < 0.26 {
+                    let t = min(1.0, max(0.0, (0.26 - lum) / 0.26)) * (1.0 - sat / 0.20)
+                    let lightVal = 0.94 - lum * 0.25
+                    r = r * (1.0 - t) + lightVal * t
+                    g = g * (1.0 - t) + lightVal * t
+                    b = b * (1.0 - t) + (lightVal + 0.02) * t
+                }
+
+            case .tinted:
+                // Applique un dégradé teinté profond basé sur la luminance réelle de l'icône
+                let baseDarkR = 0.04, baseDarkG = 0.06, baseDarkB = 0.10
+                let curve = pow(lum, 0.88)
+                r = baseDarkR + (tintRGB.r - baseDarkR) * curve
+                g = baseDarkG + (tintRGB.g - baseDarkG) * curve
+                b = baseDarkB + (tintRGB.b - baseDarkB) * curve
+
+            case .monochrome:
+                // Monochrome argenté/graphite à contraste renforcé
+                let contrasted = min(1.0, max(0.0, (lum - 0.5) * 1.16 + 0.52))
+                r = contrasted * 0.96
+                g = contrasted * 0.97
+                b = contrasted * 1.00
+
+            case .transparent, .clearLiquid:
+                // Rend les fonds neutres translucides façon verre liquide tout en gardant le logo central opaque
+                if sat < 0.18 && (lum > 0.78 || lum < 0.18) {
+                    outA = a * (style == .transparent ? 0.26 : 0.44)
+                    r = r * 0.75 + 0.22
+                    g = g * 0.76 + 0.24
+                    b = b * 0.80 + 0.28
+                }
+
+            case .clearDark:
+                if sat < 0.22 && lum > 0.65 {
+                    outA = a * 0.78
+                    r = 0.12
+                    g = 0.14
+                    b = 0.28
+                }
+
+            case .frostedGlass:
+                if sat < 0.20 {
+                    r = min(1.0, r * 0.85 + 0.14)
+                    g = min(1.0, g * 0.86 + 0.15)
+                    b = min(1.0, b * 0.90 + 0.18)
+                }
+
+            case .original, .classicApple, .system:
+                break
+            }
+
+            // Re-prémultiplication alpha
+            px[offset]     = UInt8(clamping: Int((r * outA * 255.0).rounded()))
+            px[offset + 1] = UInt8(clamping: Int((g * outA * 255.0).rounded()))
+            px[offset + 2] = UInt8(clamping: Int((b * outA * 255.0).rounded()))
+            px[offset + 3] = UInt8(clamping: Int((outA * 255.0).rounded()))
+        }
+    }
+
+    /// Rend chaque icône en arrière-plan à 512×512 pour un démarrage instantané
     static func render(_ paths: [String], original: Bool) -> [String: CGImage] {
         var output: [String: CGImage] = [:]
+        let style: IconAppearanceStyle = original ? .original : .system
         for path in paths {
             autoreleasepool {
-                var image = draw(sourceIcon(for: path, original: original))
-                // Sécurité : une icône d'origine entièrement transparente est remplacée par l'icône système.
-                if original, let rendered = image, isBlank(rendered) {
-                    image = draw(NSWorkspace.shared.icon(forFile: path))
+                if let cg = renderStyledHighResIcon(for: path, style: style, tintRGB: (0.08, 0.54, 0.98)) {
+                    output[path] = cg
                 }
-                if let image { output[path] = image }
             }
         }
         return output
     }
 
-    private static let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
-
-    private static func draw(_ icon: NSImage) -> CGImage? {
-        guard let colorSpace = sRGBColorSpace,
-              let context = CGContext(data: nil, width: pixelSize, height: pixelSize, bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        context.interpolationQuality = .high
-        // Ombre portée intégrée à l'image (tient dans la marge transparente des icônes macOS).
-        let size = CGFloat(pixelSize)
-        context.setShadow(offset: CGSize(width: 0, height: -size * 0.012), blur: size * 0.035,
-                          color: CGColor(gray: 0, alpha: 0.32))
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
-        icon.draw(in: NSRect(x: 0, y: 0, width: pixelSize, height: pixelSize), from: .zero, operation: .sourceOver, fraction: 1)
-        NSGraphicsContext.restoreGraphicsState()
-        return context.makeImage()
-    }
-
-    private static func isBlank(_ image: CGImage) -> Bool {
+    static func isBlank(_ image: CGImage) -> Bool {
         guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return true }
         let length = CFDataGetLength(data)
-        // Échantillonne le canal alpha (RGBA) : un seul pixel visible suffit.
         var index = 3
         while index < length {
-            if bytes[index] > 8 { return false }
+            if bytes[index] > 12 { return false }
             index += 4 * 37
         }
         return true

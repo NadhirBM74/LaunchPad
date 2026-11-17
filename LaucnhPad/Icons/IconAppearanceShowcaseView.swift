@@ -4,14 +4,15 @@ import AppKit
 // MARK: - Galerie Interactive d'Apparence des Icônes (Fidèle à la Photo de Référence 1)
 
 struct IconAppearanceShowcaseView: View {
-    @AppStorage(PrefKey.iconStyle) private var iconStyleRaw: String = "dark"
+    @AppStorage(PrefKey.iconStyle) private var iconStyleRaw: String = "original"
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons: Bool = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor: String = "blue"
+    @State private var feedbackMessage: String? = nil
     var onStyleChanged: (() -> Void)? = nil
 
     private var activeStyle: IconAppearanceStyle {
         if tintedIcons { return .tinted }
-        return IconAppearanceStyle(rawValue: iconStyleRaw) ?? .dark
+        return IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
     }
 
     private var resolvedTint: Color {
@@ -27,53 +28,80 @@ struct IconAppearanceShowcaseView: View {
         }
     }
 
+    private let tintOptions: [(String, String, Color)] = [
+        ("blue", "Bleu", Color(red: 0.08, green: 0.54, blue: 0.98)),
+        ("purple", "Violet", Color(red: 0.65, green: 0.42, blue: 1.0)),
+        ("orange", "Orange", Color(red: 1.0, green: 0.56, blue: 0.14)),
+        ("mint", "Menthe", Color(red: 0.18, green: 0.85, blue: 0.68)),
+        ("rose", "Rose", Color(red: 1.0, green: 0.32, blue: 0.56)),
+        ("gold", "Or", Color(red: 0.98, green: 0.78, blue: 0.22)),
+        ("graphite", "Graphite", Color(white: 0.78))
+    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Deux grandes cartes côte à côte exactement comme sur la Photo de Référence 1
-            HStack(spacing: 12) {
-                // Carte Gauche : SYSTEM ICON APPEARANCE (Dark | Light | Tinted)
-                systemAppearanceCard
+            // Bandeau d'état clair indiquant le style actif et bouton de rafraîchissement HD
+            HStack(spacing: 10) {
+                Image(systemName: activeStyle.badgeIcon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                // Carte Droite : CLEAR COLORED ICONS (Glass & Colored Icons)
-                clearColoredIconsCard
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Style actif : \(activeStyle.title)")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("HD 512 px")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(Color.green.opacity(0.15), in: Capsule())
+                    }
+                    Text(activeStyle.subtitle)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    IconCache.shared.removeAll()
+                    NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+                    onStyleChanged?()
+                    showFeedback("Icônes HD 512×512 actualisées !")
+                } label: {
+                    Label("Actualiser HD", systemImage: "arrow.clockwise")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.primary.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Vide le cache et régénère toutes les icônes en haute définition 512×512 Retina")
+                .accessibilityLabel("Actualiser les icônes en haute définition")
             }
+            .padding(10)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Sélecteur rapide de mode d'icônes
+            // Sélecteur rapide de tous les styles d'icônes
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach([
-                        IconAppearanceStyle.dark,
-                        .light,
-                        .tinted,
-                        .clearDark,
-                        .frostedGlass,
-                        .clearLiquid,
-                        .classicApple,
-                        .system,
-                        .original
-                    ]) { mode in
+                    ForEach(IconAppearanceStyle.allCases) { mode in
                         let isSelected = (activeStyle == mode)
                         Button {
-                            withAnimation(AppleDesignSystem.Springs.snappy) {
-                                if mode == .tinted {
-                                    tintedIcons = true
-                                    iconStyleRaw = IconAppearanceStyle.tinted.rawValue
-                                } else {
-                                    tintedIcons = false
-                                    iconStyleRaw = mode.rawValue
-                                }
-                                onStyleChanged?()
-                            }
+                            selectMode(mode)
                         } label: {
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(isSelected ? Color.white : Color.primary.opacity(0.25))
-                                    .frame(width: 6, height: 6)
+                            HStack(spacing: 6) {
+                                Image(systemName: mode.badgeIcon)
+                                    .font(.system(size: 11, weight: .semibold))
                                 Text(mode.title)
-                                    .font(.system(size: 11.5, weight: isSelected ? .bold : .medium))
+                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                             }
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
                             .background(
                                 isSelected
                                     ? LinearGradient(colors: [Color(red: 0.35, green: 0.32, blue: 0.96), Color(red: 0.56, green: 0.34, blue: 0.96)], startPoint: .leading, endPoint: .trailing)
@@ -83,9 +111,81 @@ struct IconAppearanceShowcaseView: View {
                             .foregroundStyle(isSelected ? .white : .primary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Style d'icônes \(mode.title)")
                     }
                 }
                 .padding(.vertical, 2)
+            }
+
+            // Palette de couleur directe lorsque le mode Teinté est actif
+            if activeStyle == .tinted {
+                HStack(spacing: 10) {
+                    Text("Couleur de teinte :")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(tintOptions, id: \.0) { key, label, color in
+                        let isChosen = (tintedIconColor == key) || (key == "blue" && tintedIconColor == "accent")
+                        Button {
+                            withAnimation(AppleDesignSystem.Springs.snappy) {
+                                tintedIconColor = key
+                                IconCache.shared.removeAll()
+                                NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+                                onStyleChanged?()
+                                showFeedback("Teinte « \(label) » appliquée")
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(color)
+                                    .frame(width: 14, height: 14)
+                                Text(label)
+                                    .font(.system(size: 11, weight: isChosen ? .bold : .medium))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(isChosen ? color.opacity(0.22) : Color.primary.opacity(0.06), in: Capsule())
+                            .overlay(
+                                Capsule().strokeBorder(isChosen ? color : Color.clear, lineWidth: 1.5)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Deux grandes cartes côte à côte exactement comme sur la Photo de Référence 1
+            HStack(spacing: 12) {
+                // Carte Gauche : SYSTEM ICON APPEARANCE (Dark | Light | Tinted)
+                systemAppearanceCard
+
+                // Carte Droite : CLEAR COLORED ICONS (Glass & Colored Icons)
+                clearColoredIconsCard
+            }
+
+            if let feedbackMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text(feedbackMessage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.green)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func showFeedback(_ text: String) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            feedbackMessage = text
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if feedbackMessage == text {
+                    feedbackMessage = nil
+                }
             }
         }
     }
@@ -288,7 +388,10 @@ struct IconAppearanceShowcaseView: View {
                 tintedIcons = false
                 iconStyleRaw = mode.rawValue
             }
+            IconCache.shared.removeAll()
+            NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
             onStyleChanged?()
+            showFeedback("Style « \(mode.title) » appliqué en 512×512 HD")
         }
     }
 }

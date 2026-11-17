@@ -259,6 +259,11 @@ enum Prefs {
         if !isProUnlocked && appLogo.isProOnly {
             defaults.set(AppLogo.noir.rawValue, forKey: PrefKey.appLogo)
         }
+        if !defaults.bool(forKey: "LaunchpadMigratedToHDOriginalIconsV1") {
+            defaults.set(true, forKey: "LaunchpadMigratedToHDOriginalIconsV1")
+            defaults.set("original", forKey: PrefKey.iconStyle)
+            defaults.set(false, forKey: PrefKey.tintedIcons)
+        }
     }
 
     static func registerDefaults() {
@@ -295,7 +300,7 @@ enum Prefs {
             PrefKey.reorganizeRule: SortRule.nameAscending.rawValue,
             PrefKey.folderPlacement: FolderPlacement.before.rawValue,
             PrefKey.sortFolderContents: false,
-            PrefKey.iconStyle: "dark",
+            PrefKey.iconStyle: "original",
             PrefKey.displayMode: DisplayMode.fullScreen.rawValue,
             PrefKey.hideDock: true,
             PrefKey.appLogo: AppLogo.noir.rawValue,
@@ -464,5 +469,6 @@ extension Notification.Name {
     public static let requestToggleLaunchpad = Notification.Name("RequestToggleLaunchpad")
     public static let trialStatusDidChange = Notification.Name("TrialStatusDidChange")
     public static let trialDidExpire = Notification.Name("TrialDidExpire")
+    public static let launchpadIconStyleDidChange = Notification.Name("LaunchpadIconStyleDidChange")
 }
 

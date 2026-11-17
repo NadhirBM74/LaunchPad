@@ -1172,7 +1172,7 @@ public final class MusicServiceManager: ObservableObject {
         return Double(normalized)
     }
 
-    private static let appleMusicQueryScriptSource = """
+    nonisolated private static let appleMusicQueryScriptSource = """
     tell application "Music"
         if not running then return ""
         try
@@ -1207,7 +1207,7 @@ public final class MusicServiceManager: ObservableObject {
     return ""
     """
 
-    private static let spotifyQueryScriptSource = """
+    nonisolated private static let spotifyQueryScriptSource = """
     tell application "Spotify"
         if not running then return ""
         try

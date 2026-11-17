@@ -71,6 +71,7 @@ struct LaunchpadRootView: View {
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
     @ObservedObject private var permissionManager = PermissionManager.shared
+    @ObservedObject private var customIconManager = CustomIconManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @FocusState private var searchFocused: Bool
 
@@ -158,6 +159,26 @@ struct LaunchpadRootView: View {
                     WidgetGalleryModal(vm: vm, store: store, rootSize: size)
                         .frame(width: size.width, height: size.height)
                         .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                }
+                if let customAppID = customIconManager.activePickerAppID {
+                    ZStack {
+                        Color.black.opacity(0.48)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                customIconManager.activePickerAppID = nil
+                            }
+                        AppCustomIconPickerSheet(
+                            appID: customAppID,
+                            appName: store.displayName(customAppID),
+                            isPresented: Binding(
+                                get: { customIconManager.activePickerAppID != nil },
+                                set: { if !$0 { customIconManager.activePickerAppID = nil } }
+                            )
+                        )
+                    }
+                    .frame(width: size.width, height: size.height)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .zIndex(500)
                 }
             } else {
                 Color.clear
@@ -365,13 +386,18 @@ struct LaunchpadRootView: View {
                 .transition(.opacity)
             }
             SearchMenuButton(foreground: .white.opacity(0.85),
+                             onAddWidget: { vm.showWidgetGallery = true },
+                             onNewFolder: {
+                                 let folderID = store.createCustomFolder(name: "Nouveau dossier", style: .frostedGlass)
+                                 vm.openFolder(folderID)
+                             },
                              onSettings: { vm.onOpenSettings() },
                              onReorganize: { vm.requestReorganize() },
                              onRefresh: { store.refresh() })
         }
         .padding(.leading, 14)
         .padding(.trailing, 8)
-        .frame(width: 290, height: 36)
+        .frame(width: 340, height: 38)
         .liquidGlass(
             in: Capsule(),
             interactive: true,
@@ -635,29 +661,62 @@ struct PresentationEffect: ViewModifier {
 
 struct SearchMenuButton: View {
     var foreground: Color = .white.opacity(0.78)
+    var onAddWidget: (() -> Void)? = nil
+    var onNewFolder: (() -> Void)? = nil
     let onSettings: () -> Void
     let onReorganize: () -> Void
     let onRefresh: () -> Void
-    @State private var hovering = false
+    @State private var hoveringWidget = false
+    @State private var hoveringSettings = false
 
     var body: some View {
-        Button(action: onSettings) {
-            Image(systemName: "ellipsis.circle")
-                .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(foreground.opacity(hovering ? 1.0 : 0.85))
-                .frame(width: 26, height: 26)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
-        .help(loc("menu.settings"))
-        .contextMenu {
-            Button(loc("menu.settings"), action: onSettings)
-            Button(loc("menu.reorganize"), action: onReorganize)
-            Button(loc("menu.refresh"), action: onRefresh)
-            Divider()
-            Button(loc("menu.quit")) { NSApp.terminate(nil) }
+        HStack(spacing: 4) {
+            if let onAddWidget {
+                Button(action: onAddWidget) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.square.on.square")
+                            .font(.system(size: 12.5, weight: .semibold))
+                        Text("Widgets")
+                            .font(.system(size: 11.5, weight: .semibold))
+                    }
+                    .foregroundStyle(foreground.opacity(hoveringWidget ? 1.0 : 0.88))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(hoveringWidget ? 0.18 : 0.10), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .onHover { hoveringWidget = $0 }
+                .help("Ajouter et personnaliser des widgets")
+                .accessibilityLabel("Ouvrir la galerie de widgets")
+            }
+
+            Button(action: onSettings) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(foreground.opacity(hoveringSettings ? 1.0 : 0.85))
+                    .frame(width: 26, height: 26)
+                    .background(Color.white.opacity(hoveringSettings ? 0.16 : 0.0), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hoveringSettings = $0 }
+            .animation(.easeOut(duration: 0.12), value: hoveringSettings)
+            .help("Ouvrir les réglages de LaunchPad")
+            .accessibilityLabel("Réglages")
+            .contextMenu {
+                if let onAddWidget {
+                    Button("Ajouter un widget…", action: onAddWidget)
+                }
+                if let onNewFolder {
+                    Button("Créer un nouveau dossier…", action: onNewFolder)
+                }
+                Divider()
+                Button(loc("menu.settings"), action: onSettings)
+                Button(loc("menu.reorganize"), action: onReorganize)
+                Button(loc("menu.refresh"), action: onRefresh)
+                Divider()
+                Button(loc("menu.quit")) { NSApp.terminate(nil) }
+            }
         }
     }
 }
@@ -903,16 +962,13 @@ struct IconImage: View {
                 customSymbol: model.folderSymbol
             )
         } else if let icon = model.icon {
-            let isTinted = model.tintColor != nil
-            // L'ombre est déjà intégrée à l'image en cache (aucun calcul d'ombre à l'affichage).
+            // L'ombre et le style (Original, Sombre, Clair, Teinté, Verre, Monochrome) sont déjà pré-rendus en 512×512 Retina dans IconCache.
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
                 .antialiased(true)
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
-                .saturation(isTinted ? 0.0 : 1.0)
-                .colorMultiply(model.tintColor ?? .white)
         } else {
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .fill(Color.white.opacity(0.15))
@@ -991,6 +1047,14 @@ struct ItemContextMenu: View {
                     Button(loc("menu.add_to_dock")) { vm.addToDock(app) }
                 }
                 Divider()
+                Button("Personnaliser l'icône…") {
+                    CustomIconManager.shared.activePickerAppID = id
+                }
+                if CustomIconManager.shared.hasOverride(for: id) {
+                    Button("Rétablir l'icône d'origine") {
+                        CustomIconManager.shared.removeOverride(for: id)
+                    }
+                }
                 Button("\(loc("dialog.rename"))…") { vm.requestRename(id: id, isFolder: false) }
                 if let folderID {
                     Button(loc("menu.remove_from_folder")) { vm.removeFromFolder(id, folderID: folderID) }
@@ -1424,25 +1488,57 @@ struct FavoritesDockView: View {
     }
 }
 
-// MARK: - Galerie de Widgets & Sélecteur de Thèmes en Temps Réel
+// MARK: - Galerie Visuelle de Widgets & Sélecteur en Temps Réel (Grand Public & Intuitive)
 
 struct WidgetGalleryModal: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
     let rootSize: CGSize
 
+    enum GalleryCategory: String, CaseIterable, Identifiable {
+        case all = "Tous"
+        case weather = "Météo"
+        case music = "Musique"
+        case clock = "Horloge"
+        case calendar = "Calendrier"
+        case utilities = "Utilitaires"
+
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .all: return "square.grid.2x2.fill"
+            case .weather: return "cloud.sun.fill"
+            case .music: return "music.note"
+            case .clock: return "clock.fill"
+            case .calendar: return "calendar"
+            case .utilities: return "sparkles.rectangle.stack.fill"
+            }
+        }
+        var matchingKinds: [WidgetKind] {
+            switch self {
+            case .all: return WidgetKind.allCases
+            case .weather: return [.weather]
+            case .music: return [.vinylPlayer, .mediaWide]
+            case .clock: return [.clock]
+            case .calendar: return [.calendar]
+            case .utilities: return [.quickNote, .system]
+            }
+        }
+    }
+
     @ObservedObject private var licenseManager = LicenseManager.shared
-    @State private var selectedKind: WidgetKind = .vinylPlayer
+    @State private var selectedCategory: GalleryCategory = .all
+    @State private var selectedKind: WidgetKind = .weather
     @State private var selectedSize: WidgetSize = .medium
     @State private var selectedMusicStyle: MusicWidgetStyle = .vinylSplatterWide
-    @State private var selectedWeatherTheme: WeatherWidgetTheme = .appleMinimal
+    @State private var selectedWeatherTheme: WeatherWidgetTheme = .darkPremium
     @State private var selectedCalendarStyle: CalendarWidgetStyle = .compactDate
     @State private var selectedClockStyle: ClockWidgetStyle = .appleAnalog
 
     var body: some View {
         ZStack {
             // Arrière-plan sombre avec flou
-            Color.black.opacity(0.55)
+            Color.black.opacity(0.60)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -1450,99 +1546,96 @@ struct WidgetGalleryModal: View {
                     }
                 }
 
-            // Boîte de dialogue façon macOS / iPadOS Liquid Glass
             VStack(spacing: 0) {
-                // En-tête
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(loc("widget.gallery.title"))
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundStyle(.white)
-                            if !licenseManager.isPro {
-                                Text("PRO")
-                                    .font(.system(size: 10, weight: .black))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.yellow.opacity(0.85))
-                                    .foregroundStyle(.black)
-                                    .clipShape(Capsule())
+                // En-tête clair avec barre de catégories visuelles
+                VStack(spacing: 14) {
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 8) {
+                                Text("Galerie de Widgets")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundStyle(.white)
+                                if !licenseManager.isPro {
+                                    Text("PRO")
+                                        .font(.system(size: 10, weight: .black))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.yellow.opacity(0.85))
+                                        .foregroundStyle(.black)
+                                        .clipShape(Capsule())
+                                }
                             }
+                            Text("Cliquez sur un widget pour le personnaliser, puis ajoutez-le à votre écran en un clic.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.72))
                         }
-                        Text(loc("widget.gallery.subtitle"))
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.70))
-                    }
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            vm.showWidgetGallery = false
+                        Spacer()
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                vm.showWidgetGallery = false
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.white.opacity(0.65))
                         }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.white.opacity(0.6))
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Fermer la galerie de widgets")
                     }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 22)
-                .padding(.bottom, 16)
 
-                Divider().background(Color.white.opacity(0.12))
-
-                // Corps de la galerie (Deux colonnes : Liste des widgets à gauche, Prévisualisation & Thèmes à droite)
-                HStack(spacing: 0) {
-                    // Liste des widgets disponibles
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 6) {
-                            ForEach(WidgetKind.allCases) { kind in
-                                let isSelected = selectedKind == kind
+                    // Barre de catégories clairement identifiées
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(GalleryCategory.allCases) { cat in
+                                let isChosen = selectedCategory == cat
                                 Button {
-                                    selectedKind = kind
-                                    selectedSize = kind.defaultSize
-                                    if kind == .mediaWide {
-                                        selectedMusicStyle = .fullBleedPill
-                                    } else if kind == .vinylPlayer {
-                                        selectedMusicStyle = .vinylSplatterWide
+                                    withAnimation(AppleDesignSystem.Springs.snappy) {
+                                        selectedCategory = cat
+                                        if let first = cat.matchingKinds.first, !cat.matchingKinds.contains(selectedKind) {
+                                            selectWidgetKind(first)
+                                        }
                                     }
                                 } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: kindIcon(for: kind))
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
-                                            .frame(width: 28, height: 28)
-                                            .background(isSelected ? Color.white.opacity(0.2) : Color.white.opacity(0.06))
-                                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(kind.title)
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(.white)
-                                            Text(kind.subtitle)
-                                                .font(.system(size: 11))
-                                                .foregroundStyle(.white.opacity(0.55))
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
+                                    HStack(spacing: 6) {
+                                        Image(systemName: cat.icon)
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Text(cat.rawValue)
+                                            .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
                                     }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(isSelected ? Color.white.opacity(0.14) : Color.clear)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(isChosen ? Color.white : Color.white.opacity(0.10), in: Capsule())
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 14)
+
+                Divider().background(Color.white.opacity(0.12))
+
+                // Corps : Colonne gauche = Cartes visuelles avec miniatures réelles ; Colonne droite = Aperçu 1:1 & Personnalisation simple
+                HStack(spacing: 0) {
+                    // Grille visuelle des widgets (mini-aperçus réels + titre + explication simple)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 10) {
+                            ForEach(selectedCategory.matchingKinds) { kind in
+                                visualWidgetCard(for: kind)
+                            }
+                        }
                         .padding(16)
                     }
-                    .frame(width: 245)
+                    .frame(width: 340)
 
                     Divider().background(Color.white.opacity(0.12))
 
-                    // Zone de prévisualisation en temps réel et choix du thème/format
-                    VStack(spacing: 12) {
-                        Spacer(minLength: 4)
+                    // Zone de personnalisation et d'ajout en 3 étapes simples
+                    VStack(spacing: 14) {
+                        Spacer(minLength: 2)
 
                         // Aperçu réel du widget mis à l'échelle
                         let previewConfig = CustomWidgetConfig(
@@ -1553,107 +1646,256 @@ struct WidgetGalleryModal: View {
                             calendarStyle: selectedCalendarStyle,
                             clockStyle: selectedClockStyle
                         )
-                        let maxPreviewH: CGFloat = 205
+                        let maxPreviewH: CGFloat = 195
                         let maxPreviewW: CGFloat = 380
                         let scale = min(1.0, min(maxPreviewH / previewConfig.size.height, maxPreviewW / previewConfig.size.width))
 
-                        ZStack {
-                            WidgetHostView(config: previewConfig)
-                                .scaleEffect(scale)
-                                .frame(width: previewConfig.size.width * scale, height: previewConfig.size.height * scale)
-                                .shadow(color: .black.opacity(0.35), radius: 18 * scale, y: 8 * scale)
+                        VStack(spacing: 6) {
+                            ZStack {
+                                WidgetHostView(config: previewConfig)
+                                    .scaleEffect(scale)
+                                    .frame(width: previewConfig.size.width * scale, height: previewConfig.size.height * scale)
+                                    .shadow(color: .black.opacity(0.38), radius: 18 * scale, y: 8 * scale)
+                            }
+                            .frame(height: 200)
+
+                            Text("\(selectedKind.title) • \(friendlySizeLabel(selectedSize))")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
                         }
-                        .frame(height: 215)
 
-                        // Sélecteur de Thème / Style en temps réel selon la catégorie
-                        themePickerStrip
+                        // Étape 1 : Choisir le design / thème
+                        if selectedKind != .system && selectedKind != .quickNote {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("1. Choisissez un style visuel :")
+                                    .font(.system(size: 11.5, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.75))
+                                    .padding(.horizontal, 20)
+                                themePickerStrip
+                            }
+                        }
 
-                        // Sélecteur de taille (Petit, Moyen, Vertical, Grand)
+                        // Étape 2 : Choisir la taille du widget
                         if selectedKind.allowedSizes.count > 1 {
-                            HStack(spacing: 8) {
-                                ForEach(selectedKind.allowedSizes) { size in
-                                    let isChosen = selectedSize == size
-                                    Button {
-                                        withAnimation(AppleDesignSystem.Springs.snappy) {
-                                            selectedSize = size
+                            VStack(spacing: 6) {
+                                Text("2. Choisissez la taille :")
+                                    .font(.system(size: 11.5, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.75))
+
+                                HStack(spacing: 8) {
+                                    ForEach(selectedKind.allowedSizes) { size in
+                                        let isChosen = selectedSize == size
+                                        Button {
+                                            withAnimation(AppleDesignSystem.Springs.snappy) {
+                                                selectedSize = size
+                                            }
+                                        } label: {
+                                            HStack(spacing: 5) {
+                                                Image(systemName: sizeSymbol(for: size))
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                Text(friendlySizeLabel(size))
+                                                    .font(.system(size: 12.5, weight: isChosen ? .bold : .medium))
+                                            }
+                                            .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 7)
+                                            .background(isChosen ? Color.white : Color.white.opacity(0.12), in: Capsule())
                                         }
-                                    } label: {
-                                        Text(size.title)
-                                            .font(.system(size: 12.5, weight: isChosen ? .semibold : .medium))
-                                            .foregroundStyle(isChosen ? .black : .white.opacity(0.85))
-                                            .padding(.horizontal, 13)
-                                            .padding(.vertical, 6)
-                                            .background(isChosen ? Color.white : Color.white.opacity(0.12))
-                                            .clipShape(Capsule())
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
 
-                        // Bouton "Ajouter le widget"
+                        // Étape 3 : Bouton d'ajout clair et visible
                         Button {
-                            if !licenseManager.isPro {
-                                vm.showProUpgradeAlert(
-                                    feature: loc("widget.gallery.title"),
-                                    description: "Les widgets interactifs Liquid Glass sont réservés à la version Pro.\n\nActivez votre licence avec le code 1234 dans les Réglages pour débloquer cette fonctionnalité."
-                                )
-                                return
-                            }
-                            let currentPage = vm.page
-                            let newConfig = CustomWidgetConfig(
-                                kind: selectedKind,
-                                size: selectedSize,
-                                musicStyle: selectedMusicStyle,
-                                weatherTheme: selectedWeatherTheme,
-                                calendarStyle: selectedCalendarStyle,
-                                clockStyle: selectedClockStyle
-                            )
-                            WidgetManager.shared.updateMusicStyle(for: selectedKind, style: selectedMusicStyle)
-                            if selectedKind == .weather {
-                                WidgetManager.shared.updateWeatherTheme(selectedWeatherTheme)
-                            } else if selectedKind == .calendar {
-                                WidgetManager.shared.updateCalendarStyle(selectedCalendarStyle)
-                            } else if selectedKind == .clock {
-                                WidgetManager.shared.updateClockStyle(selectedClockStyle)
-                            }
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                let ok = store.addWidget(newConfig, onPage: currentPage, columns: vm.columns, rows: vm.rows)
-                                if ok {
-                                    vm.showWidgetGallery = false
-                                    if let placed = vm.placedItem(for: newConfig.id) {
-                                        vm.setPage(placed.page)
-                                    } else {
-                                        vm.setPage(currentPage)
-                                    }
-                                } else {
-                                    vm.showToast(loc("widget.resize_failed"))
-                                }
-                            }
+                            addSelectedWidget()
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 14))
-                                let addLabel = loc("widget.gallery.add_button")
-                                Text(addLabel == "widget.gallery.add_button" ? "Ajouter le widget" : addLabel)
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 16, weight: .bold))
+                                Text("Ajouter ce widget au Launchpad")
+                                    .font(.system(size: 14, weight: .bold))
                             }
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 9)
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                            .shadow(color: .white.opacity(0.25), radius: 8, y: 2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 11)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color(red: 0.10, green: 0.52, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.98)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+                            .shadow(color: Color.blue.opacity(0.35), radius: 10, y: 4)
                         }
                         .buttonStyle(.plain)
                         .padding(.bottom, 16)
+                        .accessibilityLabel("Ajouter le widget \(selectedKind.title) au Launchpad")
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .frame(width: min(780, rootSize.width - 40), height: min(560, rootSize.height - 50))
+            .frame(width: min(860, rootSize.width - 36), height: min(600, rootSize.height - 44))
             .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
             .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
+        }
+    }
+
+    private func visualWidgetCard(for kind: WidgetKind) -> some View {
+        let isSelected = (selectedKind == kind)
+        let miniSize: WidgetSize = kind.allowedSizes.contains(.small) ? .small : kind.defaultSize
+        let miniConfig = CustomWidgetConfig(
+            kind: kind,
+            size: miniSize,
+            musicStyle: kind == .mediaWide ? .fullBleedPill : .vinylSplatterWide,
+            weatherTheme: .darkPremium,
+            calendarStyle: .compactDate,
+            clockStyle: .appleAnalog
+        )
+        let thumbScale: CGFloat = miniSize == .small ? 0.38 : 0.25
+
+        return Button {
+            withAnimation(AppleDesignSystem.Springs.snappy) {
+                selectWidgetKind(kind)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                // Miniature visuelle réelle du widget
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.black.opacity(0.28))
+                    WidgetHostView(config: miniConfig)
+                        .scaleEffect(thumbScale)
+                        .frame(width: miniConfig.size.width * thumbScale, height: miniConfig.size.height * thumbScale)
+                        .allowsHitTesting(false)
+                }
+                .frame(width: 92, height: 68)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: kindIcon(for: kind))
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(isSelected ? Color.cyan : .white.opacity(0.8))
+                        Text(kind.title)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    Text(friendlyWidgetDescription(for: kind))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.cyan : .white.opacity(0.35))
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(isSelected ? Color.white.opacity(0.55) : Color.white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.8)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func selectWidgetKind(_ kind: WidgetKind) {
+        selectedKind = kind
+        selectedSize = kind.defaultSize
+        if kind == .mediaWide {
+            selectedMusicStyle = .fullBleedPill
+        } else if kind == .vinylPlayer {
+            selectedMusicStyle = .vinylSplatterWide
+        }
+    }
+
+    private func addSelectedWidget() {
+        if !licenseManager.isPro {
+            vm.showProUpgradeAlert(
+                feature: loc("widget.gallery.title"),
+                description: "Les widgets interactifs sont inclus dans la version Pro.\n\nVous pouvez activer votre essai gratuit ou votre licence dans les Réglages."
+            )
+            return
+        }
+        let currentPage = vm.page
+        let newConfig = CustomWidgetConfig(
+            kind: selectedKind,
+            size: selectedSize,
+            musicStyle: selectedMusicStyle,
+            weatherTheme: selectedWeatherTheme,
+            calendarStyle: selectedCalendarStyle,
+            clockStyle: selectedClockStyle
+        )
+        WidgetManager.shared.updateMusicStyle(for: selectedKind, style: selectedMusicStyle)
+        if selectedKind == .weather {
+            WidgetManager.shared.updateWeatherTheme(selectedWeatherTheme)
+        } else if selectedKind == .calendar {
+            WidgetManager.shared.updateCalendarStyle(selectedCalendarStyle)
+        } else if selectedKind == .clock {
+            WidgetManager.shared.updateClockStyle(selectedClockStyle)
+        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            let ok = store.addWidget(newConfig, onPage: currentPage, columns: vm.columns, rows: vm.rows)
+            if ok {
+                vm.showWidgetGallery = false
+                if let placed = vm.placedItem(for: newConfig.id) {
+                    vm.setPage(placed.page)
+                } else {
+                    vm.setPage(currentPage)
+                }
+            } else {
+                vm.showToast(loc("widget.resize_failed"))
+            }
+        }
+    }
+
+    private func friendlyWidgetDescription(for kind: WidgetKind) -> String {
+        switch kind {
+        case .weather:
+            return "Météo en direct et prévisions sur 7 jours avec 18 thèmes au choix."
+        case .vinylPlayer:
+            return "Tourne-disque vinyle animé pour contrôler votre musique."
+        case .mediaWide:
+            return "Lecteur musical avec pochette d'album et barre de progression."
+        case .clock:
+            return "15 styles d'horloges : analogique, numérique, volets, néon et fuseaux."
+        case .calendar:
+            return "Date du jour, calendrier mensuel et prochains événements synchronisés."
+        case .quickNote:
+            return "Bloc-notes rapide toujours accessible pour noter vos idées."
+        case .system:
+            return "Suivi simple de la batterie, de la mémoire et du processeur."
+        }
+    }
+
+    private func friendlySizeLabel(_ size: WidgetSize) -> String {
+        switch size {
+        case .small: return "Petit"
+        case .medium: return "Moyen"
+        case .tall: return "Vertical"
+        case .large: return "Grand"
+        }
+    }
+
+    private func sizeSymbol(for size: WidgetSize) -> String {
+        switch size {
+        case .small: return "square"
+        case .medium: return "rectangle"
+        case .tall: return "rectangle.portrait"
+        case .large: return "square.split.2x2"
         }
     }
 
@@ -1702,10 +1944,10 @@ struct WidgetGalleryModal: View {
             }
         } label: {
             Text(title)
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.75))
-                .padding(.horizontal, 11)
-                .padding(.vertical, 5)
+                .font(.system(size: 11.5, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.78))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(
                     isSelected
                         ? LinearGradient(colors: [Color(red: 0.35, green: 0.32, blue: 0.96), Color(red: 0.56, green: 0.34, blue: 0.96)], startPoint: .leading, endPoint: .trailing)

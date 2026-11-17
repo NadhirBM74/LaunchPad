@@ -81,54 +81,99 @@ struct SettingsPanel: View {
     @State private var licenseInput = ""
     @State private var licenseFeedback: (isError: Bool, message: String)?
     @State private var showProCelebration = false
+    @State private var showAdvancedInGeneral = false
+    @State private var showManageAppsInCustomization = false
+    @State private var settingsToast: String? = nil
+    @AppStorage(PrefKey.autoCheckUpdates) private var autoCheckUpdates = true
+    @AppStorage("LaunchpadEnableUsageTips") private var enableUsageTips = true
+    @AppStorage("LaunchpadEnableSoundFeedback") private var enableSoundFeedback = true
 
     enum SettingsTab: String, CaseIterable, Identifiable {
-        case general, interface, apps, advanced, license, about
+        case interface, apps, notifications, general, license, about, advanced
         var id: String { rawValue }
+
+        static var visibleTabs: [SettingsTab] {
+            [.interface, .apps, .notifications, .general, .license, .about]
+        }
+
         var title: String {
             switch self {
+            case .interface: return "Apparence"
+            case .apps: return "Personnalisation"
+            case .notifications: return "Notifications"
             case .general: return loc("tab.general")
-            case .interface: return loc("tab.interface")
-            case .apps: return loc("tab.apps")
-            case .advanced: return loc("tab.advanced")
             case .license: return loc("tab.license")
             case .about: return loc("tab.about")
+            case .advanced: return loc("tab.advanced")
             }
         }
         var symbol: String {
             switch self {
-            case .general: return "gearshape"
-            case .interface: return "camera.macro"
-            case .apps: return "rectangle.inset.topleft.filled"
-            case .advanced: return "switch.2"
-            case .license: return "key.fill"
-            case .about: return "info.circle"
+            case .interface: return "paintpalette.fill"
+            case .apps: return "sparkles.rectangle.stack.fill"
+            case .notifications: return "bell.badge.fill"
+            case .general: return "gearshape.fill"
+            case .license: return "crown.fill"
+            case .about: return "info.circle.fill"
+            case .advanced: return "slider.horizontal.3"
+            }
+        }
+    }
+
+    private func triggerSettingsToast(_ text: String) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            settingsToast = text
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                if settingsToast == text {
+                    settingsToast = nil
+                }
             }
         }
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 tabBar
                     .padding(.top, 28)
                     .padding(.bottom, 10)
                 Rectangle().fill(SettingsStyle.separator).frame(height: 1)
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 14) {
                         switch selectedTab {
-                        case .general: generalTab
                         case .interface: interfaceTab
-                        case .apps: appsTab
+                        case .apps: customizationAndAppsTab
+                        case .notifications: notificationsTab
+                        case .general: generalTab
                         case .advanced: advancedTab
                         case .license: licenseTab
                         case .about: aboutTab
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 18)
                     .padding(.top, 16)
-                    .padding(.bottom, 44)
+                    .padding(.bottom, 52)
                 }
+            }
+
+            if let settingsToast {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text(settingsToast)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(Color.black.opacity(0.84), in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.20), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+                .padding(.bottom, 14)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(500)
             }
 
             if showProCelebration {
@@ -229,19 +274,19 @@ struct SettingsPanel: View {
     // MARK: Onglets (icône au-dessus du titre, onglet actif en violet)
 
     private var tabBar: some View {
-        HStack(spacing: 8) {
-            ForEach(SettingsTab.allCases) { tab in
-                let selected = selectedTab == tab
+        HStack(spacing: 6) {
+            ForEach(SettingsTab.visibleTabs) { tab in
+                let selected = (selectedTab == tab) || (tab == .general && selectedTab == .advanced)
                 Button {
                     withAnimation(.easeOut(duration: 0.15)) { selectedTab = tab }
                 } label: {
                     VStack(spacing: 5) {
                         Image(systemName: tab.symbol)
-                            .font(.system(size: 18, weight: .regular))
+                            .font(.system(size: 17, weight: selected ? .semibold : .regular))
                             .frame(height: 20)
                         HStack(spacing: 3) {
                             Text(tab.title)
-                                .font(.system(size: 12.5, weight: selected ? .medium : .regular))
+                                .font(.system(size: 12, weight: selected ? .semibold : .regular))
                                 .lineLimit(1)
                             if tab == .license && licenseManager.isPro {
                                 Image(systemName: "checkmark.circle.fill")
@@ -250,14 +295,14 @@ struct SettingsPanel: View {
                             }
                         }
                     }
-                    .frame(width: 96, height: 62)
+                    .frame(width: 96, height: 60)
                     .foregroundStyle(selected ? SettingsStyle.accent : Color.primary.opacity(0.78))
                     .background {
                         if selected {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(SettingsStyle.accent.opacity(0.18))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .strokeBorder(SettingsStyle.accent.opacity(0.35), lineWidth: 1)
                                 }
                         }
@@ -265,10 +310,163 @@ struct SettingsPanel: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Onglet \(tab.title)")
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Notifications (Gestion simple et claire des alertes)
+
+    @ViewBuilder
+    private var notificationsTab: some View {
+        SettingsSectionTitle("Alertes et mises à jour")
+        SettingsCardBox {
+            SettingsRow(
+                "Vérifier automatiquement les mises à jour",
+                subtitle: "Vous prévient dès qu'une nouvelle version de LaunchPad est disponible."
+            ) {
+                SettingsSwitch(isOn: Binding(
+                    get: { updateManager.autoCheckEnabled },
+                    set: { newVal in
+                        updateManager.autoCheckEnabled = newVal
+                        autoCheckUpdates = newVal
+                        triggerSettingsToast(newVal ? "Mises à jour automatiques activées" : "Mises à jour automatiques désactivées")
+                    }
+                ))
+            }
+            SettingsSeparator()
+            SettingsRow(
+                "Conseils d'utilisation et nouveautés",
+                subtitle: "Affiche des astuces simples pour découvrir les gestes et les nouveaux widgets."
+            ) {
+                SettingsSwitch(isOn: $enableUsageTips)
+                    .onChange(of: enableUsageTips) { _, val in
+                        triggerSettingsToast(val ? "Conseils activés" : "Conseils masqués")
+                    }
+            }
+            SettingsSeparator()
+            SettingsRow(
+                "Retours visuels de confirmation",
+                subtitle: "Affiche une discrète bannière de confirmation après chaque modification."
+            ) {
+                SettingsSwitch(isOn: $enableSoundFeedback)
+                    .onChange(of: enableSoundFeedback) { _, val in
+                        triggerSettingsToast(val ? "Confirmations visuelles activées" : "Confirmations visuelles désactivées")
+                    }
+            }
+        }
+
+        SettingsSectionTitle("Notifications macOS")
+        SettingsCardBox {
+            SettingsRow(
+                "Tester l'affichage d'une notification",
+                subtitle: "Vérifie que les bannières de LaunchPad s'affichent correctement à l'écran."
+            ) {
+                Button("Envoyer un test") {
+                    NotificationCenter.default.post(name: .triggerTestToast, object: nil)
+                    triggerSettingsToast("Notification de test envoyée !")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SettingsStyle.accent)
+                .controlSize(.small)
+            }
+            SettingsSeparator()
+            SettingsRow(
+                "Réglages Système macOS",
+                subtitle: "Gérez les bannières et les sons de LaunchPad dans les Réglages de votre Mac."
+            ) {
+                Button("Ouvrir les Réglages macOS") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    // MARK: Personnalisation (Icônes HD, Grille, Widgets & Applications)
+
+    @ViewBuilder
+    private var customizationAndAppsTab: some View {
+        SettingsSectionTitle("Style et qualité des icônes (512×512 HD)")
+        SettingsCardBox {
+            VStack(alignment: .leading, spacing: 10) {
+                IconAppearanceShowcaseView {
+                    store.reloadIcons()
+                    triggerSettingsToast("Style d'icônes mis à jour en haute définition")
+                }
+            }
+            .padding(.vertical, 10)
+
+            if !CustomIconManager.shared.overrides.isEmpty {
+                SettingsSeparator()
+                SettingsRow(
+                    "Icônes personnalisées individuellement",
+                    subtitle: "\(CustomIconManager.shared.overrides.count) application(s) utilisent une icône sur mesure."
+                ) {
+                    Button("Tout rétablir par défaut") {
+                        CustomIconManager.shared.removeAllOverrides()
+                        store.reloadIcons()
+                        triggerSettingsToast("Toutes les icônes d'origine ont été rétablies")
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+
+        SettingsSectionTitle("Taille et disposition de la grille")
+        SettingsCardBox {
+            SettingsSliderRow("Taille des icônes", value: $iconScale, range: 0.7...1.3, onEditingChanged: { editing in
+                NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: editing)
+                if !editing { triggerSettingsToast("Taille des icônes enregistrée") }
+            })
+            IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
+            SettingsSeparator()
+            SettingsRow("Nombre de colonnes et de lignes", subtitle: "Ajustez le nombre d'applications affichées par page.") {
+                HStack(spacing: 10) {
+                    SettingsNumberField(value: $columns, range: 4...10)
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    SettingsNumberField(value: $rows, range: 3...8)
+                }
+            }
+            SettingsSeparator()
+            SettingsRow("Afficher le nom sous chaque application") {
+                SettingsSwitch(isOn: $showLabels)
+            }
+            SettingsSeparator()
+            SettingsRow("Afficher un point sous les applications ouvertes") {
+                SettingsSwitch(isOn: $showRunning)
+            }
+            SettingsSeparator()
+            SettingsRow(
+                loc("interface.favorites_bar"),
+                subtitle: loc("interface.favorites_subtitle"),
+                isPro: true,
+                isProUnlocked: licenseManager.isPro
+            ) {
+                SettingsSwitch(isOn: Binding(
+                    get: { showFavoritesBar },
+                    set: { newValue in
+                        if newValue && !licenseManager.isPro {
+                            confirm(loc("pro_alert.favorites_title"), loc("pro_alert.favorites_msg")) {
+                                withAnimation { selectedTab = .license }
+                            }
+                        } else {
+                            showFavoritesBar = newValue
+                            triggerSettingsToast(newValue ? "Barre de favoris affichée" : "Barre de favoris masquée")
+                        }
+                    }
+                ))
+            }
+        }
+
+        musicServicesSection
+
+        SettingsSectionTitle("Applications et dossiers")
+        appsTab
     }
 
     // MARK: Général
@@ -414,32 +612,71 @@ struct SettingsPanel: View {
             }
         }
 
-        SettingsSectionTitle(loc("general.behavior"))
+        SettingsSectionTitle("Options avancées (Section secondaire)")
         SettingsCardBox {
-            SettingsRow(loc("general.screen_target")) {
-                SettingsMenuPicker(selection: $screenTarget, options: ScreenTarget.allCases, title: \.title)
-            }
-            SettingsSeparator()
-            SettingsRow(loc("general.return_first_page")) {
-                Picker("", selection: $returnToFirstPage) {
-                    Text(loc("return.never")).tag(-1)
-                    Text(loc("return.always")).tag(0)
-                    Text(loc("return.5s")).tag(5)
-                    Text(loc("return.15s")).tag(15)
-                    Text(loc("return.30s")).tag(30)
-                    Text(loc("return.1m")).tag(60)
-                    Text(loc("return.5m")).tag(300)
+            Button {
+                withAnimation(AppleDesignSystem.Springs.snappy) {
+                    showAdvancedInGeneral.toggle()
                 }
-                .labelsHidden().fixedSize()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(SettingsStyle.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Afficher les options avancées et la sauvegarde")
+                            .font(.system(size: 13.5, weight: .semibold))
+                        Text("Écran cible, tri automatique, sauvegarde de disposition et réinitialisation.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: showAdvancedInGeneral ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
-            SettingsSeparator()
-            SettingsRow(loc("general.include_hidden_search")) { SettingsSwitch(isOn: $showHiddenInSearch) }
-        }
+            .buttonStyle(.plain)
 
-        SettingsSectionTitle(loc("general.tips_title"))
-        SettingsCardBox {
-            SettingsNote(loc("general.tips_text"))
-                .padding(.vertical, 6)
+            if showAdvancedInGeneral {
+                SettingsSeparator()
+                SettingsRow(loc("general.screen_target")) {
+                    SettingsMenuPicker(selection: $screenTarget, options: ScreenTarget.allCases, title: \.title)
+                }
+                SettingsSeparator()
+                SettingsRow(loc("general.return_first_page")) {
+                    Picker("", selection: $returnToFirstPage) {
+                        Text(loc("return.never")).tag(-1)
+                        Text(loc("return.always")).tag(0)
+                        Text(loc("return.5s")).tag(5)
+                        Text(loc("return.15s")).tag(15)
+                        Text(loc("return.30s")).tag(30)
+                        Text(loc("return.1m")).tag(60)
+                        Text(loc("return.5m")).tag(300)
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                SettingsSeparator()
+                SettingsRow(loc("general.include_hidden_search")) { SettingsSwitch(isOn: $showHiddenInSearch) }
+                SettingsSeparator()
+                SettingsRow("Sauvegarder ou restaurer votre disposition", subtitle: "Exportez ou importez vos pages, dossiers et réglages.") {
+                    HStack(spacing: 8) {
+                        Button(loc("advanced.import")) { importBackup() }
+                        Button(loc("advanced.export")) { exportBackup() }
+                    }
+                }
+                SettingsSeparator()
+                SettingsRow(loc("advanced.reset_title"), subtitle: loc("advanced.reset_subtitle")) {
+                    Button(loc("advanced.reset_button")) {
+                        confirm(loc("advanced.reset_confirm_title"), loc("advanced.reset_confirm_msg")) {
+                            store.resetLayout()
+                            triggerSettingsToast("Disposition réinitialisée par défaut")
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -1,46 +1,71 @@
 import SwiftUI
 import AppKit
+import ImageIO
+import UniformTypeIdentifiers
+import Combine
 
-// MARK: - Modes d'Apparence des Icônes (Inspirés de la Photo de Référence 1 & 2 & 4)
+// MARK: - Modes d'Apparence des Icônes (Tous styles compatibles HD 512×512)
 
 public enum IconAppearanceStyle: String, Codable, CaseIterable, Identifiable, Sendable {
-    case dark = "dark"                   // Dark squircle + icône colorée + halo ambiant (Photos 1 & 4)
-    case light = "light"                 // Light squircle blanc pur + icône colorée (Photos 1 & 2)
-    case tinted = "tinted"               // Dark teinté + icône monochrome dégradée (Photo 1 Tinted)
-    case clearDark = "clearDark"         // Verre sombre translucide + icône colorée (Photo 1 Clear Row 1)
-    case frostedGlass = "frostedGlass"   // Verre givré clair avec reflet diagonal (Photo 1 Clear Row 2 & Photo 2)
-    case clearLiquid = "clearLiquid"     // Liquid Glass transparent réfractif (Photo 1 Clear Row 3)
-    case classicApple = "classicApple"   // Style Photo 2 (App Store beige, Calendrier pierre & rouge)
-    case system = "system"               // Icônes natives macOS (comme le système)
-    case original = "original"           // Icônes .icns d'origine
+    case original = "original"           // Icônes originales haute définition des applications (recommandé)
+    case dark = "dark"                   // Sombre profond + lueur ambiante (Photos 1 & 4)
+    case light = "light"                 // Clair lumineux + couleurs vives (Photos 1 & 2)
+    case tinted = "tinted"               // Teinté monochrome dégradé (Photo 1 Tinted)
+    case monochrome = "monochrome"       // Monochrome argenté/graphite haute lisibilité
+    case transparent = "transparent"     // Transparent / Verre cristal sans fond opaque
+    case clearDark = "clearDark"         // Verre sombre translucide (Photo 1 Clear Row 1)
+    case frostedGlass = "frostedGlass"   // Verre dépoli clair avec reflet diagonal (Photo 1 Clear Row 2)
+    case clearLiquid = "clearLiquid"     // Verre liquide réfractif (Photo 1 Clear Row 3)
+    case classicApple = "classicApple"   // Pack Studio Apple (App Store sable, Calendrier matriciel)
+    case system = "system"               // Suit automatiquement l'apparence de macOS
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
-        case .dark: return "Sombre (Dark)"
-        case .light: return "Clair (Light)"
-        case .tinted: return "Teinté (Tinted)"
-        case .clearDark: return "Verre Sombre (Clear Dark)"
-        case .frostedGlass: return "Verre Givré (Frosted Glass)"
-        case .clearLiquid: return "Liquid Glass (Clear Colored)"
-        case .classicApple: return "Édition Studio (Photo Réf.)"
-        case .system: return loc("interface.icon_color_system")
-        case .original: return loc("interface.icon_color_original")
+        case .original: return "Originales HD"
+        case .dark: return "Sombre"
+        case .light: return "Clair"
+        case .tinted: return "Teinté"
+        case .monochrome: return "Monochrome"
+        case .transparent: return "Transparent"
+        case .clearDark: return "Verre Sombre"
+        case .frostedGlass: return "Verre Givré"
+        case .clearLiquid: return "Verre Liquide"
+        case .classicApple: return "Pack Studio Apple"
+        case .system: return "Automatique (macOS)"
         }
     }
 
     public var subtitle: String {
         switch self {
-        case .dark: return "Fond sombre profond, lueur ambiante et icônes vibrantes"
-        case .light: return "Fond blanc nacré lumineux et icônes colorées"
-        case .tinted: return "Style monochrome teinté haute couture"
-        case .clearDark: return "Surface vitrée sombre translucide et icônes colorées"
-        case .frostedGlass: return "Verre dépoli lumineux avec reflet spéculaire diagonal"
-        case .clearLiquid: return "Verre cristal transparent avec biseau réfractif"
-        case .classicApple: return "Palette chaude App Store & Calendrier matriciel"
-        case .system: return "Suit l'apparence système de macOS"
-        case .original: return "Icônes d'origine des bundles d'applications"
+        case .original: return "Les vraies icônes en couleur de vos applications en très haute définition"
+        case .dark: return "Fond sombre élégant qui met en valeur les couleurs de chaque icône"
+        case .light: return "Rendu lumineux et éclatant adapté aux ambiances claires"
+        case .tinted: return "Harmonise toutes vos icônes avec votre couleur préférée"
+        case .monochrome: return "Style épuré en nuances d'argent et de graphite à fort contraste"
+        case .transparent: return "Fond en verre transparent laissant apparaître votre fond d'écran"
+        case .clearDark: return "Surface vitrée sombre translucide avec icônes colorées"
+        case .frostedGlass: return "Verre dépoli lumineux avec reflet diagonal soyeux"
+        case .clearLiquid: return "Effet verre liquide Apple avec contour lumineux"
+        case .classicApple: return "Icônes revisitées (App Store sable chaud, Calendrier à points)"
+        case .system: return "Utilise le style d'icônes configuré dans les Réglages Système de votre Mac"
+        }
+    }
+
+    public var badgeIcon: String {
+        switch self {
+        case .original: return "sparkles.rectangle.stack.fill"
+        case .dark: return "moon.stars.fill"
+        case .light: return "sun.max.fill"
+        case .tinted: return "paintpalette.fill"
+        case .monochrome: return "circle.lefthalf.filled"
+        case .transparent: return "square.on.square.dashed"
+        case .clearDark: return "rectangle.fill.on.rectangle.fill"
+        case .frostedGlass: return "snowflake"
+        case .clearLiquid: return "drop.fill"
+        case .classicApple: return "apple.logo"
+        case .system: return "macwindow"
         }
     }
 }
@@ -241,6 +266,8 @@ public struct CustomAppIconView: View {
             // 2. Contenu Vectoriel Spécifique à l'Application
             iconGlyphContent(size: s)
                 .frame(width: s, height: s)
+                .saturation(style == .monochrome ? 0.0 : 1.0)
+                .contrast(style == .monochrome ? 1.12 : 1.0)
                 .clipShape(shape)
 
             // 3. Reflet Spéculaire de Verre & Bordure Lumineuse (selon le style)
@@ -406,15 +433,15 @@ public struct CustomAppIconView: View {
                     .clipShape(shape)
                 }
 
-            case .clearLiquid:
+            case .clearLiquid, .transparent:
                 // Photo 1 (Clear Colored Row 3) : Liquid Glass cristallin avec bulle de réfraction
                 ZStack {
                     shape.fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.28),
-                                Color(red: 0.55, green: 0.62, blue: 1.0).opacity(0.22),
-                                Color.white.opacity(0.14)
+                                Color.white.opacity(style == .transparent ? 0.14 : 0.28),
+                                Color(red: 0.55, green: 0.62, blue: 1.0).opacity(style == .transparent ? 0.10 : 0.22),
+                                Color.white.opacity(style == .transparent ? 0.06 : 0.14)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -434,6 +461,18 @@ public struct CustomAppIconView: View {
                         .offset(x: -s * 0.15, y: -s * 0.18)
                         .clipShape(shape)
                 }
+
+            case .monochrome:
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            Color(white: 0.20),
+                            Color(white: 0.09)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             }
         }
     }
@@ -1467,11 +1506,354 @@ struct TrianglePointerShape: Shape {
     }
 }
 
-// MARK: - Rendu Bitmap Haute Performance pour la Grille Launchpad (NSImage / CGImage)
+// MARK: - Gestionnaire d'Icônes Personnalisées par Application (Images & Symboles)
+
+public struct CustomAppIconOverride: Codable, Equatable, Sendable {
+    public var appID: String
+    public var customImageFilename: String?
+    public var symbolName: String?
+    public var backgroundColorHex: String?
+
+    public init(
+        appID: String,
+        customImageFilename: String? = nil,
+        symbolName: String? = nil,
+        backgroundColorHex: String? = nil
+    ) {
+        self.appID = appID
+        self.customImageFilename = customImageFilename
+        self.symbolName = symbolName
+        self.backgroundColorHex = backgroundColorHex
+    }
+}
+
+@MainActor
+public final class CustomIconManager: ObservableObject {
+    public static let shared = CustomIconManager()
+
+    @Published public private(set) var overrides: [String: CustomAppIconOverride] = [:]
+    @Published public var activePickerAppID: String? = nil
+
+    private let directoryURL: URL
+    private let metadataURL: URL
+
+    private init() {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("LaunchPad/custom_icons", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        self.directoryURL = base
+        self.metadataURL = base.appendingPathComponent("overrides.json")
+        load()
+    }
+
+    public func hasOverride(for appID: String) -> Bool {
+        overrides[appID] != nil
+    }
+
+    public func setCustomImage(from sourceURL: URL, for appID: String) -> Bool {
+        let ext = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension.lowercased()
+        let safeName = UUID().uuidString + "." + ext
+        let destURL = directoryURL.appendingPathComponent(safeName)
+        do {
+            if let old = overrides[appID]?.customImageFilename {
+                try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(old))
+            }
+            let accessed = sourceURL.startAccessingSecurityScopedResource()
+            defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
+            try FileManager.default.copyItem(at: sourceURL, to: destURL)
+            overrides[appID] = CustomAppIconOverride(appID: appID, customImageFilename: safeName)
+            save()
+            IconCache.shared.invalidate([appID])
+            NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    public func setCustomSymbol(symbol: String, colorHex: String, for appID: String) {
+        if let old = overrides[appID]?.customImageFilename {
+            try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(old))
+        }
+        overrides[appID] = CustomAppIconOverride(
+            appID: appID,
+            customImageFilename: nil,
+            symbolName: symbol,
+            backgroundColorHex: colorHex
+        )
+        save()
+        IconCache.shared.invalidate([appID])
+        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+    }
+
+    public func removeOverride(for appID: String) {
+        if let old = overrides[appID]?.customImageFilename {
+            try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(old))
+        }
+        overrides.removeValue(forKey: appID)
+        save()
+        IconCache.shared.invalidate([appID])
+        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+    }
+
+    public func removeAllOverrides() {
+        for (_, ov) in overrides {
+            if let file = ov.customImageFilename {
+                try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(file))
+            }
+        }
+        overrides.removeAll()
+        save()
+        IconCache.shared.removeAll()
+        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+    }
+
+    nonisolated public func overrideImageURL(filename: String) -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("LaunchPad/custom_icons", isDirectory: true)
+        return base.appendingPathComponent(filename)
+    }
+
+    private func load() {
+        guard let data = try? Data(contentsOf: metadataURL),
+              let decoded = try? JSONDecoder().decode([String: CustomAppIconOverride].self, from: data) else {
+            return
+        }
+        self.overrides = decoded
+    }
+
+    private func save() {
+        guard let data = try? JSONEncoder().encode(overrides) else { return }
+        try? data.write(to: metadataURL, options: .atomic)
+    }
+}
+
+// MARK: - Fenêtre de Personnalisation Simple d'une Icône d'Application
+
+public struct AppCustomIconPickerSheet: View {
+    public let appID: String
+    public let appName: String
+    @Binding public var isPresented: Bool
+
+    @ObservedObject private var customManager = CustomIconManager.shared
+    @State private var selectedSymbol: String = "star.fill"
+    @State private var selectedColorHex: String = "#0A84FF"
+    @State private var statusFeedback: String? = nil
+
+    private let popularSymbols: [String] = [
+        "star.fill", "bolt.fill", "sparkles", "terminal.fill", "paintbrush.fill",
+        "music.note", "gamecontroller.fill", "camera.fill", "video.fill", "envelope.fill",
+        "safari.fill", "folder.fill", "doc.text.fill", "cpu.fill", "globe",
+        "bubble.left.and.bubble.right.fill", "book.fill", "hammer.fill", "heart.fill", "shield.fill"
+    ]
+
+    private let colorPalette: [(String, String, Color)] = [
+        ("#0A84FF", "Bleu", Color(red: 0.04, green: 0.52, blue: 1.0)),
+        ("#BF5AF2", "Violet", Color(red: 0.75, green: 0.35, blue: 0.95)),
+        ("#FF9F0A", "Orange", Color(red: 1.0, green: 0.62, blue: 0.04)),
+        ("#30D158", "Vert", Color(red: 0.19, green: 0.82, blue: 0.35)),
+        ("#FF2D55", "Rose", Color(red: 1.0, green: 0.18, blue: 0.33)),
+        ("#22D3EE", "Turquoise", Color(red: 0.13, green: 0.83, blue: 0.93)),
+        ("#181920", "Obsidienne", Color(red: 0.10, green: 0.10, blue: 0.14)),
+        ("#F5F6FA", "Blanc Pur", Color(red: 0.95, green: 0.96, blue: 0.98))
+    ]
+
+    public init(appID: String, appName: String, isPresented: Binding<Bool>) {
+        self.appID = appID
+        self.appName = appName
+        self._isPresented = isPresented
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Image(nsImage: IconCache.shared.icon(for: appID))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 56, height: 56)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Personnaliser l'icône de « \(appName) »")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Choisissez une image sur votre Mac ou créez une icône sur mesure.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.68))
+                }
+                Spacer()
+                Button {
+                    isPresented = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Fermer")
+            }
+
+            Divider().background(Color.white.opacity(0.14))
+
+            // Option 1 : Importer un fichier image
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("1. Utiliser une image de votre Mac")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("Formats acceptés : PNG, ICNS, JPG, HEIC (haute résolution conseillée)")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+                Spacer()
+                Button {
+                    chooseImageFromDisk()
+                } label: {
+                    Label("Choisir une image…", systemImage: "photo.badge.plus")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.white, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            // Option 2 : Créer une icône avec symbole et couleur d'arrière-plan
+            VStack(alignment: .leading, spacing: 10) {
+                Text("2. Ou choisir un symbole et une couleur de fond")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack(spacing: 8) {
+                    ForEach(colorPalette, id: \.0) { hex, label, color in
+                        let isSelected = selectedColorHex == hex
+                        Button {
+                            selectedColorHex = hex
+                        } label: {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 24, height: 24)
+                                .overlay(
+                                    Circle().strokeBorder(isSelected ? Color.white : Color.white.opacity(0.25), lineWidth: isSelected ? 2.5 : 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(label)
+                        .accessibilityLabel("Couleur \(label)")
+                    }
+                    Spacer()
+                    Button {
+                        customManager.setCustomSymbol(symbol: selectedSymbol, colorHex: selectedColorHex, for: appID)
+                        statusFeedback = "Nouvelle icône appliquée !"
+                    } label: {
+                        Text("Appliquer ce symbole")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(popularSymbols, id: \.self) { sym in
+                            let isChosen = selectedSymbol == sym
+                            Button {
+                                selectedSymbol = sym
+                            } label: {
+                                Image(systemName: sym)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(isChosen ? .black : .white.opacity(0.85))
+                                    .frame(width: 34, height: 34)
+                                    .background(isChosen ? Color.white : Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            // Pied de page : Réinitialiser + Fermer
+            HStack {
+                if customManager.hasOverride(for: appID) {
+                    Button(role: .destructive) {
+                        customManager.removeOverride(for: appID)
+                        statusFeedback = "Icône d'origine restaurée."
+                    } label: {
+                        Label("Rétablir l'icône d'origine", systemImage: "arrow.counterclockwise")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.red.opacity(0.9))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let statusFeedback {
+                    Text(statusFeedback)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.green)
+                }
+                Spacer()
+                Button {
+                    isPresented = false
+                } label: {
+                    Text("Terminé")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 7)
+                        .background(Color.white.opacity(0.16), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(22)
+        .frame(width: 500)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(red: 0.10, green: 0.11, blue: 0.15).opacity(0.96))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
+                )
+        )
+        .shadow(color: .black.opacity(0.55), radius: 30, y: 14)
+    }
+
+    private func chooseImageFromDisk() {
+        let panel = NSOpenPanel()
+        panel.title = "Choisir une icône pour \(appName)"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image, .icns, .png, .jpeg, .heic, .tiff]
+        if panel.runModal() == .OK, let url = panel.url {
+            if customManager.setCustomImage(from: url, for: appID) {
+                statusFeedback = "Image personnalisée appliquée !"
+            }
+        }
+    }
+}
+
+// MARK: - Moteur Haute Définition 512×512 Retina (HDAppIconEngine & CustomAppIconRenderer)
+
+public struct IconQualityReport: Sendable {
+    public let totalTested: Int
+    public let highResCount: Int
+    public let minimumDimension: Int
+    public let averageDimension: Int
+}
 
 public enum CustomAppIconRenderer {
+    /// Résolution physique Retina cible (512×512 px = 256×256 pt @2x)
+    public static let retinaPixelSize: Int = 512
+    public static let logicalPointSize: CGFloat = 256
 
-    /// Génère une icône vectorielle sur mesure ou applique le style unifié (Dark, Light, Tinted, Clear Glass) à n'importe quelle application
+    /// Génère une icône haute résolution 512×512 pour n'importe quelle application et n'importe quel style
     @MainActor
     public static func renderIcon(
         for path: String,
@@ -1481,127 +1863,135 @@ public enum CustomAppIconRenderer {
         tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0),
         pixelSize: CGFloat = 256
     ) -> NSImage? {
-        if let customKind = CustomAppIconKind.match(path: path, bundleID: bundleID, name: name) {
-            let view = CustomAppIconView(kind: customKind, style: style, tintColor: tintColor, size: pixelSize)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 1.0
-            if let nsImage = renderer.nsImage {
-                nsImage.size = NSSize(width: pixelSize, height: pixelSize)
-                return nsImage
+        // 1. Priorité absolue : Icône personnalisée définie par l'utilisateur pour cette application
+        if let override = CustomIconManager.shared.overrides[path] {
+            if let customRendered = renderUserOverride(override, size: retinaPixelSize) {
+                return wrapCGImageAsRetinaNSImage(customRendered)
             }
         }
 
-        // Pour les applications tierces lorsque l'un des styles unifiés (Dark, Light, Tinted, Clear Glass) est actif :
-        // On intègre l'icône de l'application dans le socle squircle correspondant (Photo 1 : "A unified style with Glass and colored icons")
-        guard style != .system && style != .original else { return nil }
-        let baseIcon = NSWorkspace.shared.icon(forFile: path)
-        let wrappedView = UnifiedThirdPartyIconView(
-            appIcon: baseIcon,
-            style: style,
-            tintColor: tintColor,
-            size: pixelSize
+        // 2. Si l'utilisateur a choisi un style vectoriel ou unifié et que l'application fait partie de notre pack vectoriel (sauf en mode Original ou Automatique macOS)
+        if style != .original && style != .system,
+           let customKind = CustomAppIconKind.match(path: path, bundleID: bundleID, name: name) {
+            let view = CustomAppIconView(kind: customKind, style: style, tintColor: tintColor, size: logicalPointSize)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2.0 // 256pt × 2.0 = 512×512 pixels physiques Retina !
+            if let cgImage = renderer.cgImage {
+                return wrapCGImageAsRetinaNSImage(cgImage)
+            }
+        }
+
+        // 3. Pour toutes les applications (tierces ou en mode Original / Automatique / Sombre / Clair / Teinté / Monochrome / Transparent / Verre) :
+        // Extraction haute résolution (1024×1024 ou 512×512) directement depuis Assets.car / .icns / IconServices,
+        // normalisation géométrique sans double-squircle, et application du filtre de style en 512×512.
+        let nsTint = NSColor(tintColor).usingColorSpace(.sRGB) ?? NSColor.systemBlue
+        let tintRGB = (
+            r: Double(nsTint.redComponent),
+            g: Double(nsTint.greenComponent),
+            b: Double(nsTint.blueComponent)
         )
-        let renderer = ImageRenderer(content: wrappedView)
-        renderer.scale = 1.0
-        if let nsImage = renderer.nsImage {
-            nsImage.size = NSSize(width: pixelSize, height: pixelSize)
-            return nsImage
+        if let cgImage = IconRenderer.renderStyledHighResIcon(
+            for: path,
+            style: style,
+            tintRGB: tintRGB
+        ) {
+            return wrapCGImageAsRetinaNSImage(cgImage)
         }
         return nil
     }
-}
 
-/// Enveloppe n'importe quelle icône tierce dans le style squircle unifié (Dark, Light, Tinted, Clear Glass, Frosted Glass, Liquid Glass)
-struct UnifiedThirdPartyIconView: View {
-    let appIcon: NSImage
-    let style: IconAppearanceStyle
-    let tintColor: Color
-    let size: CGFloat
-
-    private var inset: CGFloat { size * 0.09 }
-    private var bodySize: CGFloat { size - inset * 2 }
-    private var cornerRadius: CGFloat { bodySize * 0.228 }
-
-    var body: some View {
-        let s = bodySize
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
-        ZStack {
-            // Socle squircle selon le style choisi
-            switch style {
-            case .dark:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.15, green: 0.15, blue: 0.18), Color(red: 0.06, green: 0.06, blue: 0.08)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+    @MainActor
+    private static func renderUserOverride(_ override: CustomAppIconOverride, size: Int) -> CGImage? {
+        if let filename = override.customImageFilename {
+            let fileURL = CustomIconManager.shared.overrideImageURL(filename: filename)
+            if let nsImage = NSImage(contentsOf: fileURL),
+               let rawCG = IconRenderer.rasterizeNSImageHighRes(nsImage, targetSize: size) {
+                return IconRenderer.normalizeAndStyleCGImage(
+                    rawCG,
+                    style: .original,
+                    tintRGB: (0.08, 0.54, 0.98),
+                    forceSquircleClip: true
                 )
-            case .light, .classicApple:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white, Color(red: 0.93, green: 0.94, blue: 0.96)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            case .tinted:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.03, green: 0.08, blue: 0.16), Color(red: 0.01, green: 0.03, blue: 0.07)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            case .clearDark:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.14, green: 0.15, blue: 0.34).opacity(0.84), Color(red: 0.08, green: 0.09, blue: 0.22).opacity(0.90)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .frostedGlass:
-                ZStack {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [Color(red: 0.86, green: 0.88, blue: 0.98).opacity(0.88), Color(red: 0.74, green: 0.77, blue: 0.94).opacity(0.82)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    AppleDesignSystem.diagonalGlassSheen()
-                        .clipShape(shape)
-                }
-            case .clearLiquid:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.28), Color(red: 0.55, green: 0.62, blue: 1.0).opacity(0.22), Color.white.opacity(0.14)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .system, .original:
-                EmptyView()
             }
-
-            // Icône de l'application centrée
-            Image(nsImage: appIcon)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: s * 0.78, height: s * 0.78)
-                .saturation(style == .tinted ? 0.0 : 1.0)
-                .colorMultiply(style == .tinted ? tintColor : .white)
-
-            // Bordure spéculaire
-            shape.strokeBorder(
-                AppleDesignSystem.glassRimGradient(opacity: (style == .frostedGlass || style == .clearLiquid) ? 1.0 : 0.55),
-                lineWidth: max(1.0, s * 0.014)
-            )
         }
-        .frame(width: s, height: s)
-        .shadow(color: .black.opacity(0.30), radius: size * 0.04, y: size * 0.02)
-        .frame(width: size, height: size)
+        if let symbol = override.symbolName {
+            let bgColor = Self.colorFromHex(override.backgroundColorHex ?? "#0A84FF")
+            let isLightBg = (override.backgroundColorHex?.uppercased() == "#F5F6FA" || override.backgroundColorHex?.uppercased() == "#FFFFFF")
+            let view = ZStack {
+                let inset = logicalPointSize * 0.09
+                let bodySize = logicalPointSize - inset * 2
+                let shape = RoundedRectangle(cornerRadius: bodySize * 0.225, style: .continuous)
+                shape.fill(
+                    LinearGradient(
+                        colors: [bgColor, bgColor.opacity(0.78)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                Image(systemName: symbol)
+                    .font(.system(size: bodySize * 0.46, weight: .semibold))
+                    .foregroundStyle(isLightBg ? Color.black.opacity(0.85) : Color.white)
+                    .shadow(color: .black.opacity(0.22), radius: 4, y: 2)
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.55), Color.white.opacity(0.12)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
+            }
+            .frame(width: logicalPointSize - logicalPointSize * 0.18, height: logicalPointSize - logicalPointSize * 0.18)
+            .shadow(color: .black.opacity(0.30), radius: 8, y: 4)
+            .frame(width: logicalPointSize, height: logicalPointSize)
+
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2.0
+            return renderer.cgImage
+        }
+        return nil
+    }
+
+    public static func wrapCGImageAsRetinaNSImage(_ cgImage: CGImage) -> NSImage {
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        rep.size = NSSize(width: logicalPointSize, height: logicalPointSize)
+        let image = NSImage(size: NSSize(width: logicalPointSize, height: logicalPointSize))
+        image.addRepresentation(rep)
+        return image
+    }
+
+    private static func colorFromHex(_ hex: String) -> Color {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&int)
+        let r = Double((int >> 16) & 0xFF) / 255.0
+        let g = Double((int >> 8) & 0xFF) / 255.0
+        let b = Double(int & 0xFF) / 255.0
+        return Color(red: r, green: g, blue: b)
+    }
+
+    /// Auto-test de validation de la qualité et de la résolution des icônes (Section 9)
+    @MainActor
+    public static func validateCatalogIcons(paths: [String]) -> IconQualityReport {
+        var highRes = 0
+        var minDim = Int.max
+        var sumDim = 0
+        let sample = Array(paths.prefix(24))
+        for path in sample {
+            let img = IconCache.shared.icon(for: path)
+            let maxRepW = img.representations.map(\.pixelsWide).max() ?? Int(img.size.width)
+            if maxRepW >= 512 {
+                highRes += 1
+            }
+            minDim = min(minDim, maxRepW)
+            sumDim += maxRepW
+        }
+        let count = max(1, sample.count)
+        return IconQualityReport(
+            totalTested: sample.count,
+            highResCount: highRes,
+            minimumDimension: minDim == Int.max ? 0 : minDim,
+            averageDimension: sumDim / count
+        )
     }
 }

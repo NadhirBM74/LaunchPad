@@ -135,8 +135,13 @@ final class LaunchpadStore: ObservableObject {
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didMountNotification, object: nil)
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didUnmountNotification, object: nil)
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didWakeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(iconStyleNotificationReceived), name: .launchpadIconStyleDidChange, object: nil)
         watcher.onChange = { [weak self] in self?.scheduleRefresh() }
         refresh()
+    }
+
+    @objc private func iconStyleNotificationReceived() {
+        iconsVersion &+= 1
     }
 
     @objc private func runningAppsChanged() { updateRunningApps() }

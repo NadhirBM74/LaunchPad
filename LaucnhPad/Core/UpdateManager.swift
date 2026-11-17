@@ -322,6 +322,7 @@ public final class UpdateManager: NSObject, ObservableObject {
         request.timeoutInterval = 60
 
         let session = URLSession(configuration: .default)
+        let capturedFallbackApiUrl = self.pendingApiAssetUrl
         let task = session.downloadTask(with: request) { [weak self] tempUrl, response, error in
             guard let self = self else { return }
 
@@ -337,7 +338,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
 
             // Si le téléchargement échoue et qu'on a une URL API alternative directe non encore tentée
-            if !validFile, !isApiFallback, let fallbackApiUrl = self.pendingApiAssetUrl, fallbackApiUrl != targetUrl {
+            if !validFile, !isApiFallback, let fallbackApiUrl = capturedFallbackApiUrl, fallbackApiUrl != targetUrl {
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
                     self.startDownloadTask(targetUrl: fallbackApiUrl, isApiFallback: true, ext: ext, version: version)
@@ -445,7 +446,7 @@ public final class UpdateManager: NSObject, ObservableObject {
             // Recherche récursive du .app extrait
             var finalNewAppURL: URL? = nil
             if let enumerator = fileManager.enumerator(at: extractedAppDir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
-                for case let itemURL as URL in enumerator {
+                while let itemURL = enumerator.nextObject() as? URL {
                     if itemURL.pathExtension == "app" {
                         finalNewAppURL = itemURL
                         break
@@ -466,10 +467,11 @@ public final class UpdateManager: NSObject, ObservableObject {
             if targetAppPath.hasPrefix("/Volumes/") || targetAppPath.contains("DerivedData") || targetAppPath.contains("/var/folders/") || !fileManager.fileExists(atPath: targetAppPath) {
                 targetAppPath = "/Applications/LaunchPad.app"
             }
+            let resolvedTargetAppPath = targetAppPath
 
             // Mise à jour de l'état : l'application est bien téléchargée et prête à être redémarrée par l'utilisateur
             await MainActor.run {
-                self.stagedUpdateContext = (tempDir, newAppURL, targetAppPath)
+                self.stagedUpdateContext = (tempDir, newAppURL, resolvedTargetAppPath)
                 self.state = .readyToRestart(version: version)
                 self.sendReadyToRestartNotification(version: version)
             }
