@@ -52,6 +52,7 @@ nonisolated enum Translations_DE: Sendable {
         "general.f4_subtitle": "Öffnet dieses Launchpad statt des System-Launchpads mit der F4-Taste.",
         "general.accessibility_needed": "Bedienungshilfen-Berechtigung erforderlich, um die F4-Taste abzufangen.",
         "general.accessibility_button": "Systemeinstellungen öffnen",
+        "permission.banner.short": "Bedienungshilfen nötig",
 
         // MARK: - Oberfläche
         "interface.layout": "Layout",

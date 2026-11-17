@@ -754,20 +754,25 @@ struct SettingsPanel: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("permission.banner.title"))
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Text(loc("permission.banner.desc"))
                             .font(.system(size: 11.5))
-                            .foregroundStyle(.white.opacity(0.72))
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
 
-                    Button(loc("general.authorize_button")) {
+                    Button {
                         PermissionManager.shared.requestAccessibility()
+                    } label: {
+                        Text(loc("general.authorize_button"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5.5)
+                            .background(Color(red: 0.90, green: 0.43, blue: 0.05), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                 }
                 .padding(.vertical, 10)
             }

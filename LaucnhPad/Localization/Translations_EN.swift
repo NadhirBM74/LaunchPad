@@ -65,6 +65,7 @@ nonisolated enum Translations_EN: Sendable {
         "permission.granted_auto": "Permission granted! Activating…",
         "permission.banner.title": "Accessibility Permission Missing",
         "permission.banner.desc": "Required for trackpad pinch gesture, F4 key, and hot corners.",
+        "permission.banner.short": "Accessibility required",
 
         // MARK: - Interface Tab
         "interface.layout": "Layout",

@@ -18,7 +18,7 @@ struct RootLayout {
     let widgetPosition: WidgetPosition
     let widgetBannerCenterY: CGFloat
 
-    init(size: CGSize, topInset: CGFloat, columns: Int, rows: Int, iconScale: CGFloat, showLabels: Bool, hasFavorites: Bool = false, hasWidgets: Bool = false, leftShelfWidth: CGFloat = 0, widgetPosition: WidgetPosition = .leftSide, isBannerCollapsed: Bool = false) {
+    init(size: CGSize, topInset: CGFloat, columns: Int, rows: Int, iconScale: CGFloat, showLabels: Bool, hasFavorites: Bool = false, hasWidgets: Bool = false, leftShelfWidth: CGFloat = 0, widgetPosition: WidgetPosition = .leftSide, isBannerCollapsed: Bool = false, hasAccessibilityBanner: Bool = false) {
         self.size = size
         self.hasFavorites = hasFavorites
         self.hasWidgets = false
@@ -30,7 +30,8 @@ struct RootLayout {
         searchCenterX = size.width / 2
         dotsX = size.width / 2
 
-        let gridTop = searchTop + 36 + max(18, size.height * 0.03)
+        let bannerExtra: CGFloat = hasAccessibilityBanner ? 34 : 0
+        let gridTop = searchTop + 36 + bannerExtra + max(18, size.height * 0.03)
         let bottomArea = hasFavorites ? max(96, size.height * 0.13) : max(60, size.height * 0.08)
         let gridHeight = max(160, size.height - gridTop - bottomArea)
 
@@ -118,9 +119,10 @@ struct LaunchpadRootView: View {
 
     private func launchpad(size: CGSize, windowed: Bool) -> some View {
         let hasFavorites = licenseManager.isPro && showFavoritesBar && !vm.favoriteApps.isEmpty
+        let hasAccessibilityBanner = !permissionManager.isAccessibilityGranted && !permissionManager.hasDismissedBanner && !vm.isSearching
         let layout = RootLayout(size: size, topInset: vm.topInset, columns: min(max(columns, 3), 12),
                                 rows: min(max(rows, 2), 9), iconScale: iconScale, showLabels: showLabels,
-                                hasFavorites: hasFavorites)
+                                hasFavorites: hasFavorites, hasAccessibilityBanner: hasAccessibilityBanner)
         return ZStack(alignment: .topLeading) {
             if vm.isPanelVisible {
                 LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundStyle.fixedDimming, liquidGlassIntensity: liquidGlassIntensity)
@@ -318,11 +320,11 @@ struct LaunchpadRootView: View {
             if !permissionManager.isAccessibilityGranted && !permissionManager.hasDismissedBanner && !vm.isSearching {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.orange)
 
-                    Text(loc("permission.banner.desc"))
-                        .font(.system(size: 11, weight: .medium))
+                    Text(loc("permission.banner.short"))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
 
@@ -330,12 +332,11 @@ struct LaunchpadRootView: View {
                         permissionManager.promptUserForAccessibility()
                     } label: {
                         Text(loc("general.authorize_button"))
-                            .font(.system(size: 10.5, weight: .bold))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2.5)
-                            .background(Color.white)
-                            .clipShape(Capsule())
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.95))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3.5)
+                            .background(Color.white.opacity(0.16), in: Capsule())
                     }
                     .buttonStyle(.plain)
 
@@ -344,17 +345,24 @@ struct LaunchpadRootView: View {
                             permissionManager.hasDismissedBanner = true
                         }
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.55))
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.60))
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .liquidGlassCapsule(interactive: true)
-                .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
-                .position(x: layout.searchCenterX, y: layout.searchCenterY + 30)
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .frame(height: 30)
+                .liquidGlass(
+                    in: Capsule(),
+                    interactive: true,
+                    tint: nil,
+                    prominence: .clear,
+                    intensity: liquidGlassIntensity
+                )
+                .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
+                .position(x: layout.searchCenterX, y: layout.searchCenterY + 46)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
             PagesLayer(

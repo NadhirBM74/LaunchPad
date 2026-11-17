@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.10",
-  "name": "LaunchPad v1.2.10",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.10",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.10\n\n- 🎨 **Harmonie Parfaite des Logos de Source** : Harmonisation des icônes Auto, Spotify et Apple Music dans un gabarit squircle continu exactement identique en taille et en forme.",
+  "tag_name": "v1.2.11",
+  "name": "LaunchPad v1.2.11",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.11",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.11\n\n- 🔍 **Bouton d'Autorisation Accessibilité Lisible** : Contraste nettement renforcé sur le bouton Autoriser dans les réglages pour une parfaite visibilité en mode clair et sombre.\n- ✨ **Bannière Accessibilité Assortie à la Barre de Recherche** : Libellé raccourci, espacement aéré sous la barre de recherche et style Liquid Glass identique.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.10.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.10/LaunchPad-v1.2.10.zip"
+      "name": "LaunchPad-v1.2.11.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.11/LaunchPad-v1.2.11.zip"
     },
     {
-      "name": "LaunchPad-v1.2.10.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.10/LaunchPad-v1.2.10.dmg"
+      "name": "LaunchPad-v1.2.11.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.11/LaunchPad-v1.2.11.dmg"
     }
   ]
 }

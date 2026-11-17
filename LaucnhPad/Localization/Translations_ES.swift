@@ -52,6 +52,7 @@ nonisolated enum Translations_ES: Sendable {
         "general.f4_subtitle": "Abre este Launchpad en lugar del Launchpad del sistema mediante la tecla F4.",
         "general.accessibility_needed": "Se requiere permiso de accesibilidad para interceptar la tecla F4.",
         "general.accessibility_button": "Abrir Ajustes del Sistema",
+        "permission.banner.short": "Accesibilidad requerida",
 
         // MARK: - Pestaña Interfaz
         "interface.layout": "Disposición",

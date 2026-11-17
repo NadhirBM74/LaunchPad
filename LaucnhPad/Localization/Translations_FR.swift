@@ -65,6 +65,7 @@ nonisolated enum Translations_FR: Sendable {
         "permission.granted_auto": "Autorisation accordée ! Activation en cours…",
         "permission.banner.title": "Autorisation d’Accessibilité manquante",
         "permission.banner.desc": "Indispensable pour le geste de pincement du trackpad, la touche F4 et les coins actifs.",
+        "permission.banner.short": "Accessibilité requise",
 
         // MARK: - Onglet Interface
         "interface.layout": "Disposition",
