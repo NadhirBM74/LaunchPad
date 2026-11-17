@@ -1851,21 +1851,14 @@ struct WidgetGalleryModal: View {
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.black.opacity(0.28))
-
                     WidgetHostView(config: card.config)
                         .scaleEffect(thumbScale)
                         .frame(width: previewW * thumbScale, height: previewH * thumbScale)
+                        .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
                         .allowsHitTesting(false)
                 }
                 .frame(height: boxSize * 0.86)
                 .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(isSelected ? 0.65 : 0.14), lineWidth: isSelected ? 1.5 : 0.8)
-                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title)
@@ -1878,14 +1871,14 @@ struct WidgetGalleryModal: View {
                         .lineLimit(1)
                 }
             }
-            .padding(8)
+            .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.20) : (isHovered ? Color.white.opacity(0.09) : Color.clear))
+                    .fill(isSelected ? Color.white.opacity(0.18) : (isHovered ? Color.white.opacity(0.08) : Color.clear))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(isSelected ? Color.white.opacity(0.32) : Color.clear, lineWidth: 1)
+                    .strokeBorder(isSelected ? Color.white.opacity(0.30) : Color.clear, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
@@ -1897,17 +1890,20 @@ struct WidgetGalleryModal: View {
 
     private var bottomActionBar: some View {
         let card = activeCard
-        return HStack(spacing: 14) {
+        return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.title)
                     .font(.system(size: 13.5, weight: .bold))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
                 Text(card.subtitle)
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
             }
+            .frame(minWidth: 110, alignment: .leading)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             if card.config.kind.allowedSizes.count > 1 {
                 HStack(spacing: 6) {
@@ -1918,20 +1914,23 @@ struct WidgetGalleryModal: View {
                                 selectedSize = size
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 5) {
                                 Image(systemName: sizeSymbol(for: size))
-                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold))
                                 Text(friendlySizeLabel(size))
                                     .font(.system(size: 12, weight: isChosen ? .bold : .medium))
+                                    .lineLimit(1)
                             }
                             .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6.5)
                             .background(isChosen ? Color.white : Color.white.opacity(0.12), in: Capsule())
+                            .fixedSize(horizontal: true, vertical: true)
                         }
                         .buttonStyle(.plain)
                     }
                 }
+                .fixedSize(horizontal: true, vertical: true)
             }
 
             Button {
@@ -1942,9 +1941,10 @@ struct WidgetGalleryModal: View {
                         .font(.system(size: 14, weight: .bold))
                     Text("Ajouter")
                         .font(.system(size: 13.5, weight: .bold))
+                        .lineLimit(1)
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 18)
                 .padding(.vertical, 8)
                 .background(
                     LinearGradient(
@@ -1956,6 +1956,7 @@ struct WidgetGalleryModal: View {
                 )
                 .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
                 .shadow(color: Color.blue.opacity(0.32), radius: 8, y: 3)
+                .fixedSize(horizontal: true, vertical: true)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Ajouter le widget \(card.title)")

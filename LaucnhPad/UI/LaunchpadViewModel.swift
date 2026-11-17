@@ -638,7 +638,7 @@ final class LaunchpadViewModel: ObservableObject {
 
     /// Défilement à deux doigts (suivi interactif, comme le « paged drag » de LaunchOS) ou molette.
     func handleScroll(_ event: NSEvent) -> Bool {
-        guard openFolderID == nil, drag == nil, !isPresentingModal else { return false }
+        guard openFolderID == nil, drag == nil, !isPresentingModal, !showWidgetGallery, CustomIconManager.shared.activePickerAppID == nil else { return false }
         let hasPhases = event.phase != [] || event.momentumPhase != []
         if event.hasPreciseScrollingDeltas, hasPhases {
             if event.momentumPhase != [] { return true }
@@ -688,8 +688,19 @@ final class LaunchpadViewModel: ObservableObject {
             default: return false
             }
         }
-        if event.keyCode == 53 { escape(); return true }
-        if isPresentingModal || textInputActive { return false }
+        if event.keyCode == 53 {
+            if showWidgetGallery {
+                showWidgetGallery = false
+                return true
+            }
+            if CustomIconManager.shared.activePickerAppID != nil {
+                CustomIconManager.shared.activePickerAppID = nil
+                return true
+            }
+            escape()
+            return true
+        }
+        if isPresentingModal || textInputActive || showWidgetGallery || CustomIconManager.shared.activePickerAppID != nil { return false }
         switch event.keyCode {
         case 36, 76: activateKeyboardSelection(); return true
         case 123: moveSelection(dx: -1, dy: 0); return true
