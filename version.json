@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.1",
-  "name": "LaunchPad v1.2.1",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.1",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.1\n\n- 🎨 **Logos Officiels de LaunchPad Restaurés** : Retrouvez vos véritables logos LaunchPad parfaitement centrés et sans texte superflu, avec le logo de base gratuit pour tous et les déclinaisons exclusives réservées à la licence Pro.\n- ✨ **Transparence des Icônes Réservée à la Licence** : L'accès aux styles d'icônes transparentes et en verre liquide est réservé aux utilisateurs disposant d'une licence, qui peuvent librement choisir d'activer ou non la transparence.\n- 🌓 **Thèmes Épurés & Assombrissement Calibré** : Suppression du thème Verre flouté et du curseur manuel pour appliquer automatiquement l'assombrissement optimal en mode Clair (0,50) et Sombre (0,00).\n- ☀️ **Icône Soleil Éclatante en Liquid Glass** : Correction de l'affichage du soleil du thème Clair afin qu'il conserve son éclat jaune-orangé vif même avec Liquid Glass activé.\n- 🌐 **Sélecteur de Langue Simplifié** : Nouvelle présentation épurée et directe en pilules avec drapeaux pour changer instantanément la langue de l'interface.",
+  "tag_name": "v1.2.2",
+  "name": "LaunchPad v1.2.2",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.2",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.2\n\n- 🌐 **Sélecteur de Langue par Drapeaux** : Affichage épuré avec uniquement les drapeaux de chaque pays dans les réglages pour un choix visuel instantané sans texte tronqué.\n- 💜 **Badge Licence Pro en Violet** : La rosace animée vérifiée, la pastille PRO et les accents visuels de la licence adoptent désormais le violet signature de l'interface.\n- ✨ **Cohérence Visuelle & Finitions** : Harmonisation complète des badges de statut Pro entre l'onglet Licence, la barre latérale et la bannière À propos.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.1.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.1/LaunchPad-v1.2.1.zip"
+      "name": "LaunchPad-v1.2.2.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.2/LaunchPad-v1.2.2.zip"
     },
     {
-      "name": "LaunchPad-v1.2.1.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.1/LaunchPad-v1.2.1.dmg"
+      "name": "LaunchPad-v1.2.2.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.2/LaunchPad-v1.2.2.dmg"
     }
   ]
 }

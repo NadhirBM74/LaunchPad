@@ -1,5 +1,9 @@
 # Directives du Projet LaunchPad
 
+## Incrémentation Automatique de Version
+
+À **chaque modification** apportée à l'application (fonctionnalité, correctif ou ajustement visuel), il est obligatoire d'incrémenter automatiquement le numéro de version (`vX.Y.Z` → `vX.Y.(Z+1)`), de mettre à jour `MARKETING_VERSION` dans `LaunchPad.xcodeproj/project.pbxproj`, `AdminTestCenterView.swift` et `version.json`, de recompiler le build Release, de régénérer les archives (`LaunchPad.dmg`, `LaunchPad-vX.Y.Z.dmg`, `LaunchPad-vX.Y.Z.zip`) et de publier la nouvelle version (tag + release GitHub) selon le modèle ci-dessous.
+
 ## Format Obligatoire des Releases GitHub & Notes de Version
 
 À chaque création d'une nouvelle version (release GitHub, tag, annonce de mise à jour), les notes de version doivent **strictement** respecter le modèle suivant (conforme à l'affichage Discord et in-app) :
