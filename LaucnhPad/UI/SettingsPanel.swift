@@ -833,7 +833,7 @@ struct SettingsPanel: View {
 
         SettingsSectionTitle(loc("section.language"))
         SettingsCardBox {
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 ForEach(AppLanguage.allCases) { lang in
                     let isSelected = locManager.currentLanguage == lang
                     Button {
@@ -841,20 +841,21 @@ struct SettingsPanel: View {
                             locManager.currentLanguage = lang
                         }
                     } label: {
-                        HStack(spacing: 4) {
+                        Group {
                             if lang == .auto {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 11, weight: .semibold))
+                                HStack(spacing: 5) {
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text(lang.shortTitle)
+                                        .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                                }
                             } else {
                                 Text(lang.flag)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 20))
                             }
-                            Text(lang.shortTitle)
-                                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
-                                .lineLimit(1)
                         }
-                        .foregroundStyle(isSelected ? .white : .primary.opacity(0.85))
-                        .padding(.horizontal, 10)
+                        .foregroundStyle(isSelected ? .white : .primary.opacity(0.88))
+                        .padding(.horizontal, lang == .auto ? 12 : 14)
                         .padding(.vertical, 6)
                         .background(
                             Capsule(style: .continuous)
@@ -862,11 +863,12 @@ struct SettingsPanel: View {
                         )
                         .overlay(
                             Capsule(style: .continuous)
-                                .strokeBorder(isSelected ? Color.white.opacity(0.22) : Color.primary.opacity(0.08), lineWidth: 0.8)
+                                .strokeBorder(isSelected ? Color.white.opacity(0.24) : Color.primary.opacity(0.08), lineWidth: 0.8)
                         )
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .help(lang.displayName)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -1650,7 +1652,7 @@ struct SettingsPanel: View {
                                     Circle()
                                         .strokeBorder(
                                             licenseManager.isPro
-                                                ? (licenseManager.isProLifetime ? Color(red: 0.06, green: 0.56, blue: 1.00) : Color(red: 1.00, green: 0.78, blue: 0.05))
+                                                ? (licenseManager.isProLifetime ? SettingsStyle.accent : Color(red: 1.00, green: 0.78, blue: 0.05))
                                                 : Color.primary.opacity(0.18),
                                             lineWidth: 2.2
                                         )
@@ -1699,8 +1701,8 @@ struct SettingsPanel: View {
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2.5)
-                            .background(Color(red: 0.05, green: 0.56, blue: 1.00).opacity(0.16), in: Capsule())
-                            .foregroundStyle(Color(red: 0.05, green: 0.56, blue: 1.00))
+                            .background(SettingsStyle.accent.opacity(0.16), in: Capsule())
+                            .foregroundStyle(SettingsStyle.accent)
                         } else if licenseManager.isTrialActive {
                             Text(licenseManager.trialDaysRemaining > 0 ? "\(licenseManager.trialDaysRemaining)j restants" : "7 JOURS")
                                 .font(.system(size: 10, weight: .bold))
@@ -3567,11 +3569,11 @@ struct ProCelebrationPopup: View {
                         .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .tracking(1.4)
                 }
-                .foregroundStyle(Color(red: 0.35, green: 0.78, blue: 1.00))
+                .foregroundStyle(Color(red: 0.82, green: 0.58, blue: 1.00))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4.5)
-                .background(Color(red: 0.05, green: 0.56, blue: 1.00).opacity(0.18), in: Capsule())
-                .overlay(Capsule().stroke(Color(red: 0.14, green: 0.64, blue: 1.00).opacity(0.48), lineWidth: 0.9))
+                .background(SettingsStyle.accent.opacity(0.20), in: Capsule())
+                .overlay(Capsule().stroke(Color(red: 0.72, green: 0.38, blue: 0.94).opacity(0.52), lineWidth: 0.9))
                 .padding(.bottom, 8)
 
                 // Titre percutant

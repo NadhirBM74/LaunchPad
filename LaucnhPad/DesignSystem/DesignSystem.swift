@@ -90,10 +90,10 @@ enum AppleDesignSystem {
     }
 }
 
-// MARK: - Badge Vérifié Animé (Bleu Pro / Jaune Essai)
+// MARK: - Badge Vérifié Animé (Violet Pro / Jaune Essai)
 
 /// Badge officiel en rosace crénelée animé : seuls les pics extérieurs tournent, la coche centrale reste fixe.
-/// Bleu vif pour LaunchPad Pro, jaune doré pendant l'essai gratuit.
+/// Violet lumineux pour LaunchPad Pro, jaune doré pendant l'essai gratuit.
 struct AnimatedVerifiedSealBadge: View {
     let isTrial: Bool
     var size: CGFloat = 24
@@ -118,8 +118,8 @@ struct AnimatedVerifiedSealBadge: View {
         } else {
             return LinearGradient(
                 colors: [
-                    Color(red: 0.14, green: 0.64, blue: 1.00),
-                    Color(red: 0.00, green: 0.45, blue: 0.96)
+                    Color(red: 0.72, green: 0.38, blue: 0.94),
+                    Color(red: 0.52, green: 0.22, blue: 0.80)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -130,7 +130,7 @@ struct AnimatedVerifiedSealBadge: View {
     private var glowColor: Color {
         isTrial
             ? Color(red: 1.00, green: 0.78, blue: 0.05)
-            : Color(red: 0.05, green: 0.56, blue: 1.00)
+            : Color(red: 0.68, green: 0.36, blue: 0.88)
     }
 
     var body: some View {
