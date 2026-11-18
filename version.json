@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.19",
-  "name": "LaunchPad v1.2.19",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.19",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.19\n\n- 💎 **Liquid Glass « Cristal Pur » sur Icônes & Dossiers** : Véritable réfraction optique macOS 26 avec biseau spéculaire cristallin sur vos dossiers ouverts et fermés pour un rendu vitré ultra pur.\n- 🎨 **Thèmes Pro Harmonisés en Verre Liquide** : Les apparences Sombre, Clair, Teinté, Monochrome, Classique Apple et Verre dépoli bénéficient toutes de la nouvelle profondeur translucide en version Pro, tout en conservant les icônes originales intactes.\n- 🎯 **Glisser-Déposer Direct vers le Dock macOS** : Faites glisser n'importe quelle application vers le bas de l'écran pour dévoiler la barre magnétique du Dock, visualiser un aperçu et l'épingler d'un geste fluide avec animation d'aspiration et de rebond.\n- 🔍 **Détourage Affiné des Icônes Blanches** : Extraction améliorée pour les logos minimalistes sur fond clair et contraste renforcé des symboles sur le verre fumé.",
+  "tag_name": "v1.2.20",
+  "name": "LaunchPad v1.2.20",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.20",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.20\n\n- ✨ **Correctif d'Affichage en Mode Édition (Tremblement)** : Suppression du double contour statique qui apparaissait autour des icônes Liquid Glass, dossiers et widgets pendant l'animation de tremblement.\n- 💎 **Rotation Fluide à 120 Hz** : Tous les styles vitrés (Clair, Sombre, Teinté, Cristal Pur et dossiers) pivotent désormais d'un seul bloc parfaitement aligné avec leur bordure lumineuse.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.19.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.19/LaunchPad-v1.2.19.zip"
+      "name": "LaunchPad-v1.2.20.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.20/LaunchPad-v1.2.20.zip"
     },
     {
-      "name": "LaunchPad-v1.2.19.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.19/LaunchPad-v1.2.19.dmg"
+      "name": "LaunchPad-v1.2.20.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.20/LaunchPad-v1.2.20.dmg"
     }
   ]
 }

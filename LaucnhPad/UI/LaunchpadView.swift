@@ -960,7 +960,7 @@ struct AppTileView: View, Equatable {
                         .frame(width: iconSize, height: iconSize)
                         .transition(.scale(scale: 0.7).combined(with: .opacity))
                 }
-                IconImage(model: model, size: iconSize)
+                IconImage(model: model, size: iconSize, isJiggling: jiggle)
                     .background { highlight }
                     .scaleEffect(isMergeTarget ? (model.folderIcons == nil ? 0.92 : 1.14) : (hovering && !jiggle ? 1.05 : 1))
             }
@@ -1048,6 +1048,7 @@ struct JiggleEffect: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .environment(\.isJiggling, active)
             .rotationEffect(.degrees(active ? (tilted ? maxAngle : -maxAngle) : 0))
             .onAppear { if active { start() } }
             .onChange(of: active) { _, isActive in
@@ -1070,6 +1071,7 @@ struct JiggleEffect: ViewModifier {
 struct IconImage: View {
     let model: TileModel
     let size: CGFloat
+    var isJiggling: Bool = false
 
     var body: some View {
         if let icons = model.folderIcons {
@@ -1078,7 +1080,8 @@ struct IconImage: View {
                 size: size,
                 style: model.folderStyle,
                 customColorHex: model.folderColorHex,
-                customSymbol: model.folderSymbol
+                customSymbol: model.folderSymbol,
+                isJiggling: isJiggling
             )
         } else if let icon = model.icon {
             CrystalAppIconImage(
@@ -1087,7 +1090,8 @@ struct IconImage: View {
                 style: model.iconStyle,
                 isPro: model.isProCrystal,
                 tintColor: model.tintColor,
-                useLiveGlass: true
+                useLiveGlass: true,
+                isJiggling: isJiggling
             )
         } else {
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)

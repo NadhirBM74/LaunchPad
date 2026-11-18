@@ -71,6 +71,17 @@ public enum LiquidGlassStyle {
 
 // MARK: - Modificateur Liquid Glass Universel
 
+private struct IsJigglingEnvironmentKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+public extension EnvironmentValues {
+    var isJiggling: Bool {
+        get { self[IsJigglingEnvironmentKey.self] }
+        set { self[IsJigglingEnvironmentKey.self] = newValue }
+    }
+}
+
 public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
     let shape: S
     let interactive: Bool
@@ -82,6 +93,7 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
     @AppStorage(PrefKey.liquidGlassIntensity) private var storedIntensity: Double = 0.85
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isJiggling) private var isJiggling
     @State private var isHovered: Bool = false
 
     public init(
@@ -106,7 +118,7 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
 
     public func body(content: Content) -> some View {
         let i = effectiveIntensity
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), !isJiggling {
             let glassBase: Glass = {
                 switch prominence {
                 case .clear: return .clear
@@ -155,20 +167,22 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                         .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.92) : Color.clear)
                 }
                 .background {
-                    // Modulation de la transparence du matériau sans altérer la luminosité des reflets et du texte
-                    shape
-                        .fill(.ultraThinMaterial)
-                        .opacity(0.25 + 0.75 * i)
-                        .overlay {
-                            if let tint {
-                                shape.fill(tint.opacity(0.16 + 0.10 * i))
-                            }
+                    ZStack {
+                        if !reduceTransparency && !isJiggling {
+                            shape
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.25 + 0.75 * i)
+                        } else if !reduceTransparency {
+                            shape
+                                .fill(Color.white.opacity(prominence == .clear ? 0.08 : 0.14 * (0.4 + 0.6 * i)))
                         }
-                        .overlay {
-                            if prominence != .clear {
-                                shape.fill(LiquidGlassStyle.surfaceSheen)
-                            }
+                        if let tint {
+                            shape.fill(tint.opacity(0.16 + 0.10 * i))
                         }
+                        if prominence != .clear {
+                            shape.fill(LiquidGlassStyle.surfaceSheen)
+                        }
+                    }
                 }
                 .overlay {
                     shape
@@ -532,18 +546,21 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
     public let shape: S
     public let spec: CrystalGlassSpec
     public var interactive: Bool = false
+    /// Désactiver `.glassEffect` pendant les rotations animées (ex. mode jiggle) évite que le calque backdrop reste à 0°.
+    public var preferRotatedMaterial: Bool = false
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    public init(shape: S, spec: CrystalGlassSpec, interactive: Bool = false) {
+    public init(shape: S, spec: CrystalGlassSpec, interactive: Bool = false, preferRotatedMaterial: Bool = false) {
         self.shape = shape
         self.spec = spec
         self.interactive = interactive
+        self.preferRotatedMaterial = preferRotatedMaterial
     }
 
     public var body: some View {
         ZStack {
-            if #available(macOS 26.0, *), !reduceTransparency {
+            if #available(macOS 26.0, *), !reduceTransparency, !preferRotatedMaterial {
                 let glass: Glass = {
                     var g: Glass = interactive ? .clear.interactive() : .clear
                     if let tint = spec.tint {
@@ -556,13 +573,16 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
             } else {
                 shape
                     .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.86) : Color.clear)
-                if !reduceTransparency {
+                if !reduceTransparency && !preferRotatedMaterial {
                     shape
                         .fill(.ultraThinMaterial)
                         .opacity(spec.fallbackMaterialOpacity)
+                } else if !reduceTransparency {
+                    shape
+                        .fill(Color.white.opacity(0.08))
                 }
                 if let tint = spec.tint {
-                    shape.fill(tint.opacity(spec.fallbackTintOpacity))
+                    shape.fill(tint.opacity(preferRotatedMaterial ? 0.55 : spec.fallbackTintOpacity))
                 }
             }
 
@@ -601,6 +621,7 @@ public struct CrystalAppIconImage: View {
     public let isPro: Bool
     public let tintColor: Color?
     public var useLiveGlass: Bool = true
+    public var isJiggling: Bool = false
 
     public init(
         image: NSImage,
@@ -608,7 +629,8 @@ public struct CrystalAppIconImage: View {
         style: IconAppearanceStyle,
         isPro: Bool,
         tintColor: Color? = nil,
-        useLiveGlass: Bool = true
+        useLiveGlass: Bool = true,
+        isJiggling: Bool = false
     ) {
         self.image = image
         self.size = size
@@ -616,6 +638,7 @@ public struct CrystalAppIconImage: View {
         self.isPro = isPro
         self.tintColor = tintColor
         self.useLiveGlass = useLiveGlass
+        self.isJiggling = isJiggling
     }
 
     public var body: some View {
@@ -635,7 +658,7 @@ public struct CrystalAppIconImage: View {
 
             ZStack {
                 if useLiveGlass {
-                    CrystalGlassBackdrop(shape: shape, spec: spec)
+                    CrystalGlassBackdrop(shape: shape, spec: spec, preferRotatedMaterial: isJiggling)
                         .frame(width: bodySize, height: bodySize)
                 } else {
                     // Version légère sans réfraction imbriquée pour les mini-icônes 3×3 des dossiers

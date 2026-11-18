@@ -74,6 +74,7 @@ struct PremiumFolderIconView: View {
     var style: FolderVisualStyle = .frostedGlass
     var customColorHex: String? = nil
     var customSymbol: String? = nil
+    var isJiggling: Bool = false
 
     @AppStorage(PrefKey.iconStyle) private var iconStyleRaw = "original"
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
@@ -149,7 +150,8 @@ struct PremiumFolderIconView: View {
     private func themeCoherentGlassBackground(shape: RoundedRectangle, isPureLightPreset: Bool = false) -> some View {
         CrystalGlassBackdrop(
             shape: shape,
-            spec: folderCrystalSpec(isPureLightPreset: isPureLightPreset)
+            spec: folderCrystalSpec(isPureLightPreset: isPureLightPreset),
+            preferRotatedMaterial: isJiggling
         )
     }
 
@@ -164,7 +166,7 @@ struct PremiumFolderIconView: View {
         let crystalSpec = folderCrystalSpec(isPureLightPreset: isPureLightPreset)
 
         ZStack {
-            CrystalGlassBackdrop(shape: shape, spec: crystalSpec)
+            CrystalGlassBackdrop(shape: shape, spec: crystalSpec, preferRotatedMaterial: isJiggling)
 
             // Mini-grille d'icônes (ou icône personnalisée si définie manuellement)
             if let symbol = customSymbol, !symbol.isEmpty {
