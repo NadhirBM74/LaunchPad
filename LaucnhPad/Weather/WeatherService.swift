@@ -10,20 +10,20 @@ enum WeatherLocationMode: String, Sendable {
     case manual
 }
 
-struct WeatherHourlyPoint: Codable, Equatable, Sendable {
+nonisolated struct WeatherHourlyPoint: Codable, Equatable, Sendable {
     let time: String
     let temp: Int
     let symbol: String
 }
 
-struct WeatherDailyPoint: Codable, Equatable, Sendable {
+nonisolated struct WeatherDailyPoint: Codable, Equatable, Sendable {
     let isoDate: String
     let symbol: String
     let low: Int
     let high: Int
 }
 
-struct LiveWeatherSnapshot: Codable, Equatable, Sendable {
+nonisolated struct LiveWeatherSnapshot: Codable, Equatable, Sendable {
     let city: String
     let country: String
     let latitude: Double
@@ -104,8 +104,13 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
     private let clManager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var lastAutoLocateAttempt: Date = .distantPast
+    private var hasRequestedLocationUpdates: Bool = false
     private var inFlightWeatherTask: Task<Void, Never>?
     private var inFlightLocationTask: Task<Void, Never>?
+
+    nonisolated private static let jsonDecoder = JSONDecoder()
+    nonisolated private static let jsonEncoder = JSONEncoder()
+    private static let persistenceQueue = DispatchQueue(label: "launchpad.weather.persistence", qos: .utility)
 
     private var isHeadlessTestRun: Bool {
         ProcessInfo.processInfo.arguments.dropFirst().contains(where: { $0.hasPrefix("--") })
@@ -129,7 +134,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
         var loadedSnapshot: LiveWeatherSnapshot? = nil
         var loadedPrecise = false
         if let data = d.data(forKey: PrefKey.weatherCachedSnapshot),
-           let decoded = try? JSONDecoder().decode(LiveWeatherSnapshot.self, from: data) {
+           let decoded = try? Self.jsonDecoder.decode(LiveWeatherSnapshot.self, from: data) {
             loadedSnapshot = decoded
             if loadedCity.isEmpty {
                 loadedCity = decoded.city
@@ -346,6 +351,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
             lastAutoLocateAttempt = now
 
             if isAuthorized(status) {
+                hasRequestedLocationUpdates = true
                 isDetectingLocation = true
                 clManager.requestLocation()
                 // Si aucune coordonnée n'est encore connue, on charge aussi en parallèle par IP pour ne pas afficher un état vide
@@ -354,6 +360,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
                 }
                 return
             } else if status == .notDetermined && requestPermission && !isHeadlessTestRun {
+                hasRequestedLocationUpdates = true
                 isDetectingLocation = true
                 clManager.requestWhenInUseAuthorization()
                 // Affiche la météo locale via IP pendant que l'utilisateur répond à la fenêtre d'autorisation macOS
@@ -459,6 +466,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.authorizationStatus = status
+            guard self.hasRequestedLocationUpdates else { return }
             if self.locationMode == .auto && self.isAuthorized(status) {
                 self.isDetectingLocation = true
                 self.clManager.requestLocation()
@@ -491,13 +499,21 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
             isDetectingLocation = false
             return
         }
+        // Évite un géocodage inverse et un appel Open-Meteo redondants si les coordonnées sont quasi-identiques et fraîches (<500 m, <10 min)
+        if let prevLat = savedLatitude, let prevLon = savedLongitude,
+           let snap = snapshot, snap.isAutoDetected, snap.unit == unit,
+           Date().timeIntervalSince(snap.updatedAt) < 600,
+           CLLocation(latitude: lat, longitude: lon).distance(from: CLLocation(latitude: prevLat, longitude: prevLon)) < 500 {
+            isDetectingLocation = false
+            return
+        }
         inFlightLocationTask?.cancel()
         savedLatitude = lat
         savedLongitude = lon
         isPreciseLocation = true
 
         let location = CLLocation(latitude: lat, longitude: lon)
-        let preferredLocale = Locale(identifier: LocalizationManager.activeLanguageCode)
+        let preferredLocale = LocalizationManager.shared.effectiveLocale
 
         geocoder.cancelGeocode()
         geocoder.reverseGeocodeLocation(location, preferredLocale: preferredLocale) { [weak self] placemarks, _ in
@@ -570,23 +586,32 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
     }
 
     private func applySnapshot(_ newSnapshot: LiveWeatherSnapshot) {
+        let prevCity = self.snapshot?.city ?? self.activeCity
+        let prevUnit = self.snapshot?.unit ?? self.unit
+        let cityOrUnitChanged = (prevCity != newSnapshot.city || prevUnit != newSnapshot.unit)
+
         self.snapshot = newSnapshot
         self.activeCity = newSnapshot.city
         self.activeCountry = newSnapshot.country
         self.isPreciseLocation = newSnapshot.isPreciseLocation
 
-        if let data = try? JSONEncoder().encode(newSnapshot) {
-            UserDefaults.standard.set(data, forKey: PrefKey.weatherCachedSnapshot)
+        Self.persistenceQueue.async {
+            guard let data = try? Self.jsonEncoder.encode(newSnapshot) else { return }
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(data, forKey: PrefKey.weatherCachedSnapshot)
+            }
         }
 
-        WidgetManager.shared.updateWeather(
-            city: newSnapshot.city,
-            unit: newSnapshot.unit,
-            temp: newSnapshot.temp,
-            condition: newSnapshot.condition,
-            feelsLike: newSnapshot.feelsLike
-        )
-        NotificationCenter.default.post(name: .weatherDataDidUpdate, object: newSnapshot)
+        if cityOrUnitChanged {
+            WidgetManager.shared.updateWeather(
+                city: newSnapshot.city,
+                unit: newSnapshot.unit,
+                temp: newSnapshot.temp,
+                condition: newSnapshot.condition,
+                feelsLike: newSnapshot.feelsLike
+            )
+            NotificationCenter.default.post(name: .weatherDataDidUpdate, object: newSnapshot)
+        }
     }
 
     nonisolated private static func fetchOpenMeteoForecast(
@@ -644,7 +669,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
                 let daily: Daily
             }
 
-            let f = try JSONDecoder().decode(ForecastResp.self, from: data)
+            let f = try Self.jsonDecoder.decode(ForecastResp.self, from: data)
             let isDay = (f.current.is_day == 1)
             let condition = conditionKey(forWMO: f.current.weather_code, isDay: isDay)
 

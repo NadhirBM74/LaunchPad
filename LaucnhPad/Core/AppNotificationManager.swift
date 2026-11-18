@@ -55,80 +55,9 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         }
     }
 
-    private static var cachedLogoPNGByRaw: [Int: Data] = [:]
-
-    /// Génère (et met en cache) les octets PNG 512×512 du logo actif via CoreGraphics sans utiliser `lockFocus`.
-    private static func cachedLogoPNGData() -> Data? {
-        let logoRaw = Prefs.defaults.integer(forKey: PrefKey.appLogo)
-        if let cached = cachedLogoPNGByRaw[logoRaw] {
-            return cached
-        }
-
-        let appLogo = AppLogo(rawValue: logoRaw) ?? .noir
-        let sourceImage: NSImage
-        if let img = appLogo.image {
-            sourceImage = img
-        } else if let img = NSImage(named: "AppIcon") {
-            sourceImage = img
-        } else if let img = Bundle.main.image(forResource: "AppIcon") {
-            sourceImage = img
-        } else if let img = NSApp.applicationIconImage {
-            sourceImage = img
-        } else {
-            return nil
-        }
-
-        let pxSize = 512
-        var proposed = NSRect(origin: .zero, size: NSSize(width: pxSize, height: pxSize))
-        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
-              let ctx = CGContext(
-                  data: nil,
-                  width: pxSize,
-                  height: pxSize,
-                  bitsPerComponent: 8,
-                  bytesPerRow: pxSize * 4,
-                  space: cs,
-                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else {
-            return nil
-        }
-        ctx.interpolationQuality = .high
-        if let srcCG = sourceImage.cgImage(forProposedRect: &proposed, context: nil, hints: [.interpolation: NSImageInterpolation.high.rawValue]) {
-            ctx.draw(srcCG, in: CGRect(x: 0, y: 0, width: pxSize, height: pxSize))
-        } else {
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-            sourceImage.draw(in: NSRect(x: 0, y: 0, width: pxSize, height: pxSize), from: .zero, operation: .sourceOver, fraction: 1.0)
-            NSGraphicsContext.restoreGraphicsState()
-        }
-
-        guard let outCG = ctx.makeImage(),
-              let pngData = NSBitmapImageRep(cgImage: outCG).representation(using: .png, properties: [:]) else {
-            return nil
-        }
-        cachedLogoPNGByRaw[logoRaw] = pngData
-        return pngData
-    }
-
-    /// Prépare le logo actif de LaunchPad en PNG temporaire pour l'attacher aux notifications.
-    public static func prepareLogoAttachment() -> UNNotificationAttachment? {
-        guard let pngData = cachedLogoPNGData() else { return nil }
-
-        let tempDir = FileManager.default.temporaryDirectory
-        let logoFile = tempDir.appendingPathComponent("LaunchPadNotificationLogo_\(UUID().uuidString).png")
-
-        do {
-            try pngData.write(to: logoFile, options: .atomic)
-            let options: [AnyHashable: Any] = [
-                UNNotificationAttachmentOptionsThumbnailHiddenKey: false
-            ]
-            return try UNNotificationAttachment(identifier: "launchpad-app-logo", url: logoFile, options: options)
-        } catch {
-            try? FileManager.default.removeItem(at: logoFile)
-            print("[AppNotificationManager] Impossible de créer l'attachement du logo : \(error)")
-            return nil
-        }
-    }
+    /// Prépare de façon asynchrone le logo actif de LaunchPad en PNG pour les notifications.
+    nonisolated private static let logoCacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedLogoURLByRaw: [Int: URL] = [:]
 
     /// Envoie une notification système native avec le logo LaunchPad inclus en miniature.
     public func sendNotification(
@@ -147,11 +76,35 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
         content.sound = sound
         content.userInfo = ["type": type.rawValue]
 
-        if includeLogo, let attachment = Self.prepareLogoAttachment() {
-            content.attachments = [attachment]
+        let logoRaw = Prefs.defaults.integer(forKey: PrefKey.appLogo)
+        if includeLogo, let cachedLogoFileURL = Self.cachedLogoURL(forRaw: logoRaw) {
+            if let attachment = try? UNNotificationAttachment(
+                identifier: "launchpad-app-logo",
+                url: cachedLogoFileURL,
+                options: [UNNotificationAttachmentOptionsThumbnailHiddenKey: false]
+            ) {
+                content.attachments = [attachment]
+            }
+            Self.enqueueNotification(request: UNNotificationRequest(identifier: identifier, content: content, trigger: nil), title: title)
+        } else if includeLogo {
+            let fallbackSource = Self.sourceImage(forLogoRaw: logoRaw)
+            Task.detached(priority: .utility) {
+                if let fileURL = Self.writeLogoPNGInBackground(logoRaw: logoRaw, sourceImage: fallbackSource),
+                   let attachment = try? UNNotificationAttachment(
+                    identifier: "launchpad-app-logo",
+                    url: fileURL,
+                    options: [UNNotificationAttachmentOptionsThumbnailHiddenKey: false]
+                   ) {
+                    content.attachments = [attachment]
+                }
+                Self.enqueueNotification(request: UNNotificationRequest(identifier: identifier, content: content, trigger: nil), title: title)
+            }
+        } else {
+            Self.enqueueNotification(request: UNNotificationRequest(identifier: identifier, content: content, trigger: nil), title: title)
         }
+    }
 
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+    nonisolated private static func enqueueNotification(request: UNNotificationRequest, title: String) {
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
                 print("[AppNotificationManager] Erreur envoi notification : \(error)")
@@ -160,6 +113,70 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
                     AdminManager.shared.log(category: "Notification", message: "Notification '\(title)' transmise à macOS avec succès")
                 }
             }
+        }
+    }
+
+    private static func cachedLogoURL(forRaw logoRaw: Int) -> URL? {
+        logoCacheLock.lock()
+        let url = cachedLogoURLByRaw[logoRaw]
+        logoCacheLock.unlock()
+        if let url, FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return nil
+    }
+
+    private static func sourceImage(forLogoRaw logoRaw: Int) -> NSImage? {
+        let appLogo = AppLogo(rawValue: logoRaw) ?? .noir
+        return appLogo.image
+            ?? NSImage(named: "AppIcon")
+            ?? Bundle.main.image(forResource: "AppIcon")
+            ?? NSApp.applicationIconImage
+    }
+
+    nonisolated private static func writeLogoPNGInBackground(logoRaw: Int, sourceImage: NSImage?) -> URL? {
+        let logoFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LaunchPadNotificationLogo_\(logoRaw).png")
+        if FileManager.default.fileExists(atPath: logoFile.path) {
+            logoCacheLock.lock()
+            cachedLogoURLByRaw[logoRaw] = logoFile
+            logoCacheLock.unlock()
+            return logoFile
+        }
+        guard let sourceImage else { return nil }
+        let pxSize = 512
+        var proposed = NSRect(origin: .zero, size: NSSize(width: pxSize, height: pxSize))
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                data: nil,
+                width: pxSize,
+                height: pxSize,
+                bitsPerComponent: 8,
+                bytesPerRow: pxSize * 4,
+                space: cs,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        ctx.interpolationQuality = .high
+        if let srcCG = sourceImage.cgImage(forProposedRect: &proposed, context: nil, hints: [.interpolation: NSImageInterpolation.high.rawValue]) {
+            ctx.draw(srcCG, in: CGRect(x: 0, y: 0, width: pxSize, height: pxSize))
+        } else {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            sourceImage.draw(in: NSRect(x: 0, y: 0, width: pxSize, height: pxSize), from: .zero, operation: .sourceOver, fraction: 1.0)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+        guard let outCG = ctx.makeImage(),
+              let pngData = NSBitmapImageRep(cgImage: outCG).representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        do {
+            try pngData.write(to: logoFile, options: .atomic)
+            logoCacheLock.lock()
+            cachedLogoURLByRaw[logoRaw] = logoFile
+            logoCacheLock.unlock()
+            return logoFile
+        } catch {
+            return nil
         }
     }
 

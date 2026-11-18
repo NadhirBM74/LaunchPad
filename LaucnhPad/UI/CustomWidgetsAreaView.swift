@@ -23,14 +23,15 @@ struct CustomWidgetsAreaView: View {
     }
 
     var body: some View {
-        if licenseManager.isPro && !enabledWidgets.isEmpty {
+        let enabled = enabledWidgets
+        if licenseManager.isPro && !enabled.isEmpty {
             ZStack(alignment: .topLeading) {
                 Group {
                     switch widgetManager.position {
                     case .leftSide:
-                        leftShelfLayout
+                        leftShelfLayout(enabled: enabled)
                     case .topBanner:
-                        topBannerLayout
+                        topBannerLayout(enabled: enabled)
                     }
                 }
 
@@ -58,13 +59,13 @@ struct CustomWidgetsAreaView: View {
 
     // MARK: - Disposition Volet Gauche (Inspiré de l'Image de Référence)
 
-    private var leftShelfLayout: some View {
-        let twoColumns = windowWidth >= 1050 && enabledWidgets.count > 2
+    private func leftShelfLayout(enabled: [CustomWidgetConfig]) -> some View {
+        let twoColumns = windowWidth >= 1050 && enabled.count > 2
         return Group {
             if twoColumns {
                 HStack(alignment: .top, spacing: 14) {
                     // Première colonne (Ex: Vinyle en haut, Météo en bas)
-                    let firstColumn = enabledWidgets.prefix(2)
+                    let firstColumn = enabled.prefix(2)
                     VStack(spacing: 14) {
                         ForEach(firstColumn) { config in
                             widgetItem(for: config)
@@ -72,7 +73,7 @@ struct CustomWidgetsAreaView: View {
                     }
 
                     // Colonnes suivantes si d'autres widgets sont activés
-                    let remaining = enabledWidgets.dropFirst(2)
+                    let remaining = enabled.dropFirst(2)
                     if !remaining.isEmpty {
                         VStack(spacing: 14) {
                             ForEach(remaining) { config in
@@ -83,7 +84,7 @@ struct CustomWidgetsAreaView: View {
                 }
             } else {
                 VStack(spacing: 14) {
-                    ForEach(enabledWidgets) { config in
+                    ForEach(enabled) { config in
                         widgetItem(for: config)
                     }
                 }
@@ -93,10 +94,10 @@ struct CustomWidgetsAreaView: View {
 
     // MARK: - Disposition Bandeau Supérieur
 
-    private var topBannerLayout: some View {
+    private func topBannerLayout(enabled: [CustomWidgetConfig]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
-                ForEach(enabledWidgets) { config in
+                ForEach(enabled) { config in
                     widgetItem(for: config)
                 }
             }

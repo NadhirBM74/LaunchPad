@@ -59,6 +59,10 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     }
 
     static func resolveSystemLanguageCode() -> String {
+        cachedSystemLanguageCode
+    }
+
+    private static let cachedSystemLanguageCode: String = {
         let preferred = Locale.preferredLanguages
         for lang in preferred {
             let lower = lang.lowercased()
@@ -70,5 +74,5 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
             if lower.hasPrefix("pt") { return "pt" }
         }
         return "fr"
-    }
+    }()
 }

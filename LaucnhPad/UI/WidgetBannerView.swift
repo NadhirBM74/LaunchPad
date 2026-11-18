@@ -16,6 +16,7 @@ struct WidgetBannerView: View {
 
     @State private var currentDate = Date()
     @State private var timer: AnyCancellable?
+    @State private var isMonitoringStats = false
 
     var body: some View {
         Group {
@@ -27,13 +28,19 @@ struct WidgetBannerView: View {
         }
         .onAppear {
             if LaunchpadViewModel.isLaunchpadVisible {
-                stats.startMonitoring()
+                if !isMonitoringStats {
+                    stats.startMonitoring()
+                    isMonitoringStats = true
+                }
                 currentDate = Date()
                 startClockTimer()
             }
         }
         .onDisappear {
-            stats.stopMonitoring()
+            if isMonitoringStats {
+                stats.stopMonitoring()
+                isMonitoringStats = false
+            }
             timer?.cancel()
             timer = nil
         }
@@ -41,10 +48,16 @@ struct WidgetBannerView: View {
             guard let isVisible = notif.object as? Bool else { return }
             if isVisible {
                 currentDate = Date()
-                stats.startMonitoring()
+                if !isMonitoringStats {
+                    stats.startMonitoring()
+                    isMonitoringStats = true
+                }
                 startClockTimer()
             } else {
-                stats.stopMonitoring()
+                if isMonitoringStats {
+                    stats.stopMonitoring()
+                    isMonitoringStats = false
+                }
                 timer?.cancel()
                 timer = nil
             }

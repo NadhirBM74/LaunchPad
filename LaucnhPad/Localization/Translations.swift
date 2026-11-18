@@ -2,18 +2,20 @@ import Foundation
 
 /// Registre des traductions par code de langue avec système de secours.
 nonisolated enum Translations: Sendable {
-    nonisolated static func string(for key: String, languageCode: String) -> String {
-        let dict: [String: String]
+    nonisolated static func table(for languageCode: String) -> [String: String] {
         switch languageCode {
-        case "fr": dict = Translations_FR.strings
-        case "en": dict = Translations_EN.strings
-        case "es": dict = Translations_ES.strings
-        case "de": dict = Translations_DE.strings
-        case "it": dict = Translations_IT.strings
-        case "pt": dict = Translations_PT.strings
-        default: dict = Translations_FR.strings
+        case "fr": return Translations_FR.strings
+        case "en": return Translations_EN.strings
+        case "es": return Translations_ES.strings
+        case "de": return Translations_DE.strings
+        case "it": return Translations_IT.strings
+        case "pt": return Translations_PT.strings
+        default: return Translations_FR.strings
         }
+    }
 
+    nonisolated static func string(for key: String, languageCode: String) -> String {
+        let dict = table(for: languageCode)
         if let translation = dict[key] {
             return translation
         }

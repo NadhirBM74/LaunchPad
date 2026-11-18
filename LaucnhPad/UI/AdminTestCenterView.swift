@@ -1024,6 +1024,8 @@ private struct AdminTrialStatusBadge: View {
         .padding(.vertical, 4)
         .background((license.isTrialActive ? Color.orange : Color.gray).opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .onAppear { license.beginCountdownObservation() }
+        .onDisappear { license.endCountdownObservation() }
     }
 }
 
@@ -1160,8 +1162,8 @@ private struct AdminUpdatesSectionView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.20)") {
-                            updates.setDebugState(.upToDate(version: "1.2.20"))
+                        Button("À jour (v1.2.21)") {
+                            updates.setDebugState(.upToDate(version: "1.2.21"))
                             AdminManager.shared.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }
@@ -1201,6 +1203,13 @@ private struct AdminDiagnosticsSectionView: View {
     @ObservedObject private var stats = SystemStatsMonitor.shared
     @ObservedObject private var admin = AdminManager.shared
 
+    private static let logTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .medium
+        return f
+    }()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             AdminTestCard(title: "Performances & Système en Direct", subtitle: "Lecture instantanée des ressources matérielles.") {
@@ -1239,7 +1248,7 @@ private struct AdminDiagnosticsSectionView: View {
                         LazyVStack(alignment: .leading, spacing: 4) {
                             ForEach(admin.testLogs) { log in
                                 HStack(spacing: 8) {
-                                    Text(log.timestamp.formatted(date: .omitted, time: .standard))
+                                    Text(Self.logTimeFormatter.string(from: log.timestamp))
                                         .font(.caption2.monospaced())
                                         .foregroundStyle(.secondary)
                                     Text("[\(log.category)]")

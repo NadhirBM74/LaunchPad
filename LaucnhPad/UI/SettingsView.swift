@@ -142,12 +142,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
-
-        DispatchQueue.main.async { [weak self, weak window] in
-            guard let self, let window, !self.isClosing else { return }
-            self.center(window, on: targetScreen)
-        }
 
         // Déclenche l'animation de fondu synchronisée avec le flou d'arrière-plan du Launchpad
         NotificationCenter.default.post(name: .settingsVisibilityDidChange, object: true)

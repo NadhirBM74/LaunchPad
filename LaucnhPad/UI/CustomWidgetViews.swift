@@ -414,6 +414,7 @@ struct AnalogClockFace: View, Equatable {
 
         ZStack {
             ClockDialFace(size: size)
+                .equatable()
 
             // Aiguille des heures
             RoundedRectangle(cornerRadius: 2)
@@ -447,7 +448,6 @@ struct AnalogClockFace: View, Equatable {
                 .frame(width: 2, height: 2)
         }
         .frame(width: size, height: size)
-        .drawingGroup()
     }
 }
 
@@ -670,7 +670,6 @@ struct VinylPlayerWidgetView: View {
             TimelineView(.animation(paused: !isSpinning)) { timeline in
                 let spinAngle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
                 disc
-                    .drawingGroup()
                     .scaleEffect(discScale)
                     .rotationEffect(.degrees(discRotation + spinAngle))
             }
@@ -751,14 +750,18 @@ struct VinylPlayerWidgetView: View {
         .animation(.easeInOut(duration: 0.25), value: config.musicAppearance)
         .onAppear {
             if !isPreview {
+                musicManager.beginObserving()
                 musicManager.refreshNowPlaying()
+                updateExtractedAccentColor(from: track.displayImage)
             }
-            updateExtractedAccentColor(from: track.displayImage)
             if LaunchpadViewModel.isLaunchpadVisible {
                 isWindowVisible = true
             }
         }
         .onDisappear {
+            if !isPreview {
+                musicManager.endObserving()
+            }
             spinTracker.reset()
             colorExtractTask?.cancel()
             bounceResetTask?.cancel()
@@ -772,7 +775,7 @@ struct VinylPlayerWidgetView: View {
             }
         }
         .onChange(of: "\(track.title)|\(track.artist)") { oldVal, newVal in
-            guard oldVal != newVal, !newVal.replacingOccurrences(of: "|", with: "").isEmpty else { return }
+            guard !isPreview, oldVal != newVal, !newVal.replacingOccurrences(of: "|", with: "").isEmpty else { return }
             updateExtractedAccentColor(from: track.displayImage)
             // Si le changement de piste vient du lecteur externe ou de la fin du morceau (et non d'un clic déjà animé)
             if Date().timeIntervalSince(lastManualSkipDate) > 0.75 {
@@ -780,6 +783,7 @@ struct VinylPlayerWidgetView: View {
             }
         }
         .onChange(of: track.artworkData?.count ?? 0) { _, _ in
+            guard !isPreview else { return }
             updateExtractedAccentColor(from: track.displayImage)
         }
     }
@@ -1894,7 +1898,7 @@ struct VinylPlayerWidgetView: View {
 
     private func updateExtractedAccentColor(from image: NSImage?) {
         colorExtractTask?.cancel()
-        guard let image else {
+        guard !isPreview, let image else {
             if extractedAccentColor != nil { extractedAccentColor = nil }
             return
         }
@@ -2322,6 +2326,7 @@ private struct SpotifyGlyphShape: Shape {
 struct MediaWideWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var musicManager = MusicServiceManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
@@ -2341,7 +2346,15 @@ struct MediaWideWidgetView: View {
             }
         }
         .onAppear {
-            musicManager.refreshNowPlaying()
+            if !isPreview {
+                musicManager.beginObserving()
+                musicManager.refreshNowPlaying()
+            }
+        }
+        .onDisappear {
+            if !isPreview {
+                musicManager.endObserving()
+            }
         }
     }
 
@@ -3313,6 +3326,7 @@ struct ClockWidgetView: View {
 struct SystemWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
     @ObservedObject private var stats = SystemStatsMonitor.shared
     @ObservedObject private var locManager = LocalizationManager.shared
 
@@ -3324,8 +3338,12 @@ struct SystemWidgetView: View {
                 smallSystemView
             }
         }
-        .onAppear { stats.startMonitoring() }
-        .onDisappear { stats.stopMonitoring() }
+        .onAppear {
+            if !isPreview { stats.startMonitoring() }
+        }
+        .onDisappear {
+            if !isPreview { stats.stopMonitoring() }
+        }
     }
 
     // MARK: - Format Carré / Petit (1x1 ou 180x180) - Double Anneaux d'Activité
@@ -3474,6 +3492,7 @@ struct SystemWidgetView: View {
 struct QuickNoteWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
+    var isPreview: Bool = false
     @AppStorage(PrefKey.widgetQuickNoteText) private var noteText = ""
     @ObservedObject private var locManager = LocalizationManager.shared
     @State private var draftText = ""
@@ -3560,21 +3579,31 @@ struct QuickNoteWidgetView: View {
                                 .allowsHitTesting(false)
                         }
 
-                        TextEditor(text: $draftText)
-                            .scrollContentBackground(.hidden)
-                            .background(Color.clear)
-                            .font(.system(size: isCompact ? 11.5 : 12.5))
-                            .foregroundStyle(.white)
-                            .lineSpacing(isCompact ? 2 : 3)
-                            .onChange(of: draftText) { _, newValue in
-                                guard newValue != noteText else { return }
-                                saveDebounceTask?.cancel()
-                                saveDebounceTask = Task { @MainActor in
-                                    try? await Task.sleep(for: .milliseconds(250))
-                                    guard !Task.isCancelled else { return }
-                                    noteText = newValue
+                        if isPreview {
+                            Text(draftText.isEmpty ? "" : draftText)
+                                .font(.system(size: isCompact ? 11.5 : 12.5))
+                                .foregroundStyle(.white)
+                                .lineSpacing(isCompact ? 2 : 3)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .padding(.top, 4)
+                                .padding(.leading, 3)
+                        } else {
+                            TextEditor(text: $draftText)
+                                .scrollContentBackground(.hidden)
+                                .background(Color.clear)
+                                .font(.system(size: isCompact ? 11.5 : 12.5))
+                                .foregroundStyle(.white)
+                                .lineSpacing(isCompact ? 2 : 3)
+                                .onChange(of: draftText) { _, newValue in
+                                    guard newValue != noteText else { return }
+                                    saveDebounceTask?.cancel()
+                                    saveDebounceTask = Task { @MainActor in
+                                        try? await Task.sleep(for: .milliseconds(250))
+                                        guard !Task.isCancelled else { return }
+                                        noteText = newValue
+                                    }
                                 }
-                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -3598,7 +3627,7 @@ struct QuickNoteWidgetView: View {
         .onDisappear {
             saveDebounceTask?.cancel()
             copiedResetTask?.cancel()
-            if noteText != draftText { noteText = draftText }
+            if !isPreview && noteText != draftText { noteText = draftText }
         }
         .onChange(of: noteText) { _, updated in
             if updated != draftText { draftText = updated }
@@ -3638,9 +3667,9 @@ struct WidgetHostView: View, Equatable {
         case .clock:
             PremiumClockWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .system:
-            SystemWidgetView(config: config, targetSize: targetSize)
+            SystemWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         case .quickNote:
-            QuickNoteWidgetView(config: config, targetSize: targetSize)
+            QuickNoteWidgetView(config: config, targetSize: targetSize, isPreview: isPreview)
         }
     }
 }

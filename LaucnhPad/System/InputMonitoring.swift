@@ -180,9 +180,10 @@ final class InputEventMonitor {
             gestureTapAvailable = false
         }
 
-        // Moniteur global compagnon pour garantir la réception sans délai
+        // Moniteur global compagnon : si CGEventTap capture déjà `.gesture`, n'écouter que `.magnify` pour éviter les doublons 120 Hz.
         if globalGestureMonitor == nil {
-            globalGestureMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.gesture, .magnify]) { [weak self] event in
+            let events: NSEvent.EventTypeMask = gestureTapAvailable ? [.magnify] : [.gesture, .magnify]
+            globalGestureMonitor = NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] event in
                 self?.handleGesture(event)
             }
         }
@@ -275,7 +276,6 @@ final class InputEventMonitor {
                 pinchInitialSpread = spread
                 pinchInitialCentroid = centroid
                 pinchFired = false
-                cachedSensitivity = CGFloat(max(0.3, min(Prefs.scrollSensitivity, 2.5)))
                 return
             } else if count != pinchFingers {
                 pinchFingers = count
@@ -388,6 +388,7 @@ final class InputEventMonitor {
     private var interactiveProgress: CGFloat = 0
     private var interactiveVelocity: CGFloat = 0
     private var interactiveWatchdog: Task<Void, Never>?
+    private var lastInteractiveEventTime: ContinuousClock.Instant = .now
 
     /// Le geste commence : renvoie false si le Launchpad refuse (fenêtre modale, etc.).
     var interactiveBegin: ((_ opening: Bool) -> Bool)?
@@ -400,6 +401,7 @@ final class InputEventMonitor {
         guard interactiveActive else { return }
         interactiveActive = false
         interactiveWatchdog?.cancel()
+        interactiveWatchdog = nil
         pinchFired = true
         let progress = interactiveProgress, velocity = interactiveVelocity
 
@@ -415,14 +417,21 @@ final class InputEventMonitor {
         interactiveEnd?(commit)
     }
 
-    /// Sécurité : si plus aucun événement n'arrive (doigts levés sans événement final), on termine.
+    /// Sécurité : si plus aucun événement n'arrive (doigts levés sans événement final), on termine (sans réallouer à 120 Hz).
     private func scheduleInteractiveWatchdog() {
-        interactiveWatchdog?.cancel()
+        lastInteractiveEventTime = .now
+        guard interactiveWatchdog == nil else { return }
         interactiveWatchdog = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(700))
-            guard !Task.isCancelled else { return }
-            self?.finishInteractive()
-            self?.resetPinch()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(180))
+                guard let self, !Task.isCancelled, self.interactiveActive else { break }
+                if ContinuousClock.now - self.lastInteractiveEventTime >= .milliseconds(700) {
+                    self.finishInteractive()
+                    self.resetPinch()
+                    break
+                }
+            }
+            self?.interactiveWatchdog = nil
         }
     }
 
@@ -458,11 +467,11 @@ final class InputEventMonitor {
                 MainActor.assumeIsolated { self?.refreshCornerTargets() }
             }
         }
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { [weak self] _ in
-            self?.checkCorner()
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { [weak self] event in
+            self?.checkCorner(screenPoint: event.locationInWindow)
         }) { mouseMonitors.append(global) }
         if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved], handler: { [weak self] event in
-            self?.checkCorner()
+            self?.checkCorner(screenPoint: NSEvent.mouseLocation)
             return event
         }) { mouseMonitors.append(local) }
     }
@@ -485,11 +494,10 @@ final class InputEventMonitor {
         }
     }
 
-    private func checkCorner() {
+    private func checkCorner(screenPoint: CGPoint) {
         guard activeHotCorner != .off else { return }
-        let location = NSEvent.mouseLocation
         let inside = cornerTargets.contains { target in
-            abs(location.x - target.x) <= 3 && abs(location.y - target.y) <= 3
+            abs(screenPoint.x - target.x) <= 3 && abs(screenPoint.y - target.y) <= 3
         }
         if inside {
             guard !cornerFired, cornerEnteredAt == nil else { return }
@@ -534,9 +542,10 @@ nonisolated private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventTyp
         return Unmanaged.passUnretained(event)
     }
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    let flags = event.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift])
     // 131 = touche Launchpad des claviers Apple ; 118 = F4 standard sans modificateur.
-    guard keyCode == 131 || (keyCode == Int64(kVK_F4) && flags.isEmpty) else { return Unmanaged.passUnretained(event) }
+    guard keyCode == 131 || (keyCode == Int64(kVK_F4) && event.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift]).isEmpty) else {
+        return Unmanaged.passUnretained(event)
+    }
     if type == .keyDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
         MainActor.assumeIsolated {
             Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue().onAction?(.toggle)

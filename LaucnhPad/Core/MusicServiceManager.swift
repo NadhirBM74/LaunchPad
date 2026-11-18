@@ -7,6 +7,7 @@ import MusicKit
 import AuthenticationServices
 import CryptoKit
 import Security
+import ImageIO
 
 // MARK: - Modèles de données des services musicaux
 
@@ -81,7 +82,7 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
         return hasher.finalize()
     }
 
-    /// Décode et met en cache hors thread principal afin d'éviter tout blocage UI lors de l'assignation.
+    /// Décode (et rééchantillonne à <= 600 px) hors thread principal afin d'éviter tout blocage UI et économiser la RAM.
     @discardableResult
     nonisolated static func prewarmImageCache(for data: Data) -> NSImage? {
         guard !data.isEmpty else { return nil }
@@ -89,9 +90,25 @@ public struct NowPlayingTrack: Equatable, @unchecked Sendable {
         if let existing = sharedImageCache.object(forKey: key) {
             return existing
         }
-        guard let decoded = NSImage(data: data) else { return nil }
-        let cost = max(1, data.count * 4)
-        sharedImageCache.setObject(decoded, forKey: key, cost: cost)
+        let decoded: NSImage?
+        if let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+           let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let pw = props[kCGImagePropertyPixelWidth] as? CGFloat,
+           let ph = props[kCGImagePropertyPixelHeight] as? CGFloat,
+           max(pw, ph) > 600,
+           let cgThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+               kCGImageSourceCreateThumbnailFromImageAlways: true,
+               kCGImageSourceCreateThumbnailWithTransform: true,
+               kCGImageSourceThumbnailMaxPixelSize: 600
+           ] as CFDictionary) {
+            decoded = NSImage(cgImage: cgThumb, size: NSSize(width: cgThumb.width, height: cgThumb.height))
+        } else {
+            decoded = NSImage(data: data)
+        }
+        guard let decoded else { return nil }
+        let rep = decoded.representations.first
+        let pixelCost = rep.map { max(1, $0.pixelsWide * $0.pixelsHigh * 4) } ?? max(1, data.count * 4)
+        sharedImageCache.setObject(decoded, forKey: key, cost: pixelCost)
         return decoded
     }
 
@@ -322,22 +339,55 @@ public final class MusicServiceManager: ObservableObject {
     private var progressTimer: Timer?
     private var lastProgressTickUptime: TimeInterval = 0
     private var artworkCache: [String: Data] = [:]
+    private var failedArtworkQueries: [String: TimeInterval] = [:]
     private var inFlightArtworkQueries: Set<String> = []
     private var inFlightSpotifyRefreshTask: Task<String?, Never>?
     private var spotifyNotificationRefreshTask: Task<Void, Never>?
+    private var scheduledRefreshTask: Task<Void, Never>?
     private var randomLaunchTask: Task<Void, Never>?
     private var isRefreshingNowPlaying = false
     private var lastRefreshUptime: TimeInterval = 0
     private var lastSystemFetchUptime: TimeInterval = 0
     private var cachedSystemTrack: NowPlayingTrack? = nil
     private var hasPendingNotificationUpdate = false
+    private var isLaunchpadCurrentlyVisible: Bool = LaunchpadViewModel.isLaunchpadVisible
+    private var activeWidgetObserverCount: Int = 0
+    private var cachedSpotifyInstalled: (value: Bool, uptime: TimeInterval)?
+    private var cachedAppleMusicInstalled: (value: Bool, uptime: TimeInterval)?
 
     public var isSpotifyInstalled: Bool {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") != nil
+        let now = ProcessInfo.processInfo.systemUptime
+        if let cached = cachedSpotifyInstalled, (now - cached.uptime) < 60.0 {
+            return cached.value
+        }
+        let installed = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") != nil
+        cachedSpotifyInstalled = (installed, now)
+        return installed
     }
 
     public var isAppleMusicInstalled: Bool {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") != nil
+        let now = ProcessInfo.processInfo.systemUptime
+        if let cached = cachedAppleMusicInstalled, (now - cached.uptime) < 60.0 {
+            return cached.value
+        }
+        let installed = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") != nil
+        cachedAppleMusicInstalled = (installed, now)
+        return installed
+    }
+
+    public func beginObserving() {
+        activeWidgetObserverCount += 1
+        if activeWidgetObserverCount == 1 && isLaunchpadCurrentlyVisible {
+            refreshNowPlaying(force: true)
+            startPolling()
+        }
+    }
+
+    public func endObserving() {
+        activeWidgetObserverCount = max(0, activeWidgetObserverCount - 1)
+        if activeWidgetObserverCount == 0 {
+            stopPolling()
+        }
     }
 
     deinit {
@@ -366,7 +416,7 @@ public final class MusicServiceManager: ObservableObject {
 
             await self.verifyNativeSpotifyAvailability(askUserIfNeeded: false)
 
-            if LaunchpadViewModel.isLaunchpadVisible {
+            if self.isLaunchpadCurrentlyVisible && self.activeWidgetObserverCount > 0 {
                 self.refreshNowPlaying(force: true)
                 self.startPolling()
             }
@@ -406,18 +456,21 @@ public final class MusicServiceManager: ObservableObject {
 
     @objc private func handleLaunchpadVisibilityChanged(_ notif: Notification) {
         guard let isVisible = notif.object as? Bool else { return }
+        self.isLaunchpadCurrentlyVisible = isVisible
         if isVisible {
             self.hasPendingNotificationUpdate = false
-            self.refreshNowPlaying(force: true)
-            self.startPolling()
+            if self.activeWidgetObserverCount > 0 {
+                self.refreshNowPlaying(force: true)
+                self.startPolling()
+            }
         } else {
             self.stopPolling()
         }
     }
 
     @objc private func handleAppleMusicNotification(_ notif: Notification) {
-        guard let info = notif.userInfo else { return }
-        if !LaunchpadViewModel.isLaunchpadVisible {
+        guard let info = notif.userInfo, activeWidgetObserverCount > 0 else { return }
+        if !isLaunchpadCurrentlyVisible {
             hasPendingNotificationUpdate = true
             return
         }
@@ -456,8 +509,8 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     @objc private func handleSpotifyNotification(_ notif: Notification) {
-        guard let info = notif.userInfo else { return }
-        if !LaunchpadViewModel.isLaunchpadVisible {
+        guard let info = notif.userInfo, activeWidgetObserverCount > 0 else { return }
+        if !isLaunchpadCurrentlyVisible {
             hasPendingNotificationUpdate = true
             return
         }
@@ -508,12 +561,12 @@ public final class MusicServiceManager: ObservableObject {
             limitationNotice: nil
         ))
 
-        if existingArtwork == nil, LaunchpadViewModel.isLaunchpadVisible {
+        if existingArtwork == nil, isLaunchpadCurrentlyVisible {
             // Récupère immédiatement l'URL officielle de pochette depuis Spotify Desktop (i.scdn.co) sans attendre le timer de 10 s.
             spotifyNotificationRefreshTask?.cancel()
             spotifyNotificationRefreshTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(250))
-                guard let self, !Task.isCancelled else { return }
+                guard let self, !Task.isCancelled, self.isLaunchpadCurrentlyVisible else { return }
                 if let local = await self.fetchLocalSpotifyTrack() {
                     self.assignCurrentTrack(local)
                 }
@@ -522,10 +575,11 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func startPolling() {
+        guard isLaunchpadCurrentlyVisible && activeWidgetObserverCount > 0 else { return }
         timer?.invalidate()
         let newTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, LaunchpadViewModel.isLaunchpadVisible else { return }
+                guard let self, self.isLaunchpadCurrentlyVisible, self.activeWidgetObserverCount > 0 else { return }
                 self.refreshNowPlaying()
             }
         }
@@ -535,13 +589,13 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func updateProgressTimerState() {
-        let needsTick = LaunchpadViewModel.isLaunchpadVisible && currentTrack.isPlaying && currentTrack.hasTrack && currentTrack.durationSeconds > 0
+        let needsTick = isLaunchpadCurrentlyVisible && activeWidgetObserverCount > 0 && currentTrack.isPlaying && currentTrack.hasTrack && currentTrack.durationSeconds > 0
         if needsTick {
             guard progressTimer == nil else { return }
             lastProgressTickUptime = ProcessInfo.processInfo.systemUptime
             let newProgressTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, LaunchpadViewModel.isLaunchpadVisible,
+                    guard let self, self.isLaunchpadCurrentlyVisible, self.activeWidgetObserverCount > 0,
                           self.currentTrack.isPlaying, self.currentTrack.hasTrack, self.currentTrack.durationSeconds > 0 else {
                         self?.progressTimer?.invalidate()
                         self?.progressTimer = nil
@@ -569,6 +623,12 @@ public final class MusicServiceManager: ObservableObject {
         timer = nil
         progressTimer?.invalidate()
         progressTimer = nil
+        spotifyNotificationRefreshTask?.cancel()
+        spotifyNotificationRefreshTask = nil
+        scheduledRefreshTask?.cancel()
+        scheduledRefreshTask = nil
+        randomLaunchTask?.cancel()
+        randomLaunchTask = nil
     }
 
     // MARK: - Apple Music (MusicKit Officiel)
@@ -976,7 +1036,7 @@ public final class MusicServiceManager: ObservableObject {
         }
         updateProgressTimerState()
 
-        if newTrack.hasTrack && newTrack.artworkData == nil && LaunchpadViewModel.isLaunchpadVisible {
+        if newTrack.hasTrack && newTrack.artworkData == nil && isLaunchpadCurrentlyVisible {
             switch newTrack.serviceSource {
             case .spotify:
                 resolveArtwork(for: newTrack.title, artist: newTrack.artist, album: newTrack.album, fallbackURL: newTrack.artworkURL, allowLocalMusicApp: false)
@@ -999,7 +1059,10 @@ public final class MusicServiceManager: ObservableObject {
                 assignCurrentTrack(localSpotify)
                 return
             }
-            if let tokenTrack = await (KeychainHelper.loadString(key: "spotify_access_token") != nil ? fetchSpotifyCurrentlyPlaying() : nil) {
+            let hasToken = await Task.detached(priority: .utility) {
+                KeychainHelper.loadString(key: "spotify_access_token") != nil
+            }.value
+            if hasToken, let tokenTrack = await fetchSpotifyCurrentlyPlaying() {
                 assignCurrentTrack(tokenTrack)
                 return
             }
@@ -1211,6 +1274,15 @@ public final class MusicServiceManager: ObservableObject {
             return
         }
 
+        // Éviter de réessayer pendant 10 minutes si la recherche de pochette a déjà échoué
+        let now = ProcessInfo.processInfo.systemUptime
+        if let failedAt = failedArtworkQueries[cacheKey] {
+            if (now - failedAt) < 600.0 && fallbackURL == nil {
+                return
+            }
+            failedArtworkQueries.removeValue(forKey: cacheKey)
+        }
+
         // Éviter les requêtes concurrentes en doublon pour le même morceau
         if inFlightArtworkQueries.contains(cacheKey) { return }
         inFlightArtworkQueries.insert(cacheKey)
@@ -1223,6 +1295,7 @@ public final class MusicServiceManager: ObservableObject {
 
             @MainActor
             func applyIfStillCurrent(_ data: Data) {
+                self.failedArtworkQueries.removeValue(forKey: cacheKey)
                 self.storeArtwork(data, forKey: cacheKey)
                 let curTitle = self.currentTrack.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 if curTitle.caseInsensitiveCompare(trimmedTitle) == .orderedSame {
@@ -1258,6 +1331,12 @@ public final class MusicServiceManager: ObservableObject {
                 applyIfStillCurrent(remoteData)
                 return
             }
+
+            if self.failedArtworkQueries.count >= 64 {
+                let oldestKeys = Array(self.failedArtworkQueries.keys.prefix(32))
+                for k in oldestKeys { self.failedArtworkQueries.removeValue(forKey: k) }
+            }
+            self.failedArtworkQueries[cacheKey] = ProcessInfo.processInfo.systemUptime
         }
     }
 
@@ -1592,9 +1671,15 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     private func scheduleRefresh(_ delays: [Double]) {
-        for delay in delays {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.refreshNowPlaying(force: true)
+        scheduledRefreshTask?.cancel()
+        scheduledRefreshTask = Task { @MainActor [weak self] in
+            var previousDelay: Double = 0
+            for delay in delays {
+                let delta = max(0, delay - previousDelay)
+                previousDelay = delay
+                try? await Task.sleep(for: .milliseconds(Int(delta * 1000)))
+                guard !Task.isCancelled, let self, self.isLaunchpadCurrentlyVisible else { return }
+                self.refreshNowPlaying(force: true)
             }
         }
     }

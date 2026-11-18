@@ -13,7 +13,7 @@ import Combine
 final class PermissionManager: ObservableObject {
     static let shared = PermissionManager()
 
-    @Published private(set) var isAccessibilityGranted: Bool = AXIsProcessTrusted()
+    @Published private(set) var isAccessibilityGranted: Bool = false
     @Published var showPermissionCard: Bool = false
     @Published var hasDismissedBanner: Bool = false
 

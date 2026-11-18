@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.20",
-  "name": "LaunchPad v1.2.20",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.20",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.20\n\n- ✨ **Correctif d'Affichage en Mode Édition (Tremblement)** : Suppression du double contour statique qui apparaissait autour des icônes Liquid Glass, dossiers et widgets pendant l'animation de tremblement.\n- 💎 **Rotation Fluide à 120 Hz** : Tous les styles vitrés (Clair, Sombre, Teinté, Cristal Pur et dossiers) pivotent désormais d'un seul bloc parfaitement aligné avec leur bordure lumineuse.",
+  "tag_name": "v1.2.21",
+  "name": "LaunchPad v1.2.21",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.21",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.21\n\n- ⚡ **Fluidité Générale & Défilement 120 Hz** : L'ouverture des pages, le glissement au trackpad et le tremblement en mode édition sont isolés pour rester parfaitement fluides sur toute la grille d'applications.\n- 🎨 **Rendu d'Icônes & Dossiers Accéléré** : Les shaders Liquid Glass, le détourage des icônes et le cache disque rétina précalculent leurs géométries pour charger et afficher vos icônes bien plus vite.\n- 🧩 **Widgets Intelligents en Veille Automatique** : Les widgets Météo, Horloge, Calendrier, Musique et Moniteur Système mettent en pause leurs actualisations dès que le Launchpad est masqué et préservent l'autonomie.\n- 💿 **Musique & Pochettes Sans Ralentissement** : Le décodage et le redimensionnement des pochettes d'album s'effectuent en arrière-plan avec mise en cache bornée pour des transitions instantanées.\n- 🛡️ **Stabilité & Fiabilité Renforcées** : Suppression d'un blocage lors de la synchronisation météo en arrière-plan, sécurisation des requêtes AppleScript par délai d'expiration et réduction de la consommation mémoire.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.20.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.20/LaunchPad-v1.2.20.zip"
+      "name": "LaunchPad-v1.2.21.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.21/LaunchPad-v1.2.21.zip"
     },
     {
-      "name": "LaunchPad-v1.2.20.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.20/LaunchPad-v1.2.20.dmg"
+      "name": "LaunchPad-v1.2.21.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.21/LaunchPad-v1.2.21.dmg"
     }
   ]
 }

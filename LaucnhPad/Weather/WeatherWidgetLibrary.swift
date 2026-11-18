@@ -55,6 +55,24 @@ struct RichWeatherData {
     let hourly: [(time: String, temp: Int, symbol: String)]
     let daily: [(day: String, symbol: String, low: Int, high: Int, barStart: CGFloat, barEnd: CGFloat)]
 
+    private static let sharedDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE"
+        return f
+    }()
+
+    private static let sharedISOFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static var cachedWeekdaysKey: String = ""
+    private static var cachedWeekdaysLabels: [String] = []
+    private static var cachedLiveDailyKey: String = ""
+    private static var cachedLiveDailyPoints: [(String, String, Int, Int, CGFloat, CGFloat)] = []
+
     static func from(config: CustomWidgetConfig) -> RichWeatherData {
         let live = WeatherService.shared.snapshot
         let t = live?.temp ?? config.weatherTemp
@@ -95,43 +113,57 @@ struct RichWeatherData {
             ]
         }()
 
-        let dayFmt = DateFormatter()
-        dayFmt.locale = Locale(identifier: LocalizationManager.activeLanguageCode)
-        dayFmt.dateFormat = "EEE"
-        let isoFmt = DateFormatter()
-        isoFmt.locale = Locale(identifier: "en_US_POSIX")
-        isoFmt.dateFormat = "yyyy-MM-dd"
+        let appLoc = LocalizationManager.shared.effectiveLocale
+        let langCode = LocalizationManager.shared.effectiveLanguageCode
+        if sharedDayFormatter.locale != appLoc {
+            sharedDayFormatter.locale = appLoc
+        }
         let cal = Calendar.current
         let now = Date()
-        func localizedWeekday(offset: Int, isoDate: String? = nil) -> String {
-            let d: Date
-            if let isoDate, let parsed = isoFmt.date(from: isoDate) {
-                d = parsed
-            } else {
-                d = cal.date(byAdding: .day, value: offset, to: now) ?? now
+        let todayBucket = Int(cal.startOfDay(for: now).timeIntervalSince1970)
+        let weekdayCacheKey = "\(langCode)|\(todayBucket)"
+        if cachedWeekdaysKey != weekdayCacheKey {
+            cachedWeekdaysLabels = (0..<7).map { offset in
+                let d = cal.date(byAdding: .day, value: offset, to: now) ?? now
+                return sharedDayFormatter.string(from: d).replacingOccurrences(of: ".", with: "").capitalized
             }
-            return dayFmt.string(from: d).replacingOccurrences(of: ".", with: "").capitalized
+            cachedWeekdaysKey = weekdayCacheKey
         }
+        let weekdayLabels = cachedWeekdaysLabels
 
         let daily: [(String, String, Int, Int, CGFloat, CGFloat)] = {
             if let liveDaily = live?.daily, !liveDaily.isEmpty {
+                let liveStamp = live?.updatedAt.timeIntervalSince1970 ?? 0
+                let dailyKey = "\(langCode)|\(live?.unit ?? unit)|\(liveStamp)|\(liveDaily.count)"
+                if cachedLiveDailyKey == dailyKey && !cachedLiveDailyPoints.isEmpty {
+                    return cachedLiveDailyPoints
+                }
                 let weekMin = Double(liveDaily.map(\.low).min() ?? low)
                 let weekMax = Double(liveDaily.map(\.high).max() ?? high)
                 let span = max(1.0, weekMax - weekMin)
-                return liveDaily.enumerated().map { idx, d in
+                let computed: [(String, String, Int, Int, CGFloat, CGFloat)] = liveDaily.enumerated().map { idx, d in
                     let start = CGFloat(max(0.0, min(0.85, (Double(d.low) - weekMin) / span)))
                     let end = CGFloat(max(Double(start) + 0.12, min(1.0, (Double(d.high) - weekMin) / span)))
-                    return (localizedWeekday(offset: idx, isoDate: d.isoDate), d.symbol, d.low, d.high, start, end)
+                    let label: String
+                    if let parsed = sharedISOFormatter.date(from: d.isoDate) {
+                        label = sharedDayFormatter.string(from: parsed).replacingOccurrences(of: ".", with: "").capitalized
+                    } else {
+                        label = weekdayLabels[min(idx, weekdayLabels.count - 1)]
+                    }
+                    return (label, d.symbol, d.low, d.high, start, end)
                 }
+                cachedLiveDailyKey = dailyKey
+                cachedLiveDailyPoints = computed
+                return computed
             }
             return [
-                (localizedWeekday(offset: 0), "cloud.rain", low, high, 0.15, 0.92),
-                (localizedWeekday(offset: 1), "cloud.rain", low - 1, high - 1, 0.10, 0.68),
-                (localizedWeekday(offset: 2), "sun.max", low - 2, high + 1, 0.05, 0.72),
-                (localizedWeekday(offset: 3), "sun.max", low - 1, high + 2, 0.08, 0.74),
-                (localizedWeekday(offset: 4), "cloud.sun", low - 1, high - 1, 0.10, 0.48),
-                (localizedWeekday(offset: 5), "cloud.sun", low - 2, high, 0.06, 0.72),
-                (localizedWeekday(offset: 6), "sun.max", low, high + 1, 0.14, 0.68)
+                (weekdayLabels[0], "cloud.rain", low, high, 0.15, 0.92),
+                (weekdayLabels[1], "cloud.rain", low - 1, high - 1, 0.10, 0.68),
+                (weekdayLabels[2], "sun.max", low - 2, high + 1, 0.05, 0.72),
+                (weekdayLabels[3], "sun.max", low - 1, high + 2, 0.08, 0.74),
+                (weekdayLabels[4], "cloud.sun", low - 1, high - 1, 0.10, 0.48),
+                (weekdayLabels[5], "cloud.sun", low - 2, high, 0.06, 0.72),
+                (weekdayLabels[6], "sun.max", low, high + 1, 0.14, 0.68)
             ]
         }()
 
@@ -228,7 +260,9 @@ struct PremiumWeatherWidgetView: View {
         .frame(width: w, height: h)
         .onAppear {
             syncWeatherAnimation(visible: LaunchpadViewModel.isLaunchpadVisible)
-            weatherService.refreshIfNeeded(requestLocationPermission: !isPreview && LaunchpadViewModel.isLaunchpadVisible)
+            if !isPreview {
+                weatherService.refreshIfNeeded(requestLocationPermission: LaunchpadViewModel.isLaunchpadVisible)
+            }
         }
         .onDisappear {
             animateWeather = false
@@ -460,9 +494,15 @@ struct PremiumWeatherWidgetView: View {
                 endPoint: .bottomTrailing
             )
             Circle()
-                .fill(Color.orange.opacity(0.45))
-                .frame(width: w * 0.55, height: w * 0.55)
-                .blur(radius: 24)
+                .fill(
+                    RadialGradient(
+                        colors: [Color.orange.opacity(0.45), Color.orange.opacity(0.14), Color.clear],
+                        center: .center,
+                        startRadius: 4,
+                        endRadius: w * 0.40
+                    )
+                )
+                .frame(width: w * 0.80, height: w * 0.80)
                 .offset(x: w * 0.25, y: -h * 0.22)
 
             VStack(alignment: .leading, spacing: isCompact ? 4 : 8) {
@@ -1535,15 +1575,14 @@ struct PremiumWeatherWidgetView: View {
 
             LinearGradient(
                 colors: [
-                    Color(red: 0.10, green: 0.92, blue: 0.62).opacity(0.48),
-                    Color(red: 0.14, green: 0.62, blue: 0.96).opacity(0.36),
-                    Color(red: 0.62, green: 0.24, blue: 0.96).opacity(0.32),
+                    Color(red: 0.10, green: 0.92, blue: 0.62).opacity(0.42),
+                    Color(red: 0.14, green: 0.62, blue: 0.96).opacity(0.32),
+                    Color(red: 0.62, green: 0.24, blue: 0.96).opacity(0.28),
                     Color.clear
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            .blur(radius: 10)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -1931,7 +1970,6 @@ struct PremiumWeatherWidgetView: View {
                     context.stroke(drop, with: .color(Color.white.opacity(0.14)), lineWidth: 1)
                 }
             }
-            .drawingGroup()
         }
     }
 }

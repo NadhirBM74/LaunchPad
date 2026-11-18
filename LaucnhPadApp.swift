@@ -137,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: UserDefaults.standard)
         center.addObserver(self, selector: #selector(hotKeyChanged), name: .launchpadHotKeyChanged, object: nil)
         center.addObserver(forName: .openSettingsTab, object: nil, queue: .main) { [weak self] note in
             let tab = (note.object as? SettingsPanel.SettingsTab) ?? .general
@@ -206,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         LicenseManager.shared.checkTrialStatus()
 
-        if !Prefs.defaults.bool(forKey: PrefKey.hasLaunchedBefore) {
+        if isFirstLaunch {
             launchpad.show()
             launchpad.viewModel.showTutorial = true
         }
@@ -431,12 +431,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func defaultsChanged() {
-        configTask?.cancel()
-        configTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled else { return }
-            self?.applyConfiguration(force: false)
+    @objc nonisolated private func defaultsChanged() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.configTask?.cancel()
+            self.configTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+                self?.applyConfiguration(force: false)
+            }
         }
     }
 

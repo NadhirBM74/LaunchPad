@@ -87,8 +87,10 @@ enum BackupManager {
         return formatter
     }()
 
+    private static let backupKeySet = Set(PrefKey.backupKeys)
+
     static func restore(_ backup: BackupFile, store: LaunchpadStore) {
-        for (key, value) in backup.preferences where PrefKey.backupKeys.contains(key) {
+        for (key, value) in backup.preferences where backupKeySet.contains(key) {
             UserDefaults.standard.set(value.object, forKey: key)
         }
         CustomTileManager.shared.loadTiles()
@@ -339,7 +341,6 @@ extension BackupManager {
         for app in store.catalog.values {
             byPath[key(app.id)] = app.id
             byPath[key(app.resolvedPath)] = app.id
-            byPath[key(app.url.resolvingSymlinksInPath().path)] = app.id
             if let bundleID = app.bundleID, byBundle[bundleID] == nil { byBundle[bundleID] = app.id }
         }
         var hidden = store.hidden

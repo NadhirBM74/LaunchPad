@@ -106,27 +106,45 @@ struct AnimatedVerifiedSealBadge: View {
         systemReduceMotion || userReduceMotion
     }
 
-    private var badgeGradient: LinearGradient {
-        if isTrial {
-            return LinearGradient(
-                colors: [
-                    Color(red: 1.00, green: 0.86, blue: 0.16),
-                    Color(red: 0.96, green: 0.65, blue: 0.00)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        } else {
-            return LinearGradient(
-                colors: [
-                    Color(red: 0.72, green: 0.38, blue: 0.94),
-                    Color(red: 0.52, green: 0.22, blue: 0.80)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-    }
+    private static let trialBadgeGradient = LinearGradient(
+        colors: [
+            Color(red: 1.00, green: 0.86, blue: 0.16),
+            Color(red: 0.96, green: 0.65, blue: 0.00)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    private static let proBadgeGradient = LinearGradient(
+        colors: [
+            Color(red: 0.72, green: 0.38, blue: 0.94),
+            Color(red: 0.52, green: 0.22, blue: 0.80)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    private static let trialGlowGradient = RadialGradient(
+        colors: [
+            Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.28),
+            Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.08),
+            Color.clear
+        ],
+        center: .center,
+        startRadius: 0,
+        endRadius: 24
+    )
+
+    private static let proGlowGradient = RadialGradient(
+        colors: [
+            Color(red: 0.68, green: 0.36, blue: 0.88).opacity(0.28),
+            Color(red: 0.68, green: 0.36, blue: 0.88).opacity(0.08),
+            Color.clear
+        ],
+        center: .center,
+        startRadius: 0,
+        endRadius: 24
+    )
 
     private var glowColor: Color {
         isTrial
@@ -137,13 +155,12 @@ struct AnimatedVerifiedSealBadge: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(glowColor.opacity(0.24))
-                .frame(width: size * 1.15, height: size * 1.15)
-                .blur(radius: max(1.8, size * 0.12))
+                .fill(isTrial ? Self.trialGlowGradient : Self.proGlowGradient)
+                .frame(width: size * 1.32, height: size * 1.32)
 
             // Seule la rosace extérieure tourne sur le GPU CoreAnimation sans réévaluer SwiftUI à 120 Hz
             Rectangle()
-                .fill(badgeGradient)
+                .fill(isTrial ? Self.trialBadgeGradient : Self.proBadgeGradient)
                 .frame(width: size * 1.12, height: size * 1.12)
                 .mask(
                     Image(systemName: "seal.fill")
@@ -156,6 +173,7 @@ struct AnimatedVerifiedSealBadge: View {
                             value: spinning
                         )
                 )
+                .drawingGroup()
                 .shadow(color: glowColor.opacity(0.45), radius: max(2.0, size * 0.15), y: 1.2)
 
             // Le "V" (coche blanche) au milieu reste strictement immobile

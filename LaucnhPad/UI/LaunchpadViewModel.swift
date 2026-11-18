@@ -171,14 +171,27 @@ final class LaunchpadViewModel: ObservableObject {
 
     /// Cache O(1) des modèles de tuiles pour éviter de reconstruire titres, états et aperçus de dossiers à 120 Hz.
     func cachedTileModel(for item: LayoutItem, showRunning: Bool, tint: Color?) -> TileModel {
-        let lang = LocalizationManager.activeLanguageCode
+        let lang = LocalizationManager.shared.effectiveLanguageCode
         let runRev = showRunning ? store.runningRevision : -1
         let state = (rev: store.revision, icons: store.iconsVersion, running: runRev, showRun: showRunning, lang: lang, tint: tint)
         if let prev = cachedTileState {
-            if prev.rev != state.rev || prev.icons != state.icons || prev.running != state.running ||
-                prev.showRun != state.showRun || prev.lang != state.lang || prev.tint != state.tint {
+            let coreChanged = prev.rev != state.rev || prev.icons != state.icons ||
+                prev.showRun != state.showRun || prev.lang != state.lang || prev.tint != state.tint
+            if coreChanged {
                 cachedTileModels.removeAll(keepingCapacity: true)
                 cachedTileState = state
+            } else if prev.running != state.running {
+                // Seules les apps lancées/fermées ont changé : préserver intacts les modèles de dossiers 3×3
+                cachedTileState = state
+                for key in Array(cachedTileModels.keys) {
+                    if var model = cachedTileModels[key], model.folderIcons == nil {
+                        let running = showRunning && (store.catalog[key].map(store.isRunning) ?? false)
+                        if model.isRunning != running {
+                            model.isRunning = running
+                            cachedTileModels[key] = model
+                        }
+                    }
+                }
             }
         } else {
             cachedTileState = state
@@ -196,6 +209,9 @@ final class LaunchpadViewModel: ObservableObject {
     @Published var query = "" { didSet { if query != oldValue { queryChanged(from: oldValue) } } }
     @Published private(set) var page = 0
     @Published private(set) var lastPage = 0
+    /// Bornes discrètes de pages visibles durant un glisser ou une animation (n'invalide pas à 120 Hz).
+    @Published private(set) var scrollPageBounds: ClosedRange<Int>? = nil
+    private var pageSettleTask: Task<Void, Never>?
     /// Décalage des pages. L'écriture est instantanée (sans animation implicite) :
     /// le suivi du doigt ne doit pas être interpolé. Les changements de page animés
     /// écrivent directement dans `pageScroll.offset` à l'intérieur de `withAnimation`.
@@ -257,10 +273,27 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     private func setLivePageOffset(_ value: CGFloat) {
+        updateScrollPageBounds(forOffset: value, width: metrics?.size.width ?? 1200)
         guard pageScroll.offset != value else { return }
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { pageScroll.offset = value }
+    }
+
+    private func updateScrollPageBounds(forOffset offset: CGFloat, width: CGFloat) {
+        guard width > 0 else { return }
+        let baseOffset = -CGFloat(page) * width
+        if abs(offset - baseOffset) < 0.5 {
+            if scrollPageBounds != nil { scrollPageBounds = nil }
+            return
+        }
+        let pos = -offset / width
+        let lo = Int(floor(pos))
+        let hi = Int(ceil(pos))
+        let bounds = min(lo, hi)...max(lo, hi)
+        if scrollPageBounds != bounds {
+            scrollPageBounds = bounds
+        }
     }
     var folderMetrics: FolderMetrics?
     var gridOrigin: CGPoint = .zero
@@ -375,6 +408,20 @@ final class LaunchpadViewModel: ObservableObject {
                 self?.showToast(loc("permission.granted_toast"))
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .launchpadCustomIconDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                guard let self else { return }
+                if let appID = note.object as? String {
+                    self.cachedTileModels.removeValue(forKey: appID)
+                } else if let appIDs = note.object as? [String] {
+                    for id in appIDs { self.cachedTileModels.removeValue(forKey: id) }
+                } else {
+                    self.cachedTileModels.removeAll(keepingCapacity: true)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func setSettingsOpen(_ open: Bool) {
@@ -422,6 +469,21 @@ final class LaunchpadViewModel: ObservableObject {
     private var cachedPageCount: Int = 1
     private var cachedPlacedLookup: [String: PlacedItem] = [:]
     private var cachedSlotLookup: [Int: PlacedItem] = [:]
+    private var cachedPlacedByPage: [Int: [PlacedItem]] = [:]
+
+    private struct SearchIndexEntry {
+        let id: String
+        let display: String
+        let foldedDisplay: String
+        let normalizedAppName: String
+        let foldedWords: [Substring]
+        let initials: String
+        let normalizedBundleID: String?
+        let isHidden: Bool
+    }
+    private var cachedSearchIndex: [SearchIndexEntry] = []
+    private var cachedSearchIndexRev: Int = -1
+    private var cachedSearchIndexLang: String = ""
 
     var pageCount: Int {
         guard let m = metrics else { return max(1, (displayItems.count + pageSize - 1) / pageSize) }
@@ -459,11 +521,13 @@ final class LaunchpadViewModel: ObservableObject {
         var maxPageIndex = 0
         var lookup: [String: PlacedItem] = [:]
         var slotLookup: [Int: PlacedItem] = [:]
+        var byPage: [Int: [PlacedItem]] = [:]
         lookup.reserveCapacity(result.count)
         slotLookup.reserveCapacity(result.count * 4)
         for item in result {
             if item.page > maxPageIndex { maxPageIndex = item.page }
             lookup[item.id] = item
+            byPage[item.page, default: []].append(item)
             let pShift = item.page << 16
             for r in item.row..<(item.row + item.rowSpan) {
                 let rShift = r << 8
@@ -475,7 +539,14 @@ final class LaunchpadViewModel: ObservableObject {
         cachedPageCount = max(1, maxPageIndex + 1)
         cachedPlacedLookup = lookup
         cachedSlotLookup = slotLookup
+        cachedPlacedByPage = byPage
         return result
+    }
+
+    func placedItems(onPage targetPage: Int) -> [PlacedItem] {
+        guard let m = metrics else { return [] }
+        _ = placedDisplayItems(metrics: m)
+        return cachedPlacedByPage[targetPage] ?? []
     }
 
     func placedItem(for id: String) -> PlacedItem? {
@@ -501,27 +572,56 @@ final class LaunchpadViewModel: ObservableObject {
         return store.visibleFolder(id) ?? folderSnapshot
     }
 
+    private func currentSearchIndex() -> [SearchIndexEntry] {
+        let rev = store.revision
+        let lang = LocalizationManager.shared.effectiveLanguageCode
+        if cachedSearchIndexRev == rev && cachedSearchIndexLang == lang {
+            return cachedSearchIndex
+        }
+        var entries: [SearchIndexEntry] = []
+        entries.reserveCapacity(store.catalog.count)
+        let separatorSet: Set<Character> = [" ", "-", ".", "_"]
+        for app in store.catalog.values {
+            let display = store.displayName(app.id)
+            let folded = (display == app.name)
+                ? app.normalizedName
+                : display.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            let words = folded.split(whereSeparator: { separatorSet.contains($0) })
+            let initials = String(words.compactMap(\.first))
+            entries.append(SearchIndexEntry(
+                id: app.id,
+                display: display,
+                foldedDisplay: folded,
+                normalizedAppName: app.normalizedName,
+                foldedWords: words,
+                initials: initials,
+                normalizedBundleID: app.normalizedBundleID,
+                isHidden: store.hidden.contains(app.id)
+            ))
+        }
+        cachedSearchIndex = entries
+        cachedSearchIndexRev = rev
+        cachedSearchIndexLang = lang
+        return entries
+    }
+
     var searchResults: [LayoutItem] {
         let text = trimmedQuery
         if text == searchCacheKey, store.revision == searchCacheRevision { return searchCache }
-        let fold: (String) -> String = { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) }
-        let needle = fold(text)
+        let needle = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         let includeHidden = Prefs.showHiddenInSearch
+        let needleLen = needle.count
         var scored: [(score: Int, name: String, id: String)] = []
-        for app in store.catalog.values where includeHidden || !store.hidden.contains(app.id) {
-            let display = store.displayName(app.id)
-            let name = (display == app.name) ? app.normalizedName : fold(display)
-            let words = name.split(whereSeparator: { " -._".contains($0) })
-            let initials = String(words.compactMap(\.first))
+        for entry in currentSearchIndex() where includeHidden || !entry.isHidden {
             let score: Int?
-            if name.hasPrefix(needle) { score = 0 }
-            else if words.contains(where: { $0.hasPrefix(needle) }) { score = 1 }
-            else if name.contains(needle) { score = 2 }
-            else if needle.count >= 2, initials.hasPrefix(needle) { score = 3 }
-            else if app.normalizedName.contains(needle) { score = 4 }
-            else if needle.count >= 3, let bundle = app.normalizedBundleID, bundle.contains(needle) { score = 5 }
+            if entry.foldedDisplay.hasPrefix(needle) { score = 0 }
+            else if entry.foldedWords.contains(where: { $0.hasPrefix(needle) }) { score = 1 }
+            else if entry.foldedDisplay.contains(needle) { score = 2 }
+            else if needleLen >= 2, entry.initials.hasPrefix(needle) { score = 3 }
+            else if entry.normalizedAppName.contains(needle) { score = 4 }
+            else if needleLen >= 3, let bundle = entry.normalizedBundleID, bundle.contains(needle) { score = 5 }
             else { score = nil }
-            if let score { scored.append((score, display, app.id)) }
+            if let score { scored.append((score, entry.display, entry.id)) }
         }
         scored.sort { $0.score == $1.score ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : $0.score < $1.score }
         searchCache = scored.map { LayoutItem.app($0.id) }
@@ -533,20 +633,24 @@ final class LaunchpadViewModel: ObservableObject {
     private func queryChanged(from old: String) {
         let wasSearching = !old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if isSearching, !wasSearching { pageBeforeSearch = page }
+        let nextPage: Int
+        let nextKeyboard: Int?
         if isSearching {
             if openFolderID != nil { closeFolder() }
-            page = 0
-            keyboardIndex = 0
+            nextPage = 0
+            nextKeyboard = 0
         } else {
-            page = min(pageBeforeSearch, max(0, pageCount - 1))
-            keyboardIndex = nil
+            nextPage = min(pageBeforeSearch, max(0, pageCount - 1))
+            nextKeyboard = nil
         }
-        lastPage = page
+        if page != nextPage { page = nextPage }
+        if keyboardIndex != nextKeyboard { keyboardIndex = nextKeyboard }
+        if lastPage != nextPage { lastPage = nextPage }
         let width = metrics?.size.width ?? 1200
-        pageOffset = -CGFloat(page) * width
-        editing = false
-        optionHeld = false
-        selection.removeAll()
+        pageOffset = -CGFloat(nextPage) * width
+        if editing { editing = false }
+        if optionHeld { optionHeld = false }
+        if !selection.isEmpty { selection.removeAll() }
     }
 
     // MARK: Cycle de vie
@@ -669,21 +773,27 @@ final class LaunchpadViewModel: ObservableObject {
         let clamped = min(max(value, 0), pageCount - 1)
         let changed = clamped != page
         let oldPage = page
-        lastPage = oldPage
-        page = clamped
+        if lastPage != oldPage { lastPage = oldPage }
+        if page != clamped { page = clamped }
         let width = metrics?.size.width ?? 1200
         let targetOffset = -CGFloat(clamped) * width
 
+        pageSettleTask?.cancel()
         if Prefs.reduceMotion {
             setLivePageOffset(targetOffset)
             lastPage = clamped
+            if scrollPageBounds != nil { scrollPageBounds = nil }
         } else {
+            let bounds = min(oldPage, clamped)...max(oldPage, clamped)
+            if scrollPageBounds != bounds { scrollPageBounds = bounds }
             withAnimation(motion(.spring(response: 0.38, dampingFraction: 0.86))) {
                 pageScroll.offset = targetOffset
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
-                guard let self else { return }
-                self.lastPage = self.page
+            pageSettleTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(450))
+                guard let self, !Task.isCancelled else { return }
+                if self.lastPage != self.page { self.lastPage = self.page }
+                if self.scrollPageBounds != nil { self.scrollPageBounds = nil }
             }
         }
         if changed, !keepKeyboardSelection, keyboardIndex != nil {
@@ -1015,12 +1125,24 @@ final class LaunchpadViewModel: ObservableObject {
         lastReorderHoverKey = nil
         pointer.location = value.location
         if isHoveringDockDropZone { isHoveringDockDropZone = false }
+        if dockDropAlreadyInDock { dockDropAlreadyInDock = false }
         if canDropToMacOSDock(id: item.id), let app = store.catalog[item.id] {
-            dockDropAlreadyInDock = AppActions.isInDock(app)
-            dockPreviewApps = AppActions.dockPreviewApps(from: store.catalog, maxCount: 5)
-        } else {
-            dockDropAlreadyInDock = false
-            if !dockPreviewApps.isEmpty { dockPreviewApps = [] }
+            let catalogSnapshot = store.catalog
+            let draggedID = item.id
+            Task.detached(priority: .userInitiated) { [weak self] in
+                let result = AppActions.dockStatusAndPreview(for: app, from: catalogSnapshot, maxCount: 5)
+                await MainActor.run { [weak self] in
+                    guard let self, self.drag?.id == draggedID else { return }
+                    if self.dockDropAlreadyInDock != result.isInDock {
+                        self.dockDropAlreadyInDock = result.isInDock
+                    }
+                    if self.dockPreviewApps != result.preview {
+                        self.dockPreviewApps = result.preview
+                    }
+                }
+            }
+        } else if !dockPreviewApps.isEmpty {
+            dockPreviewApps = []
         }
         drag = DragState(id: item.id, source: source, isFolder: item.isFolder,
                          grabOffset: CGSize(width: value.startLocation.x - center.x, height: value.startLocation.y - center.y))
@@ -1074,8 +1196,7 @@ final class LaunchpadViewModel: ObservableObject {
         let local = CGPoint(x: location.x - gridOrigin.x, y: location.y - gridOrigin.y)
         let items = store.visibleItems
         guard let draggedIndex = items.firstIndex(where: { $0.id == state.id }) else { return }
-        let placedItems = placedDisplayItems(metrics: m)
-        let pageItems = placedItems.filter { $0.page == page }
+        let pageItems = placedItems(onPage: page)
 
         guard let hit = m.hit(local) else {
             cancelMerge()

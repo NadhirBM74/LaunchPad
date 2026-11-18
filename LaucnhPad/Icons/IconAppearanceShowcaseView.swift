@@ -10,6 +10,7 @@ struct IconAppearanceShowcaseView: View {
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
     @State private var feedbackMessage: String? = nil
+    @State private var feedbackTask: Task<Void, Never>? = nil
     var onStyleChanged: (() -> Void)? = nil
     var onRequirePro: ((String, String) -> Void)? = nil
 
@@ -37,17 +38,15 @@ struct IconAppearanceShowcaseView: View {
         }
     }
 
-    private var tintOptions: [(String, String, Color)] {
-        [
-            ("blue", loc("tint.blue"), Color(red: 0.08, green: 0.54, blue: 0.98)),
-            ("purple", loc("tint.purple"), Color(red: 0.65, green: 0.42, blue: 1.0)),
-            ("orange", loc("tint.orange"), Color(red: 1.0, green: 0.56, blue: 0.14)),
-            ("mint", loc("tint.mint"), Color(red: 0.18, green: 0.85, blue: 0.68)),
-            ("rose", loc("tint.rose"), Color(red: 1.0, green: 0.32, blue: 0.56)),
-            ("gold", loc("tint.gold"), Color(red: 0.98, green: 0.78, blue: 0.22)),
-            ("graphite", loc("tint.graphite"), Color(white: 0.78))
-        ]
-    }
+    private static let tintOptions: [(key: String, labelKey: String, color: Color)] = [
+        ("blue", "tint.blue", Color(red: 0.08, green: 0.54, blue: 0.98)),
+        ("purple", "tint.purple", Color(red: 0.65, green: 0.42, blue: 1.0)),
+        ("orange", "tint.orange", Color(red: 1.0, green: 0.56, blue: 0.14)),
+        ("mint", "tint.mint", Color(red: 0.18, green: 0.85, blue: 0.68)),
+        ("rose", "tint.rose", Color(red: 1.0, green: 0.32, blue: 0.56)),
+        ("gold", "tint.gold", Color(red: 0.98, green: 0.78, blue: 0.22)),
+        ("graphite", "tint.graphite", Color(white: 0.78))
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -79,8 +78,8 @@ struct IconAppearanceShowcaseView: View {
                 Spacer()
 
                 Button {
-                    IconCache.shared.removeAll()
-                    NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+                    IconCache.shared.removeStyleImages()
+                    NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: "force")
                     onStyleChanged?()
                     showFeedback(loc("icon_showcase.refresh_done"))
                 } label: {
@@ -130,12 +129,14 @@ struct IconAppearanceShowcaseView: View {
                     Text(loc("icon_showcase.tint_label"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
-                    ForEach(tintOptions, id: \.0) { key, label, color in
-                        let isChosen = (tintedIconColor == key) || (key == "blue" && tintedIconColor == "accent")
+                    ForEach(Self.tintOptions, id: \.key) { option in
+                        let isChosen = (tintedIconColor == option.key) || (option.key == "blue" && tintedIconColor == "accent")
+                        let label = loc(option.labelKey)
                         Button {
+                            guard !isChosen else { return }
                             withAnimation(AppleDesignSystem.Springs.snappy) {
-                                tintedIconColor = key
-                                IconCache.shared.removeAll()
+                                tintedIconColor = option.key
+                                IconCache.shared.invalidateStyleCache()
                                 NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
                                 onStyleChanged?()
                                 showFeedback(loc("icon_showcase.tint_applied", label))
@@ -143,16 +144,16 @@ struct IconAppearanceShowcaseView: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Circle()
-                                    .fill(color)
+                                    .fill(option.color)
                                     .frame(width: 14, height: 14)
                                 Text(label)
                                     .font(.system(size: 11, weight: isChosen ? .bold : .medium))
                             }
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
-                            .background(isChosen ? color.opacity(0.22) : Color.primary.opacity(0.06), in: Capsule())
+                            .background(isChosen ? option.color.opacity(0.22) : Color.primary.opacity(0.06), in: Capsule())
                             .overlay(
-                                Capsule().strokeBorder(isChosen ? color : Color.clear, lineWidth: 1.5)
+                                Capsule().strokeBorder(isChosen ? option.color : Color.clear, lineWidth: 1.5)
                             )
                         }
                         .buttonStyle(.plain)
@@ -173,6 +174,10 @@ struct IconAppearanceShowcaseView: View {
                 .transition(.opacity)
             }
         }
+        .onDisappear {
+            feedbackTask?.cancel()
+            feedbackTask = nil
+        }
     }
 
     private var baseMacOSCard: some View {
@@ -182,9 +187,9 @@ struct IconAppearanceShowcaseView: View {
         } label: {
             HStack(spacing: 10) {
                 HStack(spacing: 5) {
-                    CustomAppIconView(kind: .finder, style: .classicApple, size: 32)
-                    CustomAppIconView(kind: .safari, style: .classicApple, size: 32)
-                    CustomAppIconView(kind: .photos, style: .classicApple, size: 32)
+                    CustomAppIconView(kind: .finder, style: .classicApple, size: 32).equatable()
+                    CustomAppIconView(kind: .safari, style: .classicApple, size: 32).equatable()
+                    CustomAppIconView(kind: .photos, style: .classicApple, size: 32).equatable()
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("icon_showcase.apple_colors_title"))
@@ -225,9 +230,9 @@ struct IconAppearanceShowcaseView: View {
         } label: {
             HStack(spacing: 10) {
                 HStack(spacing: 5) {
-                    CustomAppIconView(kind: .keynote, style: .transparent, size: 32)
-                    CustomAppIconView(kind: .weather, style: .transparent, size: 32)
-                    CustomAppIconView(kind: .photos, style: .transparent, size: 32)
+                    CustomAppIconView(kind: .keynote, style: .transparent, size: 32).equatable()
+                    CustomAppIconView(kind: .weather, style: .transparent, size: 32).equatable()
+                    CustomAppIconView(kind: .photos, style: .transparent, size: 32).equatable()
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -271,10 +276,13 @@ struct IconAppearanceShowcaseView: View {
     }
 
     private func showFeedback(_ text: String) {
+        feedbackTask?.cancel()
         withAnimation(.easeInOut(duration: 0.2)) {
             feedbackMessage = text
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+        feedbackTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.4))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
                 if feedbackMessage == text {
                     feedbackMessage = nil
@@ -300,31 +308,43 @@ struct IconAppearanceShowcaseView: View {
 
             VStack(spacing: 8) {
                 // Rangée 1 : Dark
-                iconShowcaseRow(
+                IconShowcaseRowButton(
                     kinds: [.freeform, .photos, .home],
                     style: .dark,
-                    isSelected: activeStyle == .dark
+                    tintColor: resolvedTint,
+                    iconSize: 48,
+                    isSelected: activeStyle == .dark,
+                    isDarkBackground: false
                 ) {
                     selectMode(.dark)
                 }
+                .equatable()
 
                 // Rangée 2 : Light
-                iconShowcaseRow(
+                IconShowcaseRowButton(
                     kinds: [.freeform, .photos, .home],
                     style: .light,
-                    isSelected: activeStyle == .light
+                    tintColor: resolvedTint,
+                    iconSize: 48,
+                    isSelected: activeStyle == .light,
+                    isDarkBackground: false
                 ) {
                     selectMode(.light)
                 }
+                .equatable()
 
                 // Rangée 3 : Tinted
-                iconShowcaseRow(
+                IconShowcaseRowButton(
                     kinds: [.freeform, .photos, .home],
                     style: .tinted,
-                    isSelected: activeStyle == .tinted
+                    tintColor: resolvedTint,
+                    iconSize: 48,
+                    isSelected: activeStyle == .tinted,
+                    isDarkBackground: false
                 ) {
                     selectMode(.tinted)
                 }
+                .equatable()
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 12)
@@ -346,34 +366,7 @@ struct IconAppearanceShowcaseView: View {
     private var clearColoredIconsCard: some View {
         ZStack {
             // Fond artistique ondulé bleu/violet fidèle à la Photo 1 (droite)
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.44, green: 0.36, blue: 0.98),
-                        Color(red: 0.24, green: 0.14, blue: 0.94),
-                        Color(red: 0.30, green: 0.20, blue: 0.96)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-
-                // Ondes fluides lumineuses blanches/lavande
-                WaveRibbonShape()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.85),
-                                Color(red: 0.72, green: 0.68, blue: 1.0).opacity(0.35),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .blur(radius: 4)
-                    .drawingGroup()
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            ClearCardArtBackdrop().equatable()
 
             VStack(spacing: 8) {
                 VStack(spacing: 1) {
@@ -396,37 +389,43 @@ struct IconAppearanceShowcaseView: View {
 
                 VStack(spacing: 8) {
                     // Rangée 1 : Clear Dark Glass
-                    iconShowcaseRow(
+                    IconShowcaseRowButton(
                         kinds: [.keynote, .photos, .weather, .maps],
                         style: .clearDark,
+                        tintColor: resolvedTint,
                         iconSize: 44,
                         isSelected: activeStyle == .clearDark,
                         isDarkBackground: true
                     ) {
                         selectMode(.clearDark)
                     }
+                    .equatable()
 
                     // Rangée 2 : Frosted Light Glass
-                    iconShowcaseRow(
+                    IconShowcaseRowButton(
                         kinds: [.keynote, .photos, .weather, .maps],
                         style: .frostedGlass,
+                        tintColor: resolvedTint,
                         iconSize: 44,
                         isSelected: activeStyle == .frostedGlass,
                         isDarkBackground: true
                     ) {
                         selectMode(.frostedGlass)
                     }
+                    .equatable()
 
                     // Rangée 3 : Clear Liquid Glass
-                    iconShowcaseRow(
+                    IconShowcaseRowButton(
                         kinds: [.keynote, .photos, .weather, .maps],
                         style: .clearLiquid,
+                        tintColor: resolvedTint,
                         iconSize: 44,
                         isSelected: activeStyle == .clearLiquid,
                         isDarkBackground: true
                     ) {
                         selectMode(.clearLiquid)
                     }
+                    .equatable()
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 12)
@@ -441,23 +440,67 @@ struct IconAppearanceShowcaseView: View {
         .shadow(color: Color(red: 0.24, green: 0.14, blue: 0.94).opacity(0.25), radius: 10, y: 4)
     }
 
-    private func iconShowcaseRow(
-        kinds: [CustomAppIconKind],
-        style: IconAppearanceStyle,
-        iconSize: CGFloat = 48,
-        isSelected: Bool,
-        isDarkBackground: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func selectMode(_ mode: IconAppearanceStyle) {
+        if mode.requiresPro && !licenseManager.isPro {
+            let title = mode.isTransparentGlassStyle
+                ? loc("pro_alert.transparent_title")
+                : loc("pro_alert.tinted_title")
+            let msg = mode.isTransparentGlassStyle
+                ? loc("pro_alert.transparent_msg")
+                : loc("pro_alert.tinted_msg")
+            if let onRequirePro {
+                onRequirePro(title, msg)
+            } else {
+                showFeedback(title)
+            }
+            return
+        }
+        guard mode != activeStyle else { return }
+        withAnimation(AppleDesignSystem.Springs.snappy) {
+            if mode == .tinted {
+                tintedIcons = true
+                iconStyleRaw = IconAppearanceStyle.tinted.rawValue
+            } else {
+                tintedIcons = false
+                iconStyleRaw = mode.rawValue
+            }
+            IconCache.shared.invalidateStyleCache()
+            NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+            onStyleChanged?()
+            showFeedback(loc("icon_showcase.style_applied", mode.title))
+        }
+    }
+}
+
+private struct IconShowcaseRowButton: View, Equatable {
+    let kinds: [CustomAppIconKind]
+    let style: IconAppearanceStyle
+    let tintColor: Color
+    let iconSize: CGFloat
+    let isSelected: Bool
+    let isDarkBackground: Bool
+    let action: () -> Void
+
+    static func == (lhs: IconShowcaseRowButton, rhs: IconShowcaseRowButton) -> Bool {
+        lhs.kinds == rhs.kinds
+            && lhs.style == rhs.style
+            && lhs.iconSize == rhs.iconSize
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isDarkBackground == rhs.isDarkBackground
+            && (lhs.style != .tinted || lhs.tintColor == rhs.tintColor)
+    }
+
+    var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 ForEach(kinds) { kind in
                     CustomAppIconView(
                         kind: kind,
                         style: style,
-                        tintColor: resolvedTint,
+                        tintColor: tintColor,
                         size: iconSize
                     )
+                    .equatable()
                 }
             }
             .padding(.horizontal, 8)
@@ -477,35 +520,38 @@ struct IconAppearanceShowcaseView: View {
         }
         .buttonStyle(.plain)
     }
+}
 
-    private func selectMode(_ mode: IconAppearanceStyle) {
-        if mode.requiresPro && !licenseManager.isPro {
-            let title = mode.isTransparentGlassStyle
-                ? loc("pro_alert.transparent_title")
-                : loc("pro_alert.tinted_title")
-            let msg = mode.isTransparentGlassStyle
-                ? loc("pro_alert.transparent_msg")
-                : loc("pro_alert.tinted_msg")
-            if let onRequirePro {
-                onRequirePro(title, msg)
-            } else {
-                showFeedback(title)
-            }
-            return
+private struct ClearCardArtBackdrop: View, Equatable {
+    static func == (lhs: ClearCardArtBackdrop, rhs: ClearCardArtBackdrop) -> Bool { true }
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.44, green: 0.36, blue: 0.98),
+                    Color(red: 0.24, green: 0.14, blue: 0.94),
+                    Color(red: 0.30, green: 0.20, blue: 0.96)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            WaveRibbonShape()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.85),
+                            Color(red: 0.72, green: 0.68, blue: 1.0).opacity(0.35),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .blur(radius: 4)
         }
-        withAnimation(AppleDesignSystem.Springs.snappy) {
-            if mode == .tinted {
-                tintedIcons = true
-                iconStyleRaw = IconAppearanceStyle.tinted.rawValue
-            } else {
-                tintedIcons = false
-                iconStyleRaw = mode.rawValue
-            }
-            IconCache.shared.removeAll()
-            NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
-            onStyleChanged?()
-            showFeedback(loc("icon_showcase.style_applied", mode.title))
-        }
+        .drawingGroup()
     }
 }
 

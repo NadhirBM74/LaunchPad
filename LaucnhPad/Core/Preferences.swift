@@ -428,8 +428,11 @@ enum Prefs {
     static var showHiddenInSearch: Bool { defaults.bool(forKey: PrefKey.showHiddenInSearch) }
     static var customSources: [String] { defaults.stringArray(forKey: PrefKey.customSources) ?? [] }
     static var allSources: [String] {
+        var seen = Set<String>()
         var result: [String] = []
-        for path in AppScanner.defaultSources + customSources where !result.contains(path) { result.append(path) }
+        for path in AppScanner.defaultSources + customSources where seen.insert(path).inserted {
+            result.append(path)
+        }
         return result
     }
 }
@@ -480,6 +483,7 @@ extension Notification.Name {
     public static let trialStatusDidChange = Notification.Name("TrialStatusDidChange")
     public static let trialDidExpire = Notification.Name("TrialDidExpire")
     public static let launchpadIconStyleDidChange = Notification.Name("LaunchpadIconStyleDidChange")
+    public static let launchpadCustomIconDidChange = Notification.Name("LaunchpadCustomIconDidChange")
     public static let weatherDataDidUpdate = Notification.Name("LaunchpadWeatherDataDidUpdate")
 }
 

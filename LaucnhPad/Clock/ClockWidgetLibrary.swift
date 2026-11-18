@@ -41,7 +41,6 @@ struct PremiumClockWidgetView: View {
 
     @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
-    @ObservedObject private var weatherService = WeatherService.shared
     @State private var currentDate = Date()
     @State private var timer: AnyCancellable?
 
@@ -103,9 +102,6 @@ struct PremiumClockWidgetView: View {
             currentDate = Date()
             if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
                 startTimer()
-                if config.clockStyle == .weatherClock {
-                    weatherService.refreshIfNeeded(requestLocationPermission: true)
-                }
             }
         }
         .onDisappear {
@@ -138,7 +134,7 @@ struct PremiumClockWidgetView: View {
             timer = nil
             return
         }
-        let needsEverySecond = config.clockShowSeconds || config.clockStyle == .appleAnalog || config.clockStyle == .darkPremium || config.clockStyle == .circularClock
+        let needsEverySecond = config.clockShowSeconds || config.clockStyle == .darkPremium || config.clockStyle == .circularClock
         let interval: TimeInterval = needsEverySecond ? 1.0 : 10.0
         timer = Timer.publish(every: interval, tolerance: needsEverySecond ? 0.2 : 2.0, on: .main, in: .common)
             .autoconnect()
@@ -189,7 +185,16 @@ struct PremiumClockWidgetView: View {
         case .worldClock:
             style12WorldClock(w: w, h: h)
         case .weatherClock:
-            style13WeatherClock(w: w, h: h)
+            WeatherClockContentView(
+                config: config,
+                currentDate: currentDate,
+                isPreview: isPreview,
+                w: w,
+                h: h,
+                fontDesign: fontDesign,
+                digitalTimeString: digitalTimeString,
+                referencePillDateString: referencePillDateString
+            )
         case .calendarClock:
             style14CalendarClock(w: w, h: h)
         case .fullscreenClock:
@@ -268,27 +273,9 @@ struct PremiumClockWidgetView: View {
 
     @ViewBuilder
     private func analogReferenceDial(size minDim: CGFloat, hourAngle: Double, minuteAngle: Double, secondAngle: Double, showPill: Bool) -> some View {
-        let numeralSize = minDim * 0.44
         ZStack {
-            ZStack {
-                Text("12")
-                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .position(x: minDim / 2, y: minDim * 0.14)
-                Text("3")
-                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .position(x: minDim - minDim * 0.12, y: minDim / 2)
-                Text("6")
-                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .position(x: minDim / 2, y: minDim - minDim * 0.12)
-                Text("9")
-                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .position(x: minDim * 0.12, y: minDim / 2)
-            }
-            .blur(radius: max(2.0, minDim * 0.022))
+            AnalogDialBlurredNumerals(minDim: minDim)
+                .equatable()
 
             if showPill {
                 Text(referencePillDateString)
@@ -588,10 +575,13 @@ struct PremiumClockWidgetView: View {
             )
             .background(.ultraThinMaterial)
 
-            Circle()
-                .fill(accentColor.opacity(0.35))
-                .frame(width: min(w, h) * 0.65, height: min(w, h) * 0.65)
-                .blur(radius: 22)
+            RadialGradient(
+                colors: [accentColor.opacity(0.35), accentColor.opacity(0.14), Color.clear],
+                center: .center,
+                startRadius: 2,
+                endRadius: min(w, h) * 0.44
+            )
+            .frame(width: min(w, h) * 0.88, height: min(w, h) * 0.88)
 
             VStack(spacing: isTall ? 10 : 4) {
                 if isTall {
@@ -1005,80 +995,131 @@ struct PremiumClockWidgetView: View {
         }
     }
 
-    // MARK: - 13. Weather Clock (Horloge associée à la météo)
+    // MARK: - 13. Weather Clock (Horloge associée à la météo, isolée)
 
-    private func style13WeatherClock(w: CGFloat, h: CGFloat) -> some View {
-        let isTall = h > w * 1.15
-        let isCompact = (h < 165 || w < 165) && !isTall
-        let weather = RichWeatherData.from(config: config)
-        let cal = Calendar.current
-        let rawH = cal.component(.hour, from: currentDate)
-        let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
-        let dispM = cal.component(.minute, from: currentDate)
+    private struct WeatherClockContentView: View {
+        let config: CustomWidgetConfig
+        let currentDate: Date
+        let isPreview: Bool
+        let w: CGFloat
+        let h: CGFloat
+        let fontDesign: Font.Design
+        let digitalTimeString: String
+        let referencePillDateString: String
 
-        return ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.08, green: 0.12, blue: 0.22), Color(red: 0.04, green: 0.06, blue: 0.12)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        @ObservedObject private var weatherService = WeatherService.shared
 
-            VStack(alignment: .leading, spacing: isTall ? 8 : 4) {
-                HStack {
-                    Label(weather.city, systemImage: "location.fill")
-                        .font(.system(size: isCompact ? 9 : 11, weight: .bold))
-                        .foregroundStyle(.cyan)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    HStack(spacing: 4) {
-                        Image(systemName: weather.filledSymbol)
-                            .symbolRenderingMode(.multicolor)
-                        Text("\(weather.temp)°")
-                            .font(.system(size: isCompact ? 11.5 : 14, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
+        var body: some View {
+            let isTall = h > w * 1.15
+            let isCompact = (h < 165 || w < 165) && !isTall
+            let weather = RichWeatherData.from(config: config)
+            let cal = Calendar.current
+            let rawH = cal.component(.hour, from: currentDate)
+            let dispH = config.clockFormat24h ? rawH : ((rawH % 12 == 0) ? 12 : (rawH % 12))
+            let dispM = cal.component(.minute, from: currentDate)
 
-                Spacer()
+            ZStack {
+                LinearGradient(
+                    colors: [Color(red: 0.08, green: 0.12, blue: 0.22), Color(red: 0.04, green: 0.06, blue: 0.12)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
 
-                if isTall {
-                    VStack(alignment: .leading, spacing: -6) {
-                        Text(String(format: "%02d", dispH))
-                            .foregroundStyle(.white)
-                        Text(String(format: "%02d", dispM))
+                VStack(alignment: .leading, spacing: isTall ? 8 : 4) {
+                    HStack {
+                        Label(weather.city, systemImage: "location.fill")
+                            .font(.system(size: isCompact ? 9 : 11, weight: .bold))
                             .foregroundStyle(.cyan)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        HStack(spacing: 4) {
+                            Image(systemName: weather.filledSymbol)
+                                .symbolRenderingMode(.multicolor)
+                            Text("\(weather.temp)°")
+                                .font(.system(size: isCompact ? 11.5 : 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
-                    .font(.system(size: min(w * 0.40, 56), weight: .bold, design: fontDesign))
-                    .monospacedDigit()
 
-                    HStack(spacing: 8) {
-                        Text("↑\(weather.high)° ↓\(weather.low)°")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.75))
-                        Spacer()
-                        Text("\(weather.humidity)%")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(.cyan)
-                    }
-                } else {
-                    Text(digitalTimeString)
-                        .font(.system(size: isCompact ? 28 : 40, weight: .bold, design: fontDesign))
-                        .foregroundStyle(.white)
+                    Spacer()
+
+                    if isTall {
+                        VStack(alignment: .leading, spacing: -6) {
+                            Text(String(format: "%02d", dispH))
+                                .foregroundStyle(.white)
+                            Text(String(format: "%02d", dispM))
+                                .foregroundStyle(.cyan)
+                        }
+                        .font(.system(size: min(w * 0.40, 56), weight: .bold, design: fontDesign))
                         .monospacedDigit()
-                        .minimumScaleFactor(0.55)
-                        .lineLimit(1)
+
+                        HStack(spacing: 8) {
+                            Text("↑\(weather.high)° ↓\(weather.low)°")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.75))
+                            Spacer()
+                            Text("\(weather.humidity)%")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.cyan)
+                        }
+                    } else {
+                        Text(digitalTimeString)
+                            .font(.system(size: isCompact ? 28 : 40, weight: .bold, design: fontDesign))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    if config.clockShowDate {
+                        Text("\(referencePillDateString) • \(weather.conditionDisplay)")
+                            .font(.system(size: isCompact ? 9 : 10.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.68))
+                            .lineLimit(1)
+                    }
                 }
-
-                Spacer()
-
-                if config.clockShowDate {
-                    Text("\(referencePillDateString) • \(weather.conditionDisplay)")
-                        .font(.system(size: isCompact ? 9 : 10.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .lineLimit(1)
+                .padding(isCompact ? 10 : 15)
+            }
+            .onAppear {
+                if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
+                    weatherService.refreshIfNeeded(requestLocationPermission: true)
                 }
             }
-            .padding(isCompact ? 10 : 15)
+            .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
+                if (notif.object as? Bool) == true, !isPreview {
+                    weatherService.refreshIfNeeded(requestLocationPermission: true)
+                }
+            }
+        }
+    }
+
+    private struct AnalogDialBlurredNumerals: View, Equatable {
+        let minDim: CGFloat
+
+        var body: some View {
+            let numeralSize = minDim * 0.44
+            ZStack {
+                Text("12")
+                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .position(x: minDim / 2, y: minDim * 0.14)
+                Text("3")
+                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .position(x: minDim - minDim * 0.12, y: minDim / 2)
+                Text("6")
+                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .position(x: minDim / 2, y: minDim - minDim * 0.12)
+                Text("9")
+                    .font(.system(size: numeralSize, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .position(x: minDim * 0.12, y: minDim / 2)
+            }
+            .blur(radius: max(2.0, minDim * 0.022))
+            .drawingGroup()
         }
     }
 
@@ -1234,7 +1275,7 @@ struct PremiumClockWidgetView: View {
     }()
 
     private var activeAppLocale: Locale {
-        Locale(identifier: LocalizationManager.activeLanguageCode)
+        LocalizationManager.shared.effectiveLocale
     }
 
     private var shortDigitalTimeString: String {

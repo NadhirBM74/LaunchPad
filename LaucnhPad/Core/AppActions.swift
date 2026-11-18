@@ -53,12 +53,14 @@ enum AppActions {
     static func quit(_ app: AppInfo) { runningInstances(of: app).forEach { $0.terminate() } }
     static func forceQuit(_ app: AppInfo) { runningInstances(of: app).forEach { $0.forceTerminate() } }
 
+    nonisolated private static let slashCharacterSet = CharacterSet(charactersIn: "/")
+
     static func isInDock(_ app: AppInfo) -> Bool {
         guard let tiles = CFPreferencesCopyAppValue("persistent-apps" as CFString, "com.apple.dock" as CFString) as? [[String: Any]] else { return false }
-        let target = app.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let target = app.url.absoluteString.trimmingCharacters(in: slashCharacterSet)
         return tiles.contains { tile in
             let data = (tile["tile-data"] as? [String: Any])?["file-data"] as? [String: Any]
-            let url = (data?["_CFURLString"] as? String)?.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let url = (data?["_CFURLString"] as? String)?.trimmingCharacters(in: slashCharacterSet)
             return url == target || url == app.url.path
         }
     }
@@ -80,14 +82,48 @@ enum AppActions {
             } else {
                 decodedPath = raw.removingPercentEncoding ?? raw
             }
-            let normalized = decodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let normalized = decodedPath.trimmingCharacters(in: slashCharacterSet)
             if let matched = catalog[decodedPath] ?? catalog["/" + normalized] ?? catalog.values.first(where: {
-                $0.url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == normalized
+                $0.url.path.trimmingCharacters(in: slashCharacterSet) == normalized
             }) {
                 result.append(matched)
             }
         }
         return result
+    }
+
+    /// Lit conjointement le statut Dock et l'aperçu en un seul accès `CFPreferences`.
+    nonisolated static func dockStatusAndPreview(for app: AppInfo, from catalog: [String: AppInfo], maxCount: Int = 4) -> (isInDock: Bool, preview: [AppInfo]) {
+        guard let tiles = CFPreferencesCopyAppValue("persistent-apps" as CFString, "com.apple.dock" as CFString) as? [[String: Any]] else {
+            return (false, [])
+        }
+        let targetURL = app.url.absoluteString.trimmingCharacters(in: slashCharacterSet)
+        let targetPath = app.url.path
+        var found = false
+        var preview: [AppInfo] = []
+        preview.reserveCapacity(maxCount)
+
+        for tile in tiles {
+            let data = (tile["tile-data"] as? [String: Any])?["file-data"] as? [String: Any]
+            guard let raw = data?["_CFURLString"] as? String else { continue }
+            let trimmed = raw.trimmingCharacters(in: slashCharacterSet)
+            if !found && (trimmed == targetURL || trimmed == targetPath) {
+                found = true
+            }
+            if preview.count < maxCount {
+                let decodedPath: String
+                if let url = URL(string: raw), url.isFileURL {
+                    decodedPath = url.path
+                } else {
+                    decodedPath = raw.removingPercentEncoding ?? raw
+                }
+                let normalized = decodedPath.trimmingCharacters(in: slashCharacterSet)
+                if let matched = catalog[decodedPath] ?? catalog["/" + normalized] {
+                    preview.append(matched)
+                }
+            }
+        }
+        return (found, preview)
     }
 
     /// Ajoute l'app au Dock (préférences com.apple.dock puis redémarrage du Dock).

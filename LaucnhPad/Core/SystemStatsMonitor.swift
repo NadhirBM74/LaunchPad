@@ -26,17 +26,20 @@ final class SystemStatsMonitor: ObservableObject {
     private var isMonitoring = false
     private var activeClients = 0
     private var alwaysVisibleClients = 0
+    private var isLaunchpadVisible = LaunchpadViewModel.isLaunchpadVisible
+    private var hardwareHasBattery: Bool = true
     private var isWidgetMounted: Bool { activeClients > 0 || alwaysVisibleClients > 0 }
     private var shouldRunTimer: Bool {
-        alwaysVisibleClients > 0 || (activeClients > 0 && LaunchpadViewModel.isLaunchpadVisible)
+        alwaysVisibleClients > 0 || (activeClients > 0 && isLaunchpadVisible)
     }
     private let statsQueue = DispatchQueue(label: "me.LaucnhPad.systemstats", qos: .utility)
 
     private init() {
         NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)
             .compactMap { $0.object as? Bool }
-            .sink { [weak self] _ in
+            .sink { [weak self] visible in
                 guard let self else { return }
+                self.isLaunchpadVisible = visible
                 if self.shouldRunTimer {
                     self.resumeTimer()
                 } else {
@@ -84,12 +87,18 @@ final class SystemStatsMonitor: ObservableObject {
         timer = nil
     }
 
+    nonisolated private static let hostPort: mach_port_t = mach_host_self()
+    nonisolated private static let pageSize: UInt64 = UInt64(getpagesize())
+    nonisolated private static let totalBytes: UInt64 = ProcessInfo.processInfo.physicalMemory
+    nonisolated private static let totalGBStatic: Double = Double(totalBytes) / 1_073_741_824
+
     func refresh() {
+        let shouldSampleBattery = hardwareHasBattery
         statsQueue.async { [weak self] in
             guard let self else { return }
             let cpu = self.sampleCPU()
             let ram = self.sampleRAM()
-            let bat = self.sampleBattery()
+            let bat = shouldSampleBattery ? self.sampleBattery() : (hasBattery: false, percent: 100, isCharging: false)
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -110,6 +119,9 @@ final class SystemStatsMonitor: ObservableObject {
                 if self.hasBattery != bat.hasBattery {
                     self.hasBattery = bat.hasBattery
                 }
+                if self.hardwareHasBattery != bat.hasBattery {
+                    self.hardwareHasBattery = bat.hasBattery
+                }
                 if bat.hasBattery {
                     if self.batteryPercent != bat.percent {
                         self.batteryPercent = bat.percent
@@ -121,10 +133,6 @@ final class SystemStatsMonitor: ObservableObject {
             }
         }
     }
-
-    nonisolated private static let hostPort: mach_port_t = mach_host_self()
-    nonisolated private static let pageSize: UInt64 = UInt64(getpagesize())
-    nonisolated private static let totalBytes: UInt64 = ProcessInfo.processInfo.physicalMemory
 
     // MARK: - CPU
 
@@ -181,7 +189,7 @@ final class SystemStatsMonitor: ObservableObject {
         let totalBytes = Self.totalBytes
 
         let usedGB = Double(usedBytes) / 1_073_741_824
-        let totalGB = Double(totalBytes) / 1_073_741_824
+        let totalGB = Self.totalGBStatic
         let newRAM = totalBytes > 0 ? min(100, max(0, Int(round((Double(usedBytes) / Double(totalBytes)) * 100)))) : 0
         return (usedGB, totalGB, newRAM)
     }

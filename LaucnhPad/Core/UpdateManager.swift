@@ -76,8 +76,6 @@ public final class UpdateManager: NSObject, ObservableObject {
         }
         self.lastChecked = UserDefaults.standard.object(forKey: "LaunchpadLastUpdateCheckDate") as? Date
         super.init()
-
-        setupNotifications()
     }
 
     // MARK: - Mode Debug / Test Administrateur
@@ -85,14 +83,6 @@ public final class UpdateManager: NSObject, ObservableObject {
     public func setDebugState(_ newState: UpdateState) {
         self.state = newState
         self.lastChecked = Date()
-    }
-
-    // MARK: - Notifications macOS
-
-    private func setupNotifications() {
-        // Ne pas écraser UNUserNotificationCenter.current().delegate (géré par AppNotificationManager,
-        // qui redirige déjà .updateAvailable vers l'onglet À propos).
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
     // MARK: - Vérification des mises à jour

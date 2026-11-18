@@ -236,7 +236,7 @@ public enum CustomAppIconKind: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Vue SwiftUI Vectorielle Haute Fidélité pour chaque Icône
 
-public struct CustomAppIconView: View {
+public struct CustomAppIconView: View, Equatable {
     public let kind: CustomAppIconKind
     public var style: IconAppearanceStyle = .dark
     public var tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0)
@@ -260,6 +260,13 @@ public struct CustomAppIconView: View {
         self.size = size
     }
 
+    public static func == (lhs: CustomAppIconView, rhs: CustomAppIconView) -> Bool {
+        lhs.kind == rhs.kind
+            && lhs.style == rhs.style
+            && lhs.size == rhs.size
+            && (lhs.style != .tinted || lhs.tintColor == rhs.tintColor)
+    }
+
     private var inset: CGFloat { size * 0.09 }
     private var bodySize: CGFloat { size - inset * 2 }
     private var cornerRadius: CGFloat { bodySize * 0.228 }
@@ -267,20 +274,24 @@ public struct CustomAppIconView: View {
     public var body: some View {
         let s = bodySize
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let crystalSpec: CrystalGlassSpec? = (usesCrystalPreview || style.isTransparentGlassStyle)
+            ? CrystalGlassSpec.resolve(style: style, tintColor: tintColor)
+            : nil
 
         ZStack {
             // 1. Fond Squircle selon le style (Dark, Light, Tinted, Clear Glass, Frosted Glass, Classic)
-            squircleBackground(size: s, shape: shape)
+            squircleBackground(size: s, shape: shape, crystalSpec: crystalSpec)
 
-            // 2. Contenu Vectoriel Spécifique à l'Application
+            // 2. Contenu Vectoriel Spécifique à l'Application (aplati en texture Metal unique)
             iconGlyphContent(size: s)
                 .frame(width: s, height: s)
                 .saturation(style == .monochrome ? 0.0 : 1.0)
                 .contrast(style == .monochrome ? 1.12 : 1.0)
+                .drawingGroup()
                 .clipShape(shape)
 
             // 3. Reflet Spéculaire de Verre & Bordure Lumineuse (selon le style)
-            squircleGlassOverlay(size: s, shape: shape)
+            squircleGlassOverlay(size: s, shape: shape, crystalSpec: crystalSpec)
         }
         .frame(width: s, height: s)
         .shadow(
@@ -295,7 +306,7 @@ public struct CustomAppIconView: View {
     // MARK: - Fond Squircle Adaptatif (Photos 1, 2 & 4)
 
     @ViewBuilder
-    private func squircleBackground(size s: CGFloat, shape: RoundedRectangle) -> some View {
+    private func squircleBackground(size s: CGFloat, shape: RoundedRectangle, crystalSpec: CrystalGlassSpec?) -> some View {
         if kind == .calendar && (style == .classicApple || style == .light || style == .frostedGlass) {
             // Calendrier matriciel iconique de la Photo 2 : Bandeau rouge vif en haut + corps gris-taupe chaud
             ZStack(alignment: .top) {
@@ -338,9 +349,9 @@ public struct CustomAppIconView: View {
         } else if kind == .maps && style != .tinted {
             // Plans Photo 1 : Fond carte routière complet
             mapsBackgroundCanvas(size: s)
+                .drawingGroup()
                 .clipShape(shape)
-        } else if usesCrystalPreview && style != .classicApple {
-            let spec = CrystalGlassSpec.resolve(style: style, tintColor: tintColor)
+        } else if usesCrystalPreview && style != .classicApple, let spec = crystalSpec {
             ZStack {
                 CrystalGlassBackdrop(shape: shape, spec: spec)
                 if style == .dark {
@@ -402,7 +413,9 @@ public struct CustomAppIconView: View {
                 }
 
             case .clearDark, .frostedGlass, .clearLiquid, .transparent:
-                CrystalGlassBackdrop(shape: shape, spec: CrystalGlassSpec.resolve(style: style, tintColor: tintColor))
+                if let spec = crystalSpec {
+                    CrystalGlassBackdrop(shape: shape, spec: spec)
+                }
 
             case .monochrome:
                 shape.fill(
@@ -459,11 +472,11 @@ public struct CustomAppIconView: View {
     }
 
     @ViewBuilder
-    private func squircleGlassOverlay(size s: CGFloat, shape: RoundedRectangle) -> some View {
+    private func squircleGlassOverlay(size s: CGFloat, shape: RoundedRectangle, crystalSpec: CrystalGlassSpec?) -> some View {
         if usesCrystalPreview {
             CrystalGlassBackdrop.specularRim(
                 shape: shape,
-                spec: CrystalGlassSpec.resolve(style: style, tintColor: tintColor),
+                spec: crystalSpec ?? CrystalGlassSpec.resolve(style: style, tintColor: tintColor),
                 lineWidth: max(0.95, s * 0.0155)
             )
         } else {
@@ -1484,15 +1497,24 @@ public final class CustomIconManager: ObservableObject {
     @Published public private(set) var overrides: [String: CustomAppIconOverride] = [:]
     @Published public var activePickerAppID: String? = nil
 
-    private let directoryURL: URL
-    private let metadataURL: URL
-
-    private init() {
+    private nonisolated static let sharedDirectoryURL: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("LaunchPad/custom_icons", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        self.directoryURL = base
-        self.metadataURL = base.appendingPathComponent("overrides.json")
+        return base
+    }()
+
+    private nonisolated static let sharedMetadataURL: URL = {
+        sharedDirectoryURL.appendingPathComponent("overrides.json")
+    }()
+
+    private let directoryURL: URL
+    private let metadataURL: URL
+    private let ioQueue = DispatchQueue(label: "launchpad.customicons.io", qos: .utility)
+
+    private init() {
+        self.directoryURL = Self.sharedDirectoryURL
+        self.metadataURL = Self.sharedMetadataURL
         load()
     }
 
@@ -1500,30 +1522,82 @@ public final class CustomIconManager: ObservableObject {
         overrides[appID] != nil
     }
 
-    public func setCustomImage(from sourceURL: URL, for appID: String) -> Bool {
+    nonisolated private static func persistNormalizedCustomImage(from sourceURL: URL, to directoryURL: URL) -> String? {
+        let accessed = sourceURL.startAccessingSecurityScopedResource()
+        defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
+
         let ext = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension.lowercased()
+        if ext != "icns",
+           let imgSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil) {
+            let props = CGImageSourceCopyPropertiesAtIndex(imgSource, 0, nil) as? [CFString: Any]
+            let pw = (props?[kCGImagePropertyPixelWidth] as? Int) ?? 0
+            let ph = (props?[kCGImagePropertyPixelHeight] as? Int) ?? 0
+            if max(pw, ph) > 512 {
+                let opts: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 512,
+                    kCGImageSourceCreateThumbnailWithTransform: true
+                ]
+                if let thumb = CGImageSourceCreateThumbnailAtIndex(imgSource, 0, opts as CFDictionary),
+                   let pngData = NSBitmapImageRep(cgImage: thumb).representation(using: .png, properties: [:]) {
+                    let safeName = UUID().uuidString + ".png"
+                    let destURL = directoryURL.appendingPathComponent(safeName)
+                    do {
+                        try pngData.write(to: destURL, options: .atomic)
+                        return safeName
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+        }
+
         let safeName = UUID().uuidString + "." + ext
         let destURL = directoryURL.appendingPathComponent(safeName)
         do {
-            if let old = overrides[appID]?.customImageFilename {
-                try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(old))
-            }
-            let accessed = sourceURL.startAccessingSecurityScopedResource()
-            defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
             try FileManager.default.copyItem(at: sourceURL, to: destURL)
-            overrides[appID] = CustomAppIconOverride(appID: appID, customImageFilename: safeName)
-            save()
-            IconCache.shared.invalidate([appID])
-            NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
-            return true
+            return safeName
         } catch {
+            return nil
+        }
+    }
+
+    public func setCustomImageAsync(from sourceURL: URL, for appID: String) async -> Bool {
+        let dirURL = directoryURL
+        let savedName = await Task.detached(priority: .userInitiated) {
+            Self.persistNormalizedCustomImage(from: sourceURL, to: dirURL)
+        }.value
+        guard let safeName = savedName else { return false }
+        if let old = overrides[appID]?.customImageFilename {
+            let oldURL = directoryURL.appendingPathComponent(old)
+            ioQueue.async { try? FileManager.default.removeItem(at: oldURL) }
+        }
+        overrides[appID] = CustomAppIconOverride(appID: appID, customImageFilename: safeName)
+        save()
+        IconCache.shared.invalidate([appID])
+        NotificationCenter.default.post(name: .launchpadCustomIconDidChange, object: appID)
+        return true
+    }
+
+    public func setCustomImage(from sourceURL: URL, for appID: String) -> Bool {
+        guard let safeName = Self.persistNormalizedCustomImage(from: sourceURL, to: directoryURL) else {
             return false
         }
+        if let old = overrides[appID]?.customImageFilename {
+            let oldURL = directoryURL.appendingPathComponent(old)
+            ioQueue.async { try? FileManager.default.removeItem(at: oldURL) }
+        }
+        overrides[appID] = CustomAppIconOverride(appID: appID, customImageFilename: safeName)
+        save()
+        IconCache.shared.invalidate([appID])
+        NotificationCenter.default.post(name: .launchpadCustomIconDidChange, object: appID)
+        return true
     }
 
     public func setCustomSymbol(symbol: String, colorHex: String, for appID: String) {
         if let old = overrides[appID]?.customImageFilename {
-            try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(old))
+            let oldURL = directoryURL.appendingPathComponent(old)
+            ioQueue.async { try? FileManager.default.removeItem(at: oldURL) }
         }
         overrides[appID] = CustomAppIconOverride(
             appID: appID,
@@ -1533,35 +1607,39 @@ public final class CustomIconManager: ObservableObject {
         )
         save()
         IconCache.shared.invalidate([appID])
-        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+        NotificationCenter.default.post(name: .launchpadCustomIconDidChange, object: appID)
     }
 
     public func removeOverride(for appID: String) {
         if let old = overrides[appID]?.customImageFilename {
-            try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(old))
+            let oldURL = directoryURL.appendingPathComponent(old)
+            ioQueue.async { try? FileManager.default.removeItem(at: oldURL) }
         }
         overrides.removeValue(forKey: appID)
         save()
         IconCache.shared.invalidate([appID])
-        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+        NotificationCenter.default.post(name: .launchpadCustomIconDidChange, object: appID)
     }
 
     public func removeAllOverrides() {
-        for (_, ov) in overrides {
-            if let file = ov.customImageFilename {
-                try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent(file))
+        let oldFiles = overrides.values.compactMap(\.customImageFilename)
+        let affectedIDs = Array(overrides.keys)
+        let dirURL = directoryURL
+        if !oldFiles.isEmpty {
+            ioQueue.async {
+                for file in oldFiles {
+                    try? FileManager.default.removeItem(at: dirURL.appendingPathComponent(file))
+                }
             }
         }
         overrides.removeAll()
         save()
-        IconCache.shared.removeAll()
-        NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: nil)
+        IconCache.shared.invalidate(affectedIDs)
+        NotificationCenter.default.post(name: .launchpadCustomIconDidChange, object: affectedIDs)
     }
 
-    nonisolated public func overrideImageURL(filename: String) -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("LaunchPad/custom_icons", isDirectory: true)
-        return base.appendingPathComponent(filename)
+    nonisolated public static func overrideImageURL(filename: String) -> URL {
+        sharedDirectoryURL.appendingPathComponent(filename)
     }
 
     private func load() {
@@ -1573,8 +1651,12 @@ public final class CustomIconManager: ObservableObject {
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(overrides) else { return }
-        try? data.write(to: metadataURL, options: .atomic)
+        let snapshot = overrides
+        let targetURL = metadataURL
+        ioQueue.async {
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            try? data.write(to: targetURL, options: .atomic)
+        }
     }
 }
 
@@ -1590,6 +1672,7 @@ public struct AppCustomIconPickerSheet: View {
     @State private var selectedSymbol: String = "star.fill"
     @State private var selectedColorHex: String = "#0A84FF"
     @State private var statusFeedback: String? = nil
+    @State private var previewImage: NSImage? = nil
 
     private let popularSymbols: [String] = [
         "star.fill", "bolt.fill", "sparkles", "terminal.fill", "paintbrush.fill",
@@ -1598,18 +1681,16 @@ public struct AppCustomIconPickerSheet: View {
         "bubble.left.and.bubble.right.fill", "book.fill", "hammer.fill", "heart.fill", "shield.fill"
     ]
 
-    private var colorPalette: [(String, String, Color)] {
-        [
-            ("#0A84FF", loc("custom_icon.color.blue"), Color(red: 0.04, green: 0.52, blue: 1.0)),
-            ("#BF5AF2", loc("custom_icon.color.purple"), Color(red: 0.75, green: 0.35, blue: 0.95)),
-            ("#FF9F0A", loc("custom_icon.color.orange"), Color(red: 1.0, green: 0.62, blue: 0.04)),
-            ("#30D158", loc("custom_icon.color.green"), Color(red: 0.19, green: 0.82, blue: 0.35)),
-            ("#FF2D55", loc("custom_icon.color.pink"), Color(red: 1.0, green: 0.18, blue: 0.33)),
-            ("#22D3EE", loc("custom_icon.color.cyan"), Color(red: 0.13, green: 0.83, blue: 0.93)),
-            ("#181920", loc("custom_icon.color.obsidian"), Color(red: 0.10, green: 0.10, blue: 0.14)),
-            ("#F5F6FA", loc("custom_icon.color.pure_white"), Color(red: 0.95, green: 0.96, blue: 0.98))
-        ]
-    }
+    private static let colorPalette: [(hex: String, labelKey: String, color: Color)] = [
+        ("#0A84FF", "custom_icon.color.blue", Color(red: 0.04, green: 0.52, blue: 1.0)),
+        ("#BF5AF2", "custom_icon.color.purple", Color(red: 0.75, green: 0.35, blue: 0.95)),
+        ("#FF9F0A", "custom_icon.color.orange", Color(red: 1.0, green: 0.62, blue: 0.04)),
+        ("#30D158", "custom_icon.color.green", Color(red: 0.19, green: 0.82, blue: 0.35)),
+        ("#FF2D55", "custom_icon.color.pink", Color(red: 1.0, green: 0.18, blue: 0.33)),
+        ("#22D3EE", "custom_icon.color.cyan", Color(red: 0.13, green: 0.83, blue: 0.93)),
+        ("#181920", "custom_icon.color.obsidian", Color(red: 0.10, green: 0.10, blue: 0.14)),
+        ("#F5F6FA", "custom_icon.color.pure_white", Color(red: 0.95, green: 0.96, blue: 0.98))
+    ]
 
     public init(appID: String, appName: String, isPresented: Binding<Bool>) {
         self.appID = appID
@@ -1620,7 +1701,7 @@ public struct AppCustomIconPickerSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                LiveAppIconView(image: IconCache.shared.icon(for: appID), size: 56)
+                LiveAppIconView(image: previewImage ?? IconCache.shared.icon(for: appID), size: 56)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(loc("icon_picker.title", appName))
@@ -1677,13 +1758,14 @@ public struct AppCustomIconPickerSheet: View {
                     .foregroundStyle(.white)
 
                 HStack(spacing: 8) {
-                    ForEach(colorPalette, id: \.0) { hex, label, color in
-                        let isSelected = selectedColorHex == hex
+                    ForEach(Self.colorPalette, id: \.hex) { entry in
+                        let isSelected = selectedColorHex == entry.hex
+                        let label = loc(entry.labelKey)
                         Button {
-                            selectedColorHex = hex
+                            selectedColorHex = entry.hex
                         } label: {
                             Circle()
-                                .fill(color)
+                                .fill(entry.color)
                                 .frame(width: 24, height: 24)
                                 .overlay(
                                     Circle().strokeBorder(isSelected ? Color.white : Color.white.opacity(0.25), lineWidth: isSelected ? 2.5 : 1)
@@ -1696,6 +1778,7 @@ public struct AppCustomIconPickerSheet: View {
                     Spacer()
                     Button {
                         customManager.setCustomSymbol(symbol: selectedSymbol, colorHex: selectedColorHex, for: appID)
+                        previewImage = IconCache.shared.icon(for: appID)
                         statusFeedback = loc("icon_picker.applied_symbol")
                     } label: {
                         Text(loc("icon_picker.apply_symbol"))
@@ -1734,6 +1817,7 @@ public struct AppCustomIconPickerSheet: View {
                 if customManager.hasOverride(for: appID) {
                     Button(role: .destructive) {
                         customManager.removeOverride(for: appID)
+                        previewImage = IconCache.shared.icon(for: appID)
                         statusFeedback = loc("icon_picker.restored")
                     } label: {
                         Label(loc("menu.restore_icon"), systemImage: "arrow.counterclockwise")
@@ -1772,6 +1856,10 @@ public struct AppCustomIconPickerSheet: View {
                 )
         )
         .shadow(color: .black.opacity(0.55), radius: 30, y: 14)
+        .onAppear { previewImage = IconCache.shared.icon(for: appID) }
+        .onChange(of: customManager.overrides[appID]) { _, _ in
+            previewImage = IconCache.shared.icon(for: appID)
+        }
     }
 
     private func chooseImageFromDisk() {
@@ -1781,9 +1869,14 @@ public struct AppCustomIconPickerSheet: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image, .icns, .png, .jpeg, .heic, .tiff]
-        if panel.runModal() == .OK, let url = panel.url {
-            if customManager.setCustomImage(from: url, for: appID) {
-                statusFeedback = loc("icon_picker.applied_image")
+        panel.level = .modalPanel
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in
+                if await customManager.setCustomImageAsync(from: url, for: appID) {
+                    previewImage = IconCache.shared.icon(for: appID)
+                    statusFeedback = loc("icon_picker.applied_image")
+                }
             }
         }
     }
@@ -1800,8 +1893,9 @@ public struct IconQualityReport: Sendable {
 
 public enum CustomAppIconRenderer {
     /// Résolution physique Retina cible (512×512 px = 256×256 pt @2x)
-    public static let retinaPixelSize: Int = 512
-    public static let logicalPointSize: CGFloat = 256
+    nonisolated public static let retinaPixelSize: Int = 512
+    nonisolated public static let logicalPointSize: CGFloat = 256
+    nonisolated private static let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
 
     /// Génère une icône haute résolution 512×512 pour n'importe quelle application et n'importe quel style
     @MainActor
@@ -1839,10 +1933,89 @@ public enum CustomAppIconRenderer {
         return nil
     }
 
-    @MainActor
-    private static func renderUserOverride(_ override: CustomAppIconOverride, size: Int) -> CGImage? {
+    nonisolated private static func makeContinuousSquirclePath(in rect: CGRect, cornerRatio: CGFloat = 0.225) -> CGPath {
+        let path = CGMutablePath()
+        let w = rect.width
+        let h = rect.height
+        let minDim = min(w, h)
+        let r = minDim * cornerRatio
+        let rawC = r * 1.52866494
+        let c = min(minDim * 0.5, rawC)
+        let s = rawC > 0 ? (c / rawC) : 1.0
+        let k1 = r * 1.0884900 * s
+        let k2 = r * 0.8684070 * s
+        let k3 = r * 0.6314940 * s
+        let k4 = r * 0.0749114 * s
+        let k5 = r * 0.3728240 * s
+        let k6 = r * 0.1690600 * s
+
+        let minX = rect.minX, maxX = rect.maxX
+        let minY = rect.minY, maxY = rect.maxY
+
+        path.move(to: CGPoint(x: maxX, y: rect.midY))
+        path.addLine(to: CGPoint(x: maxX, y: maxY - c))
+        path.addCurve(to: CGPoint(x: maxX - k4, y: maxY - k3), control1: CGPoint(x: maxX, y: maxY - k1), control2: CGPoint(x: maxX, y: maxY - k2))
+        path.addCurve(to: CGPoint(x: maxX - k3, y: maxY - k4), control1: CGPoint(x: maxX - k6, y: maxY - k5), control2: CGPoint(x: maxX - k5, y: maxY - k6))
+        path.addCurve(to: CGPoint(x: maxX - c, y: maxY), control1: CGPoint(x: maxX - k2, y: maxY), control2: CGPoint(x: maxX - k1, y: maxY))
+
+        path.addLine(to: CGPoint(x: minX + c, y: maxY))
+        path.addCurve(to: CGPoint(x: minX + k3, y: maxY - k4), control1: CGPoint(x: minX + k1, y: maxY), control2: CGPoint(x: minX + k2, y: maxY))
+        path.addCurve(to: CGPoint(x: minX + k4, y: maxY - k3), control1: CGPoint(x: minX + k5, y: maxY - k6), control2: CGPoint(x: minX + k6, y: maxY - k5))
+        path.addCurve(to: CGPoint(x: minX, y: maxY - c), control1: CGPoint(x: minX, y: maxY - k2), control2: CGPoint(x: minX, y: maxY - k1))
+
+        path.addLine(to: CGPoint(x: minX, y: minY + c))
+        path.addCurve(to: CGPoint(x: minX + k4, y: minY + k3), control1: CGPoint(x: minX, y: minY + k1), control2: CGPoint(x: minX, y: minY + k2))
+        path.addCurve(to: CGPoint(x: minX + k3, y: minY + k4), control1: CGPoint(x: minX + k6, y: minY + k5), control2: CGPoint(x: minX + k5, y: minY + k6))
+        path.addCurve(to: CGPoint(x: minX + c, y: minY), control1: CGPoint(x: minX + k2, y: minY), control2: CGPoint(x: minX + k1, y: minY))
+
+        path.addLine(to: CGPoint(x: maxX - c, y: minY))
+        path.addCurve(to: CGPoint(x: maxX - k3, y: minY + k4), control1: CGPoint(x: maxX - k1, y: minY), control2: CGPoint(x: maxX - k2, y: minY))
+        path.addCurve(to: CGPoint(x: maxX - k4, y: minY + k3), control1: CGPoint(x: maxX - k5, y: minY + k6), control2: CGPoint(x: maxX - k6, y: minY + k5))
+        path.addCurve(to: CGPoint(x: maxX, y: minY + c), control1: CGPoint(x: maxX, y: minY + k2), control2: CGPoint(x: maxX, y: minY + k1))
+        path.closeSubpath()
+        return path
+    }
+
+    nonisolated private static func rgbFromHex(_ hex: String) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
+        var value: UInt32 = 0
+        var count = 0
+        for scalar in hex.unicodeScalars {
+            let v: UInt32
+            switch scalar.value {
+            case 48...57: v = scalar.value - 48
+            case 65...70: v = scalar.value - 55
+            case 97...102: v = scalar.value - 87
+            default: continue
+            }
+            value = (value << 4) | v
+            count += 1
+        }
+        guard count >= 6 else { return (0.04, 0.52, 1.0) }
+        return (
+            CGFloat((value >> 16) & 0xFF) / 255.0,
+            CGFloat((value >> 8) & 0xFF) / 255.0,
+            CGFloat(value & 0xFF) / 255.0
+        )
+    }
+
+    nonisolated private static func renderUserOverride(_ override: CustomAppIconOverride, size: Int) -> CGImage? {
         if let filename = override.customImageFilename {
-            let fileURL = CustomIconManager.shared.overrideImageURL(filename: filename)
+            let fileURL = CustomIconManager.overrideImageURL(filename: filename)
+            if let src = CGImageSourceCreateWithURL(fileURL as CFURL, nil) {
+                let opts: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: size,
+                    kCGImageSourceCreateThumbnailWithTransform: true
+                ]
+                if let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                    return IconRenderer.normalizeAndStyleCGImage(
+                        thumb,
+                        style: .original,
+                        tintRGB: (0.08, 0.54, 0.98),
+                        forceSquircleClip: true
+                    )
+                }
+            }
             if let nsImage = NSImage(contentsOf: fileURL),
                let rawCG = IconRenderer.rasterizeNSImageHighRes(nsImage, targetSize: size) {
                 return IconRenderer.normalizeAndStyleCGImage(
@@ -1854,59 +2027,126 @@ public enum CustomAppIconRenderer {
             }
         }
         if let symbol = override.symbolName {
-            let bgColor = Self.colorFromHex(override.backgroundColorHex ?? "#0A84FF")
-            let isLightBg = (override.backgroundColorHex?.uppercased() == "#F5F6FA" || override.backgroundColorHex?.uppercased() == "#FFFFFF")
-            let view = ZStack {
-                let inset = logicalPointSize * 0.09
-                let bodySize = logicalPointSize - inset * 2
-                let shape = RoundedRectangle(cornerRadius: bodySize * 0.225, style: .continuous)
-                shape.fill(
-                    LinearGradient(
-                        colors: [bgColor, bgColor.opacity(0.78)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                Image(systemName: symbol)
-                    .font(.system(size: bodySize * 0.46, weight: .semibold))
-                    .foregroundStyle(isLightBg ? Color.black.opacity(0.85) : Color.white)
-                    .shadow(color: .black.opacity(0.22), radius: 4, y: 2)
-                shape.strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.55), Color.white.opacity(0.12)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 2
-                )
-            }
-            .frame(width: logicalPointSize - logicalPointSize * 0.18, height: logicalPointSize - logicalPointSize * 0.18)
-            .shadow(color: .black.opacity(0.30), radius: 8, y: 4)
-            .frame(width: logicalPointSize, height: logicalPointSize)
-
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2.0
-            return renderer.cgImage
+            return renderSymbolSquircleCGImage(symbol: symbol, backgroundColorHex: override.backgroundColorHex ?? "#0A84FF", pixelDim: size)
         }
         return nil
     }
 
-    public static func wrapCGImageAsRetinaNSImage(_ cgImage: CGImage) -> NSImage {
+    /// Rendu CoreGraphics direct 512×512 sans dépendance `@MainActor` ni `ImageRenderer`.
+    nonisolated private static func renderSymbolSquircleCGImage(
+        symbol: String,
+        backgroundColorHex: String,
+        pixelDim: Int
+    ) -> CGImage? {
+        guard let cs = sRGBColorSpace,
+              let ctx = CGContext(
+                  data: nil,
+                  width: pixelDim,
+                  height: pixelDim,
+                  bitsPerComponent: 8,
+                  bytesPerRow: pixelDim * 4,
+                  space: cs,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        ctx.interpolationQuality = .high
+
+        let fSize = CGFloat(pixelDim)
+        let inset = fSize * 0.09
+        let bodyRect = CGRect(x: inset, y: inset, width: fSize - inset * 2, height: fSize - inset * 2)
+        let squirclePath = makeContinuousSquirclePath(in: bodyRect, cornerRatio: 0.225)
+
+        let rgb = rgbFromHex(backgroundColorHex)
+        let cTop = CGColor(colorSpace: cs, components: [rgb.r, rgb.g, rgb.b, 1.0])!
+        let cBot = CGColor(colorSpace: cs, components: [rgb.r * 0.78, rgb.g * 0.78, rgb.b * 0.78, 1.0])!
+
+        // Ombre portée du squircle
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -fSize * 0.0156), blur: fSize * 0.03125, color: CGColor(gray: 0, alpha: 0.30))
+        ctx.addPath(squirclePath)
+        ctx.setFillColor(cTop)
+        ctx.fillPath()
+        ctx.restoreGState()
+
+        // Dégradé principal dans le squircle
+        ctx.saveGState()
+        ctx.addPath(squirclePath)
+        ctx.clip()
+        if let bgGrad = CGGradient(colorsSpace: cs, colors: [cTop, cBot] as CFArray, locations: [0.0, 1.0]) {
+            ctx.drawLinearGradient(
+                bgGrad,
+                start: CGPoint(x: bodyRect.minX, y: bodyRect.maxY),
+                end: CGPoint(x: bodyRect.maxX, y: bodyRect.minY),
+                options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            )
+        }
+
+        // Symbole SF centré avec ombre douce
+        let scale = fSize / logicalPointSize
+        let ptSize = (bodyRect.width / scale) * 0.46
+        if let symImg = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: ptSize, weight: .semibold)) {
+            let symLogicalSize = symImg.size
+            let targetW = max(1, symLogicalSize.width * scale)
+            let targetH = max(1, symLogicalSize.height * scale)
+            var proposed = NSRect(x: 0, y: 0, width: targetW, height: targetH)
+            if let symCG = symImg.cgImage(forProposedRect: &proposed, context: nil, hints: nil) {
+                let drawRect = CGRect(
+                    x: (fSize - targetW) * 0.5,
+                    y: (fSize - targetH) * 0.5,
+                    width: targetW,
+                    height: targetH
+                )
+                let upperHex = backgroundColorHex.uppercased()
+                let isLightBg = (upperHex == "#F5F6FA" || upperHex == "#FFFFFF")
+                let inkColor = isLightBg
+                    ? CGColor(colorSpace: cs, components: [0, 0, 0, 0.85])!
+                    : CGColor(colorSpace: cs, components: [1, 1, 1, 1])!
+
+                ctx.saveGState()
+                ctx.setShadow(offset: CGSize(width: 0, height: -2.0 * scale), blur: 4.0 * scale, color: CGColor(gray: 0, alpha: 0.22))
+                ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+                ctx.clip(to: drawRect, mask: symCG)
+                ctx.setFillColor(inkColor)
+                ctx.fill(drawRect)
+                ctx.endTransparencyLayer()
+                ctx.restoreGState()
+            }
+        }
+        ctx.restoreGState()
+
+        // Bordure spéculaire diagonale
+        ctx.saveGState()
+        let borderWidth = 2.0 * scale
+        ctx.addPath(squirclePath)
+        ctx.setLineWidth(borderWidth)
+        ctx.replacePathWithStrokedPath()
+        ctx.clip()
+        if let rimGrad = CGGradient(
+            colorsSpace: cs,
+            colors: [
+                CGColor(colorSpace: cs, components: [1, 1, 1, 0.55])!,
+                CGColor(colorSpace: cs, components: [1, 1, 1, 0.12])!
+            ] as CFArray,
+            locations: [0.0, 1.0]
+        ) {
+            ctx.drawLinearGradient(
+                rimGrad,
+                start: CGPoint(x: bodyRect.minX, y: bodyRect.maxY),
+                end: CGPoint(x: bodyRect.maxX, y: bodyRect.minY),
+                options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            )
+        }
+        ctx.restoreGState()
+
+        return ctx.makeImage()
+    }
+
+    nonisolated public static func wrapCGImageAsRetinaNSImage(_ cgImage: CGImage) -> NSImage {
         let rep = NSBitmapImageRep(cgImage: cgImage)
         rep.size = NSSize(width: logicalPointSize, height: logicalPointSize)
         let image = NSImage(size: NSSize(width: logicalPointSize, height: logicalPointSize))
         image.addRepresentation(rep)
         return image
-    }
-
-    private static func colorFromHex(_ hex: String) -> Color {
-        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: cleaned).scanHexInt64(&int)
-        let r = Double((int >> 16) & 0xFF) / 255.0
-        let g = Double((int >> 8) & 0xFF) / 255.0
-        let b = Double(int & 0xFF) / 255.0
-        return Color(red: r, green: g, blue: b)
     }
 
     /// Auto-test de validation de la qualité et de la résolution des icônes (Section 9)
@@ -1917,7 +2157,7 @@ public enum CustomAppIconRenderer {
         var sumDim = 0
         let sample = Array(paths.prefix(24))
         for path in sample {
-            let img = IconCache.shared.icon(for: path)
+            let img = IconCache.shared.highResIconSync(for: path)
             let maxRepW = img.representations.map(\.pixelsWide).max() ?? Int(img.size.width)
             if maxRepW >= 512 {
                 highRes += 1

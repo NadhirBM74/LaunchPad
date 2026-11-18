@@ -105,6 +105,9 @@ nonisolated enum SystemNowPlayingClient {
             if duration > 0 { elapsed = min(elapsed, duration) }
 
             let artwork = (json["artwork"] as? String).flatMap { Data(base64Encoded: $0) }
+            if let artwork, !artwork.isEmpty {
+                _ = NowPlayingTrack.prewarmImageCache(for: artwork)
+            }
 
             return SystemNowPlayingSnapshot(
                 title: title,
@@ -157,7 +160,11 @@ nonisolated enum SystemNowPlayingClient {
         }.value
     }
 
-    private static func runOsascript(script: String, extraEnvironment: [String: String]? = nil) -> Data? {
+    private static func runOsascript(
+        script: String,
+        extraEnvironment: [String: String]? = nil,
+        timeoutSeconds: TimeInterval = 4.0
+    ) -> Data? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-l", "JavaScript", "-e", script]
@@ -169,6 +176,14 @@ nonisolated enum SystemNowPlayingClient {
         let stdout = Pipe()
         process.standardOutput = stdout
         process.standardError = FileHandle.nullDevice
+
+        let timeoutWorkItem = DispatchWorkItem { [weak process] in
+            guard let process, process.isRunning else { return }
+            process.terminate()
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
+        defer { timeoutWorkItem.cancel() }
+
         do {
             try process.run()
         } catch {

@@ -245,6 +245,8 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
     // Options Note Rapide
     var noteContent: String
 
+    private static let defaultClockTimezones: [String] = ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London"]
+
     init(
         id: String? = nil,
         kind: WidgetKind,
@@ -273,7 +275,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
         clockShowDate: Bool = true,
         clockFontDesign: String = "rounded",
         clockAccentColor: String = "red",
-        clockTimezones: [String] = ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London"],
+        clockTimezones: [String] = CustomWidgetConfig.defaultClockTimezones,
         noteContent: String = ""
     ) {
         self.id = id ?? kind.rawValue
@@ -346,7 +348,7 @@ nonisolated struct CustomWidgetConfig: Codable, Identifiable, Sendable, Equatabl
         self.clockShowDate = try c.decodeIfPresent(Bool.self, forKey: .clockShowDate) ?? true
         self.clockFontDesign = try c.decodeIfPresent(String.self, forKey: .clockFontDesign) ?? "rounded"
         self.clockAccentColor = try c.decodeIfPresent(String.self, forKey: .clockAccentColor) ?? "red"
-        self.clockTimezones = try c.decodeIfPresent([String].self, forKey: .clockTimezones) ?? ["Europe/Paris", "America/New_York", "Asia/Tokyo", "Europe/London"]
+        self.clockTimezones = try c.decodeIfPresent([String].self, forKey: .clockTimezones) ?? Self.defaultClockTimezones
         self.noteContent = try c.decodeIfPresent(String.self, forKey: .noteContent) ?? ""
     }
 }

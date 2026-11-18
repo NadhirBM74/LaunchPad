@@ -120,6 +120,10 @@ final class LaunchpadStore: ObservableObject {
 
     private var hasLayoutFile = false
     private var started = false
+    private var isLaunchpadVisible = false
+    private var needsRunningAppsRefresh = false
+    private var needsScanRefresh = false
+    private var lastAppliedIconSignature = ""
     private var scanTask: Task<Void, Never>?
     private var iconPreloadTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
@@ -127,6 +131,7 @@ final class LaunchpadStore: ObservableObject {
     private var missingSince: [String: Date] = [:]
     private(set) var lastScan = Date.distantPast
     private let watcher = FolderWatcher()
+    private let saveWriteQueue = DispatchQueue(label: "launchpad.layout.save", qos: .utility)
 
     deinit {
         NotificationCenter.default.removeObserver(self)
@@ -139,6 +144,10 @@ final class LaunchpadStore: ObservableObject {
         guard !started else { return }
         started = true
         loadFromDisk()
+        lastAppliedIconSignature = currentIconSignature()
+        IconCache.shared.onAsyncBatchReady = { [weak self] in
+            self?.iconsVersion &+= 1
+        }
         updateRunningApps()
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(self, selector: #selector(runningAppsChanged), name: NSWorkspace.didLaunchApplicationNotification, object: nil)
@@ -146,14 +155,63 @@ final class LaunchpadStore: ObservableObject {
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didMountNotification, object: nil)
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didUnmountNotification, object: nil)
         center.addObserver(self, selector: #selector(volumesChanged), name: NSWorkspace.didWakeNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(iconStyleNotificationReceived), name: .launchpadIconStyleDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(iconStyleNotificationReceived(_:)), name: .launchpadIconStyleDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(customIconDidChangeNotification(_:)), name: .launchpadCustomIconDidChange, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(weatherDataUpdatedNotification(_:)), name: .weatherDataDidUpdate, object: nil)
-        watcher.onChange = { [weak self] in self?.scheduleRefresh() }
+        NotificationCenter.default.addObserver(self, selector: #selector(launchpadVisibilityNotification(_:)), name: .launchpadVisibilityDidChange, object: nil)
+        watcher.onChange = { [weak self] in
+            guard let self else { return }
+            if !self.isLaunchpadVisible {
+                self.needsScanRefresh = true
+                return
+            }
+            self.scheduleRefresh()
+        }
         refresh()
-        WeatherService.shared.refreshIfNeeded(force: false, requestLocationPermission: false)
     }
 
-    @objc private func iconStyleNotificationReceived() {
+    private func currentIconSignature() -> String {
+        let style = IconCache.shared.currentAppearanceStyle
+        let isPro = Prefs.defaults.bool(forKey: PrefKey.isProUnlocked)
+        let tintKey = IconCache.shared.activeTintKey
+        return "\(style.rawValue)|\(isPro)|\(tintKey)"
+    }
+
+    @objc private func launchpadVisibilityNotification(_ note: Notification) {
+        let visible = (note.object as? Bool) ?? false
+        isLaunchpadVisible = visible
+        guard visible else { return }
+        if needsRunningAppsRefresh {
+            needsRunningAppsRefresh = false
+            updateRunningApps()
+        }
+        if needsScanRefresh {
+            needsScanRefresh = false
+            refresh()
+        }
+        if items.contains(where: { $0.widget?.kind == .weather && $0.widget?.isEnabled == true }) {
+            WeatherService.shared.refreshIfNeeded(force: false, requestLocationPermission: false)
+        }
+    }
+
+    @objc private func customIconDidChangeNotification(_ note: Notification) {
+        if let appID = note.object as? String {
+            IconCache.shared.invalidate([appID])
+        } else if let appIDs = note.object as? [String] {
+            IconCache.shared.invalidate(appIDs)
+        } else {
+            IconCache.shared.invalidate(Array(catalog.keys))
+        }
+        iconsVersion &+= 1
+    }
+
+    @objc private func iconStyleNotificationReceived(_ note: Notification) {
+        IconCache.shared.invalidateStyleCache()
+        let force = (note.object as? String) == "force"
+        let signature = currentIconSignature()
+        guard force || signature != lastAppliedIconSignature else { return }
+        lastAppliedIconSignature = signature
+        IconCache.shared.removeStyleImages()
         iconsVersion &+= 1
         prewarmIcons(Array(catalog.keys))
     }
@@ -179,8 +237,21 @@ final class LaunchpadStore: ObservableObject {
         }
     }
 
-    @objc private func runningAppsChanged() { updateRunningApps() }
-    @objc private func volumesChanged() { scheduleRefresh(delay: 1.0) }
+    @objc private func runningAppsChanged() {
+        guard isLaunchpadVisible else {
+            needsRunningAppsRefresh = true
+            return
+        }
+        updateRunningApps()
+    }
+
+    @objc private func volumesChanged() {
+        guard isLaunchpadVisible else {
+            needsScanRefresh = true
+            return
+        }
+        scheduleRefresh(delay: 1.0)
+    }
 
     private func updateRunningApps() {
         let ids = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
@@ -198,7 +269,14 @@ final class LaunchpadStore: ObservableObject {
     // MARK: Analyse
 
     func refreshIfStale() {
-        if Date().timeIntervalSince(lastScan) > 30 { refresh() }
+        if needsRunningAppsRefresh {
+            needsRunningAppsRefresh = false
+            updateRunningApps()
+        }
+        if needsScanRefresh || Date().timeIntervalSince(lastScan) > 30 {
+            needsScanRefresh = false
+            refresh()
+        }
     }
 
     func scheduleRefresh(delay: Double = 1.5) {
@@ -210,12 +288,13 @@ final class LaunchpadStore: ObservableObject {
         }
     }
 
-    /// Vide le cache d'icônes et les régénère en arrière-plan (changement de style d'icône).
+    /// Vide le cache de style d'icônes (en préservant les icônes personnalisées) et les régénère en arrière-plan.
     func reloadIcons() {
-        IconCache.shared.removeAll()
+        IconCache.shared.invalidateStyleCache()
+        lastAppliedIconSignature = currentIconSignature()
+        IconCache.shared.removeStyleImages()
         iconsVersion &+= 1
         prewarmIcons(Array(catalog.keys))
-        refresh()
     }
 
     /// Pré-rend en parallèle et hors thread principal toutes les icônes manquantes dans le style actif.
@@ -246,15 +325,41 @@ final class LaunchpadStore: ObservableObject {
         let style = IconCache.shared.currentAppearanceStyle
         let tintRGB = IconCache.shared.activeTintRGB
         let tintKey = IconCache.shared.activeTintKey
+        let isPro = Prefs.defaults.bool(forKey: PrefKey.isProUnlocked)
 
         iconPreloadTask?.cancel()
         iconPreloadTask = Task { [weak self] in
-            let rendered = await Task.detached(priority: .utility) {
-                IconRenderer.render(prioritized, style: style, tintRGB: tintRGB)
-            }.value
-            guard let self, !Task.isCancelled else { return }
-            IconCache.shared.store(rendered, forStyle: style, tintKey: tintKey)
-            self.iconsVersion &+= 1
+            // Vague 1 : icônes immédiatement visibles en page 1 / premiers dossiers
+            let wave1Count = min(56, prioritized.count)
+            let wave1 = Array(prioritized.prefix(wave1Count))
+            if !wave1.isEmpty {
+                let rendered1 = await IconRenderer.renderAsync(wave1, style: style, tintRGB: tintRGB, isPro: isPro)
+                guard let self, !Task.isCancelled else { return }
+                IconCache.shared.store(rendered1, forStyle: style, tintKey: tintKey, isPro: isPro)
+                self.iconsVersion &+= 1
+            }
+
+            // Vague 2 : icônes des pages suivantes par paquets bornés
+            if prioritized.count > wave1Count {
+                let chunkSize = 64
+                var idx = wave1Count
+                var storedAny = false
+                while idx < prioritized.count {
+                    guard !Task.isCancelled else { return }
+                    let end = min(prioritized.count, idx + chunkSize)
+                    let chunk = Array(prioritized[idx..<end])
+                    let rendered = await IconRenderer.renderAsync(chunk, style: style, tintRGB: tintRGB, isPro: isPro)
+                    guard !Task.isCancelled else { return }
+                    if !rendered.isEmpty {
+                        IconCache.shared.store(rendered, forStyle: style, tintKey: tintKey, isPro: isPro)
+                        storedAny = true
+                    }
+                    idx = end
+                }
+                if let self, !Task.isCancelled, storedAny {
+                    self.iconsVersion &+= 1
+                }
+            }
         }
     }
 
@@ -275,20 +380,24 @@ final class LaunchpadStore: ObservableObject {
         defer { if isLoading { isLoading = false } }
         // Sécurité : une analyse vide (volume indisponible…) ne doit jamais effacer la disposition.
         guard !scanned.isEmpty else { return }
-        AppleAppLocalizer.clearCache()
 
         let customApps = CustomTileManager.shared.tiles.map { CustomTileManager.shared.asAppInfo(tile: $0) }
         let allScanned = scanned + customApps
 
         let previous = catalog
         var newCatalog: [String: AppInfo] = [:]
+        newCatalog.reserveCapacity(allScanned.count)
         for app in allScanned { newCatalog[app.id] = app }
 
         // Les icônes des apps mises à jour sont régénérées.
-        let changed = allScanned.filter { previous[$0.id] != nil && previous[$0.id]?.bundleID != $0.bundleID }.map(\.id)
+        let changed = allScanned.filter { prev in
+            guard let old = previous[prev.id] else { return false }
+            return old.bundleID != prev.bundleID || (prev.bundleModTime > 0 && old.bundleModTime != prev.bundleModTime)
+        }.map(\.id)
         if !changed.isEmpty { IconCache.shared.invalidate(changed) }
 
-        if previous != newCatalog { catalog = newCatalog }
+        let catalogChanged = previous != newCatalog
+        if catalogChanged { catalog = newCatalog }
         var updated = items
 
         // Les apps disparues restent 60 s dans la disposition (mise à jour en cours, etc.) avant d'être retirées.
@@ -316,9 +425,11 @@ final class LaunchpadStore: ObservableObject {
             let legacy = UserDefaults.standard.stringArray(forKey: "LaunchpadSavedAppOrder") ?? []
             if !legacy.isEmpty {
                 let rank = Dictionary(legacy.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+                let namesByID = Dictionary(uniqueKeysWithValues: fresh.map { ($0.id, displayName($0.id)) })
                 fresh.sort {
                     let left = rank[$0.id] ?? Int.max, right = rank[$1.id] ?? Int.max
-                    return left == right ? displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending : left < right
+                    if left != right { return left < right }
+                    return (namesByID[$0.id] ?? $0.name).localizedStandardCompare(namesByID[$1.id] ?? $1.name) == .orderedAscending
                 }
                 updated.append(contentsOf: fresh.map { LayoutItem.app($0.id) })
             } else {
@@ -327,8 +438,9 @@ final class LaunchpadStore: ObservableObject {
                 updated.append(contentsOf: categorized)
             }
             hasLayoutFile = true
-        } else {
-            fresh.sort { displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending }
+        } else if !fresh.isEmpty {
+            let namesByID = Dictionary(uniqueKeysWithValues: fresh.map { ($0.id, displayName($0.id)) })
+            fresh.sort { (namesByID[$0.id] ?? $0.name).localizedStandardCompare(namesByID[$1.id] ?? $1.name) == .orderedAscending }
             let freshItems = fresh.map { LayoutItem.app($0.id) }
             // Insérer les nouvelles applications avant les éventuels dossiers Apple épinglés en dernière page.
             if let firstPinnedIdx = updated.firstIndex(where: { $0.folder?.pinToLastPage == true }) {
@@ -349,8 +461,10 @@ final class LaunchpadStore: ObservableObject {
             updated = migrateAppleFoldersToLastPage(in: updated, catalog: newCatalog)
         }
 
-        if updated != items || previous != newCatalog {
-            commit(updated, save: updated != items)
+        if updated != items {
+            commit(updated, save: true)
+        } else if catalogChanged {
+            recomputeVisible()
         }
     }
 
@@ -433,7 +547,9 @@ final class LaunchpadStore: ObservableObject {
     }
 
     private func commit(_ newItems: [LayoutItem], save: Bool = true) {
-        items = newItems
+        if items != newItems {
+            items = newItems
+        }
         recomputeVisible()
         if save { scheduleSave() }
     }
@@ -757,8 +873,9 @@ final class LaunchpadStore: ObservableObject {
         guard let index = items.firstIndex(where: { $0.id == id }),
               case .folder(var folder) = items[index] else { return false }
         folder.isLocked.toggle()
-        items[index] = .folder(folder)
-        commit(items)
+        var copy = items
+        copy[index] = .folder(folder)
+        commit(copy)
         return folder.isLocked
     }
 
@@ -790,11 +907,21 @@ final class LaunchpadStore: ObservableObject {
             return false
         }
 
-        let byName: (String, String) -> Bool = { [unowned self] a, b in
-            self.displayName(a).localizedStandardCompare(self.displayName(b)) == .orderedAscending
+        // Pré-calcul des noms affichés (évite N log N appels localisés durant le tri)
+        var namesByID: [String: String] = [:]
+        namesByID.reserveCapacity(catalog.count)
+        for id in catalog.keys {
+            namesByID[id] = displayName(id)
+        }
+
+        let needsDates = (rule == .dateAddedNewest || rule == .dateAddedOldest || rule == .lastUsedRecent || rule == .lastUsedOldest)
+        let metadataDates = needsDates ? AppScanner.metadataDates(for: Array(catalog.keys)) : [:]
+
+        let byName: (String, String) -> Bool = { a, b in
+            (namesByID[a] ?? a).localizedStandardCompare(namesByID[b] ?? b) == .orderedAscending
         }
         let appOrder: (String, String) -> Bool = { [unowned self] a, b in
-            self.compare(a, b, rule: rule)
+            self.compare(a, b, rule: rule, namesByID: namesByID, metadataDates: metadataDates)
         }
 
         let widgets = visibleItems.filter { $0.isWidget }
@@ -815,15 +942,19 @@ final class LaunchpadStore: ObservableObject {
             }
             folders.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             loose.sort(by: byName)
-            result = widgets + arrange(apps: loose.map { .app($0) }, folders: folders.map { .folder($0) }, placement: placement)
+            result = widgets + arrange(apps: loose.map { .app($0) }, folders: folders.map { .folder($0) }, placement: placement, namesByID: namesByID)
         } else {
+            var storedFoldersByID: [String: FolderData] = [:]
+            for case .folder(let folder) in items {
+                storedFoldersByID[folder.id] = folder
+            }
             var apps: [String] = []
             var folders: [FolderData] = []
             for item in visibleItems {
                 switch item {
                 case .app(let id): apps.append(id)
                 case .folder(let visible):
-                    guard var stored = items.lazy.compactMap(\.folder).first(where: { $0.id == visible.id }) else { continue }
+                    guard var stored = storedFoldersByID[visible.id] else { continue }
                     if sortFolderContents { stored.apps.sort(by: appOrder) }
                     folders.append(stored)
                 case .widget:
@@ -832,47 +963,60 @@ final class LaunchpadStore: ObservableObject {
             }
             apps.sort(by: appOrder)
             folders.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            result = widgets + arrange(apps: apps.map { .app($0) }, folders: folders.map { .folder($0) }, placement: placement)
+            result = widgets + arrange(apps: apps.map { .app($0) }, folders: folders.map { .folder($0) }, placement: placement, namesByID: namesByID)
         }
         commit(result + invisible)
     }
 
-    private func arrange(apps: [LayoutItem], folders: [LayoutItem], placement: FolderPlacement) -> [LayoutItem] {
+    private func arrange(apps: [LayoutItem], folders: [LayoutItem], placement: FolderPlacement, namesByID: [String: String]) -> [LayoutItem] {
         switch placement {
         case .before: return folders + apps
         case .after: return apps + folders
         case .mixed:
             return (folders + apps).sorted { a, b in
-                sortName(a).localizedStandardCompare(sortName(b)) == .orderedAscending
+                let na: String = {
+                    switch a {
+                    case .app(let id): return namesByID[id] ?? displayName(id)
+                    case .folder(let folder): return folder.name
+                    case .widget(let config): return config.kind.title
+                    }
+                }()
+                let nb: String = {
+                    switch b {
+                    case .app(let id): return namesByID[id] ?? displayName(id)
+                    case .folder(let folder): return folder.name
+                    case .widget(let config): return config.kind.title
+                    }
+                }()
+                return na.localizedStandardCompare(nb) == .orderedAscending
             }
         }
     }
 
-    private func sortName(_ item: LayoutItem) -> String {
-        switch item {
-        case .app(let id): displayName(id)
-        case .folder(let folder): folder.name
-        case .widget(let config): config.kind.title
-        }
-    }
-
-    private func compare(_ a: String, _ b: String, rule: SortRule) -> Bool {
-        let left = catalog[a], right = catalog[b]
+    private func compare(
+        _ a: String,
+        _ b: String,
+        rule: SortRule,
+        namesByID: [String: String],
+        metadataDates: [String: (added: Date?, lastUsed: Date?)]
+    ) -> Bool {
+        let nameA = namesByID[a] ?? a
+        let nameB = namesByID[b] ?? b
         func dates(_ l: Date?, _ r: Date?, newestFirst: Bool) -> Bool {
             switch (l, r) {
-            case let (l?, r?): return l == r ? displayName(a).localizedStandardCompare(displayName(b)) == .orderedAscending : (newestFirst ? l > r : l < r)
-            case (nil, nil): return displayName(a).localizedStandardCompare(displayName(b)) == .orderedAscending
+            case let (l?, r?): return l == r ? nameA.localizedStandardCompare(nameB) == .orderedAscending : (newestFirst ? l > r : l < r)
+            case (nil, nil): return nameA.localizedStandardCompare(nameB) == .orderedAscending
             case (nil, _): return false
             case (_, nil): return true
             }
         }
         switch rule {
-        case .nameAscending, .category: return displayName(a).localizedStandardCompare(displayName(b)) == .orderedAscending
-        case .nameDescending: return displayName(a).localizedStandardCompare(displayName(b)) == .orderedDescending
-        case .dateAddedNewest: return dates(left?.dateAdded, right?.dateAdded, newestFirst: true)
-        case .dateAddedOldest: return dates(left?.dateAdded, right?.dateAdded, newestFirst: false)
-        case .lastUsedRecent: return dates(left?.lastUsed, right?.lastUsed, newestFirst: true)
-        case .lastUsedOldest: return dates(left?.lastUsed, right?.lastUsed, newestFirst: false)
+        case .nameAscending, .category: return nameA.localizedStandardCompare(nameB) == .orderedAscending
+        case .nameDescending: return nameA.localizedStandardCompare(nameB) == .orderedDescending
+        case .dateAddedNewest: return dates(metadataDates[a]?.added ?? catalog[a]?.dateAdded, metadataDates[b]?.added ?? catalog[b]?.dateAdded, newestFirst: true)
+        case .dateAddedOldest: return dates(metadataDates[a]?.added ?? catalog[a]?.dateAdded, metadataDates[b]?.added ?? catalog[b]?.dateAdded, newestFirst: false)
+        case .lastUsedRecent: return dates(metadataDates[a]?.lastUsed ?? catalog[a]?.lastUsed, metadataDates[b]?.lastUsed ?? catalog[b]?.lastUsed, newestFirst: true)
+        case .lastUsedOldest: return dates(metadataDates[a]?.lastUsed ?? catalog[a]?.lastUsed, metadataDates[b]?.lastUsed ?? catalog[b]?.lastUsed, newestFirst: false)
         }
     }
 
@@ -890,46 +1034,46 @@ final class LaunchpadStore: ObservableObject {
         commit(widgets + categorized)
     }
 
+    private static let appleUtilityIDs: Set<String> = [
+        "com.apple.terminal", "com.apple.activitymonitor", "com.apple.diskutility",
+        "com.apple.console", "com.apple.keychainaccess", "com.apple.systemprofiler",
+        "com.apple.systempreferences", "com.apple.preferences.softwareupdate",
+        "com.apple.screenshot.launcher", "com.apple.screencapture",
+        "com.apple.audio.audiomidisetup", "com.apple.bluetoothfileexchange",
+        "com.apple.colorsyncutility", "com.apple.digitalcolormeter", "com.apple.grapher",
+        "com.apple.migrationassistant", "com.apple.scripteditor2",
+        "com.apple.voiceoverutility", "com.apple.airport.airportutility",
+        "com.apple.print.printerproxy", "com.apple.printcenter", "com.apple.automator",
+        "com.apple.shortcuts", "com.apple.backup.launcher", "com.apple.bootcampassistant"
+    ]
+    private static let appleProductivityIDs: Set<String> = [
+        "com.apple.notes", "com.apple.reminders", "com.apple.ical", "com.apple.addressbook",
+        "com.apple.textedit", "com.apple.preview", "com.apple.calculator", "com.apple.clock",
+        "com.apple.dictionary", "com.apple.stickies", "com.apple.fontbook", "com.apple.freeform",
+        "com.apple.iwork.pages", "com.apple.iwork.numbers", "com.apple.iwork.keynote",
+        "com.apple.passwords"
+    ]
+    private static let appleMediaIDs: Set<String> = [
+        "com.apple.music", "com.apple.tv", "com.apple.podcasts", "com.apple.ibooksx",
+        "com.apple.photos", "com.apple.quicktimeplayerx", "com.apple.photobooth",
+        "com.apple.image_capture", "com.apple.voicememos", "com.apple.imovieapp",
+        "com.apple.garageband10"
+    ]
+    private static let appleInternetIDs: Set<String> = [
+        "com.apple.safari", "com.apple.mail", "com.apple.mobilesms", "com.apple.facetime",
+        "com.apple.maps", "com.apple.weather", "com.apple.stocks", "com.apple.news",
+        "com.apple.home", "com.apple.findmy", "com.apple.appstore"
+    ]
+    private static let appleGameIDs: Set<String> = [
+        "com.apple.chess", "com.apple.games"
+    ]
+
     private func buildDefaultCategorizedItems(from apps: [AppInfo]) -> [LayoutItem] {
         let utilitiesName = loc("category.utilities")
         let productivityName = loc("category.productivity")
         let mediaName = loc("category.media")
         let internetName = loc("category.internet_home")
         let gamesName = loc("category.games")
-
-        let utilityIDs: Set<String> = [
-            "com.apple.terminal", "com.apple.activitymonitor", "com.apple.diskutility",
-            "com.apple.console", "com.apple.keychainaccess", "com.apple.systemprofiler",
-            "com.apple.systempreferences", "com.apple.preferences.softwareupdate",
-            "com.apple.screenshot.launcher", "com.apple.screencapture",
-            "com.apple.audio.audiomidisetup", "com.apple.bluetoothfileexchange",
-            "com.apple.colorsyncutility", "com.apple.digitalcolormeter", "com.apple.grapher",
-            "com.apple.migrationassistant", "com.apple.scripteditor2",
-            "com.apple.voiceoverutility", "com.apple.airport.airportutility",
-            "com.apple.print.printerproxy", "com.apple.printcenter", "com.apple.automator",
-            "com.apple.shortcuts", "com.apple.backup.launcher", "com.apple.bootcampassistant"
-        ]
-        let productivityIDs: Set<String> = [
-            "com.apple.notes", "com.apple.reminders", "com.apple.ical", "com.apple.addressbook",
-            "com.apple.textedit", "com.apple.preview", "com.apple.calculator", "com.apple.clock",
-            "com.apple.dictionary", "com.apple.stickies", "com.apple.fontbook", "com.apple.freeform",
-            "com.apple.iwork.pages", "com.apple.iwork.numbers", "com.apple.iwork.keynote",
-            "com.apple.passwords"
-        ]
-        let mediaIDs: Set<String> = [
-            "com.apple.music", "com.apple.tv", "com.apple.podcasts", "com.apple.ibooksx",
-            "com.apple.photos", "com.apple.quicktimeplayerx", "com.apple.photobooth",
-            "com.apple.image_capture", "com.apple.voicememos", "com.apple.imovieapp",
-            "com.apple.garageband10"
-        ]
-        let internetIDs: Set<String> = [
-            "com.apple.safari", "com.apple.mail", "com.apple.mobilesms", "com.apple.facetime",
-            "com.apple.maps", "com.apple.weather", "com.apple.stocks", "com.apple.news",
-            "com.apple.home", "com.apple.findmy", "com.apple.appstore"
-        ]
-        let gameIDs: Set<String> = [
-            "com.apple.chess", "com.apple.games"
-        ]
 
         var utilitiesApps: [AppInfo] = []
         var productivityApps: [AppInfo] = []
@@ -951,24 +1095,25 @@ final class LaunchpadStore: ObservableObject {
                 continue
             }
 
-            if utilityIDs.contains(bid) || isUtilitiesPath {
+            if Self.appleUtilityIDs.contains(bid) || isUtilitiesPath {
                 utilitiesApps.append(app)
-            } else if productivityIDs.contains(bid) {
+            } else if Self.appleProductivityIDs.contains(bid) {
                 productivityApps.append(app)
-            } else if mediaIDs.contains(bid) {
+            } else if Self.appleMediaIDs.contains(bid) {
                 mediaApps.append(app)
-            } else if internetIDs.contains(bid) {
+            } else if Self.appleInternetIDs.contains(bid) {
                 internetApps.append(app)
-            } else if gameIDs.contains(bid) {
+            } else if Self.appleGameIDs.contains(bid) {
                 gamesApps.append(app)
             } else {
                 utilitiesApps.append(app)
             }
         }
 
+        let namesByID = Dictionary(uniqueKeysWithValues: apps.map { ($0.id, displayName($0.id)) })
         func sortedIDs(_ list: [AppInfo]) -> [String] {
             list.sorted {
-                displayName($0.id).localizedStandardCompare(displayName($1.id)) == .orderedAscending
+                (namesByID[$0.id] ?? $0.name).localizedStandardCompare(namesByID[$1.id] ?? $1.name) == .orderedAscending
             }.map(\.id)
         }
 
@@ -1156,8 +1301,13 @@ final class LaunchpadStore: ObservableObject {
             var trialVisible = visibleBase
             trialVisible.insert(newItem, at: vIdx)
             let assigned = GridLayoutEngine.pageAssignments(items: trialVisible, columns: columns, rows: rows)
-            if vIdx < assigned.count && assigned[vIdx] == desiredPage {
-                return insert(newItem, atVisibleIndex: vIdx, in: copy, visibleBase: visibleBase)
+            if vIdx < assigned.count {
+                if assigned[vIdx] == desiredPage {
+                    return insert(newItem, atVisibleIndex: vIdx, in: copy, visibleBase: visibleBase)
+                }
+                if assigned[vIdx] > desiredPage {
+                    break
+                }
             }
         }
 
@@ -1393,12 +1543,12 @@ final class LaunchpadStore: ObservableObject {
         let snapshot = layoutSnapshot
         let url = layoutURL
         hasLayoutFile = true
-        Task.detached(priority: .utility) {
+        saveWriteQueue.async {
             do {
                 let directory = url.deletingLastPathComponent()
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                encoder.outputFormatting = [.sortedKeys]
                 let data = try encoder.encode(snapshot)
                 try data.write(to: url, options: .atomic)
             } catch {

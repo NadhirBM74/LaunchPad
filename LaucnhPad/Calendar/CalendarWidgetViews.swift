@@ -213,13 +213,29 @@ public final class CalendarEventService: ObservableObject {
 
 // MARK: - Vue Principale du Widget Calendrier
 
+private struct CalendarObservedEventsBlock<Content: View>: View {
+    @ObservedObject private var calendarService = CalendarEventService.shared
+    let content: ([LaunchpadCalendarEvent]) -> Content
+
+    var body: some View {
+        content(calendarService.events)
+    }
+}
+
+private struct CalendarObservedCountText: View {
+    @ObservedObject private var calendarService = CalendarEventService.shared
+
+    var body: some View {
+        Text(loc("calendar.events_count", calendarService.events.count))
+    }
+}
+
 struct PremiumCalendarWidgetView: View {
     let config: CustomWidgetConfig
     var targetSize: CGSize? = nil
     var isPreview: Bool = false
 
     @ObservedObject private var widgetManager = WidgetManager.shared
-    @ObservedObject private var calendarService = CalendarEventService.shared
     @ObservedObject private var locManager = LocalizationManager.shared
     @State private var currentDate = Date()
     @State private var displayedMonthOffset: Int = 0
@@ -272,8 +288,15 @@ struct PremiumCalendarWidgetView: View {
         .frame(width: w, height: h)
         .onAppear {
             currentDate = Date()
+            if !isPreview && LaunchpadViewModel.isLaunchpadVisible {
+                CalendarEventService.shared.refreshEvents()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .launchpadVisibilityDidChange)) { notif in
+            guard (notif.object as? Bool) == true else { return }
+            currentDate = Date()
             if !isPreview {
-                calendarService.refreshEvents()
+                CalendarEventService.shared.refreshEvents()
             }
         }
     }
@@ -324,9 +347,11 @@ struct PremiumCalendarWidgetView: View {
                         .fill(Color.white.opacity(0.12))
                         .frame(width: 1, height: h * 0.68)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(calendarService.events.prefix(3)) { ev in
-                            eventCompactRow(ev)
+                    CalendarObservedEventsBlock { events in
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(events.prefix(3)) { ev in
+                                eventCompactRow(ev)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -359,9 +384,11 @@ struct PremiumCalendarWidgetView: View {
                         .fill(Color.white.opacity(0.12))
                         .frame(height: 1)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(calendarService.events.prefix(eventLimit)) { ev in
-                            eventCompactRow(ev)
+                    CalendarObservedEventsBlock { events in
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(events.prefix(eventLimit)) { ev in
+                                eventCompactRow(ev)
+                            }
                         }
                     }
 
@@ -475,24 +502,26 @@ struct PremiumCalendarWidgetView: View {
                 if isTall {
                     Spacer(minLength: 10)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        ForEach(calendarService.events.prefix(w < 190 ? 3 : 4)) { ev in
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color(red: 1.00, green: 0.16, blue: 0.16))
-                                    .frame(width: 5, height: 5)
-                                Text(ev.title)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.08))
-                                    .lineLimit(1)
-                                Spacer(minLength: 0)
-                                Text(Self.timeFmt.string(from: ev.startDate))
-                                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(Color(red: 0.18, green: 0.16, blue: 0.15).opacity(0.72))
+                    CalendarObservedEventsBlock { events in
+                        VStack(alignment: .leading, spacing: 5) {
+                            ForEach(events.prefix(w < 190 ? 3 : 4)) { ev in
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color(red: 1.00, green: 0.16, blue: 0.16))
+                                        .frame(width: 5, height: 5)
+                                    Text(ev.title)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.08))
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Text(Self.timeFmt.string(from: ev.startDate))
+                                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(Color(red: 0.18, green: 0.16, blue: 0.15).opacity(0.72))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(Color.white.opacity(0.28), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.white.opacity(0.28), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                     }
                     .padding(.horizontal, 10)
@@ -612,9 +641,11 @@ struct PremiumCalendarWidgetView: View {
                     Divider().background(Color.white.opacity(0.12))
                         .padding(.vertical, 2)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        ForEach(calendarService.events.prefix(isNarrow ? 3 : 4)) { ev in
-                            eventCompactRow(ev)
+                    CalendarObservedEventsBlock { events in
+                        VStack(alignment: .leading, spacing: 5) {
+                            ForEach(events.prefix(isNarrow ? 3 : 4)) { ev in
+                                eventCompactRow(ev)
+                            }
                         }
                     }
 
@@ -651,7 +682,7 @@ struct PremiumCalendarWidgetView: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     if !isNarrow {
-                        Text(loc("calendar.events_count", calendarService.events.count))
+                        CalendarObservedCountText()
                             .font(.system(size: 8.5, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.55))
                             .padding(.horizontal, 6)
@@ -662,9 +693,11 @@ struct PremiumCalendarWidgetView: View {
 
                 Divider().background(Color.white.opacity(0.12))
 
-                VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
-                    ForEach(calendarService.events.prefix(eventCount)) { ev in
-                        eventCompactRow(ev)
+                CalendarObservedEventsBlock { events in
+                    VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
+                        ForEach(events.prefix(eventCount)) { ev in
+                            eventCompactRow(ev)
+                        }
                     }
                 }
 
@@ -736,9 +769,11 @@ struct PremiumCalendarWidgetView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(calendarService.events.prefix(eventCount)) { ev in
-                        eventCompactRow(ev)
+                CalendarObservedEventsBlock { events in
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(events.prefix(eventCount)) { ev in
+                            eventCompactRow(ev)
+                        }
                     }
                 }
 
@@ -786,9 +821,11 @@ struct PremiumCalendarWidgetView: View {
                     Rectangle().fill(Color.red.opacity(0.65)).frame(height: 1)
                 }
 
-                VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
-                    ForEach(calendarService.events.prefix(eventCount)) { ev in
-                        eventCompactRow(ev)
+                CalendarObservedEventsBlock { events in
+                    VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
+                        ForEach(events.prefix(eventCount)) { ev in
+                            eventCompactRow(ev)
+                        }
                     }
                 }
 
@@ -863,15 +900,24 @@ struct PremiumCalendarWidgetView: View {
     private static let enLocale = Locale(identifier: "en_US")
 
     private var activeAppLocale: Locale {
-        Locale(identifier: LocalizationManager.activeLanguageCode)
+        locManager.effectiveLocale
     }
 
+    private static var cachedWeekdaySymbols: (lang: String, symbols: [String])?
+
     private var weekdaySymbolsMonFirst: [String] {
+        let code = locManager.effectiveLanguageCode
+        if let cached = Self.cachedWeekdaySymbols, cached.lang == code {
+            return cached.symbols
+        }
         var cal = Calendar.current
         cal.locale = activeAppLocale
         let syms = cal.veryShortStandaloneWeekdaySymbols
-        guard syms.count == 7 else { return ["M", "T", "W", "T", "F", "S", "S"] }
-        return (Array(syms[1...6]) + [syms[0]]).map { $0.uppercased() }
+        let resolved: [String] = syms.count == 7
+            ? (Array(syms[1...6]) + [syms[0]]).map { $0.uppercased() }
+            : ["M", "T", "W", "T", "F", "S", "S"]
+        Self.cachedWeekdaySymbols = (code, resolved)
+        return resolved
     }
 
     private func shortWeekdayString(for date: Date) -> String {

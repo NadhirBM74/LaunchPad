@@ -125,19 +125,18 @@ struct LiquidGlassBackground: View, Equatable {
                 endPoint: .bottomTrailing
             )
         }
-        .compositingGroup()
         .ignoresSafeArea()
     }
 }
 
 struct LaunchpadBackground: View, Equatable {
-    @ObservedObject var wallpaper: WallpaperProvider
+    let wallpaper: WallpaperProvider
     let style: BackgroundStyle
     let dimming: Double
     var liquidGlassIntensity: Double = 0.85
 
     static func == (lhs: LaunchpadBackground, rhs: LaunchpadBackground) -> Bool {
-        lhs.style == rhs.style && lhs.dimming == rhs.dimming && lhs.liquidGlassIntensity == rhs.liquidGlassIntensity && lhs.wallpaper.image === rhs.wallpaper.image
+        lhs.style == rhs.style && lhs.dimming == rhs.dimming && lhs.liquidGlassIntensity == rhs.liquidGlassIntensity
     }
 
     var body: some View {
@@ -163,7 +162,6 @@ struct LaunchpadBackground: View, Equatable {
                     Color.black.opacity(dimming)
                 }
             }
-            .clipped()
             .ignoresSafeArea()
     }
 }

@@ -168,6 +168,8 @@ nonisolated enum CustomTileRenderer {
         return renderImage(symbol: symbol, colorHex: colorHex, size: size)
     }
 
+    private static let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+
     static func renderImage(symbol: String, colorHex: String, size: CGFloat = 256) -> NSImage {
         let pxKey = "\(symbol)|\(colorHex)|\(Int(size.rounded()))" as NSString
         if let cached = imageCache.object(forKey: pxKey) {
@@ -175,7 +177,7 @@ nonisolated enum CustomTileRenderer {
         }
 
         let pxDim = max(64, Int((size * 2.0).rounded()))
-        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let cs = sRGBColorSpace,
               let ctx = CGContext(
                   data: nil,
                   width: pxDim,

@@ -53,6 +53,48 @@ struct RootLayout {
 
 struct LaunchpadRootView: View {
     @ObservedObject var vm: LaunchpadViewModel
+    let store: LaunchpadStore
+    let wallpaper: WallpaperProvider
+
+    var body: some View {
+        if vm.isPanelVisible {
+            LaunchpadActiveBody(vm: vm, store: store, wallpaper: wallpaper)
+        } else {
+            Color.clear
+                .ignoresSafeArea()
+        }
+    }
+}
+
+private struct CustomIconPickerModalLayer: View {
+    let store: LaunchpadStore
+    @ObservedObject private var customIconManager = CustomIconManager.shared
+
+    var body: some View {
+        if let customAppID = customIconManager.activePickerAppID {
+            ZStack {
+                Color.black.opacity(0.48)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        customIconManager.activePickerAppID = nil
+                    }
+                AppCustomIconPickerSheet(
+                    appID: customAppID,
+                    appName: store.displayName(customAppID),
+                    isPresented: Binding(
+                        get: { customIconManager.activePickerAppID != nil },
+                        set: { if !$0 { customIconManager.activePickerAppID = nil } }
+                    )
+                )
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            .zIndex(500)
+        }
+    }
+}
+
+private struct LaunchpadActiveBody: View {
+    @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
     let wallpaper: WallpaperProvider
 
@@ -60,7 +102,6 @@ struct LaunchpadRootView: View {
     @AppStorage(PrefKey.rows) private var rows = 5
     @AppStorage(PrefKey.iconScale) private var iconScale = 1.0
     @AppStorage(PrefKey.showLabels) private var showLabels = true
-    @AppStorage(PrefKey.backgroundOpacity) private var backgroundOpacity = 0.35
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
     @AppStorage(PrefKey.showRunningIndicator) private var showRunning = true
@@ -68,11 +109,9 @@ struct LaunchpadRootView: View {
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
     @AppStorage(PrefKey.reduceMotion) private var reduceMotionPreference = false
-    @ObservedObject private var widgetManager = WidgetManager.shared
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
     @ObservedObject private var permissionManager = PermissionManager.shared
-    @ObservedObject private var customIconManager = CustomIconManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @FocusState private var searchFocused: Bool
 
@@ -84,6 +123,7 @@ struct LaunchpadRootView: View {
     }
 
     var body: some View {
+        let _ = locManager.effectiveLanguageCode
         GeometryReader { proxy in
             let full = proxy.size
             let windowRect = vm.windowRect
@@ -97,9 +137,15 @@ struct LaunchpadRootView: View {
                         .frame(width: full.width, height: full.height)
                         .modifier(PresentationEffect(state: vm.presentation, style: .fade))
                 }
-                launchpad(size: rect.size, windowed: windowRect != nil)
-                    .shadow(color: .black.opacity(windowRect != nil ? 0.45 : 0), radius: 30, y: 14)
-                    .offset(x: rect.minX, y: rect.minY)
+                Group {
+                    if windowRect != nil {
+                        launchpad(size: rect.size, windowed: true)
+                            .shadow(color: .black.opacity(0.45), radius: 30, y: 14)
+                    } else {
+                        launchpad(size: rect.size, windowed: false)
+                    }
+                }
+                .offset(x: rect.minX, y: rect.minY)
             }
             .frame(width: full.width, height: full.height, alignment: .topLeading)
         }
@@ -113,145 +159,127 @@ struct LaunchpadRootView: View {
         let layout = RootLayout(size: size, topInset: vm.topInset, columns: min(max(columns, 3), 12),
                                 rows: min(max(rows, 2), 9), iconScale: iconScale, showLabels: showLabels,
                                 hasFavorites: hasFavorites, hasAccessibilityBanner: hasAccessibilityBanner)
-        return ZStack(alignment: .topLeading) {
-            if vm.isPanelVisible {
-                LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundStyle.fixedDimming, liquidGlassIntensity: liquidGlassIntensity)
-                    .equatable()
-                    .frame(width: size.width, height: size.height)
-                    .modifier(PresentationEffect(state: vm.presentation, style: .fade))
-                backgroundInteraction
-                    .frame(width: size.width, height: size.height)
-                content(layout)
-                    .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
+        let inner = ZStack(alignment: .topLeading) {
+            LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundStyle.fixedDimming, liquidGlassIntensity: liquidGlassIntensity)
+                .equatable()
+                .frame(width: size.width, height: size.height)
+                .modifier(PresentationEffect(state: vm.presentation, style: .fade))
+            backgroundInteraction
+                .frame(width: size.width, height: size.height)
+            content(layout)
+                .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
 
-                SettingsDimmingOverlay(chrome: vm.settingsChrome)
-                    .frame(width: size.width, height: size.height)
-                if let state = vm.drag {
-                    if let widgetConfig = store.visibleItems.compactMap(\.widget).first(where: { $0.id == state.id }) {
-                        let placed = vm.placedItem(for: state.id)
-                        FloatingDragWidget(pointer: vm.pointer, config: widgetConfig, grabOffset: state.grabOffset, targetSize: placed?.frameSize)
-                            .frame(width: size.width, height: size.height)
-                            .zIndex(270)
-                    } else {
-                        FloatingDragIcon(pointer: vm.pointer, model: tileModel(for: state.id), size: layout.grid.iconSize,
-                                         grabOffset: state.grabOffset, merging: vm.mergeTargetID != nil,
-                                         dockHovering: vm.isHoveringDockDropZone,
-                                         alreadyInDock: vm.dockDropAlreadyInDock)
-                            .frame(width: size.width, height: size.height)
-                            .zIndex(270)
-                    }
-                }
-                if let burst = vm.dockSuctionBurst {
-                    DockSuctionFlyingView(burst: burst)
+            SettingsDimmingOverlay(chrome: vm.settingsChrome)
+                .frame(width: size.width, height: size.height)
+            if let state = vm.drag {
+                if let widgetConfig = store.visibleItems.compactMap(\.widget).first(where: { $0.id == state.id }) {
+                    let placed = vm.placedItem(for: state.id)
+                    FloatingDragWidget(pointer: vm.pointer, config: widgetConfig, grabOffset: state.grabOffset, targetSize: placed?.frameSize)
                         .frame(width: size.width, height: size.height)
-                        .allowsHitTesting(false)
-                        .zIndex(268)
-                }
-                if vm.isDraggingAppForDock || vm.dockSuctionBurst != nil {
-                    MacOSDockDropBar(
-                        vm: vm,
-                        draggedTile: vm.drag.map { tileModel(for: $0.id) }
-                    )
-                    .position(x: size.width / 2, y: size.height - 38)
-                    .zIndex(260)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .allowsHitTesting(false)
-                }
-                if let folder = vm.overlayFolder {
-                    let anchor = folderAnchor(for: folder.id, in: size)
-                    // Voile plein écran découplé du zoom pour éviter tout carré sombre qui grandit à l'ouverture.
-                    Color.black.opacity(backgroundStyle == .light ? 0.12 : 0.18)
-                        .contentShape(Rectangle())
-                        .onTapGesture { vm.closeFolder() }
+                        .zIndex(270)
+                } else {
+                    FloatingDragIcon(pointer: vm.pointer, model: tileModel(for: state.id), size: layout.grid.iconSize,
+                                     grabOffset: state.grabOffset, merging: vm.mergeTargetID != nil,
+                                     dockHovering: vm.isHoveringDockDropZone,
+                                     alreadyInDock: vm.dockDropAlreadyInDock)
                         .frame(width: size.width, height: size.height)
-                        .transition(.opacity)
-                        .zIndex(249)
-
-                    FolderOverlayView(vm: vm, store: store, folder: folder, grid: layout.grid, rootSize: size,
-                                      anchor: anchor, showLabels: showLabels, showRunning: showRunning, reduceMotion: reduceMotion)
-                        .frame(width: size.width, height: size.height)
-                        .compositingGroup()
-                        .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
-                        .transition(
-                            reduceMotion
-                                ? .opacity
-                                : .asymmetric(
-                                    insertion: .identity,
-                                    removal: .opacity.combined(with: .scale(scale: 0.93, anchor: anchor))
-                                )
-                        )
-                        .zIndex(250)
+                        .zIndex(270)
                 }
-                LaunchpadOverlays(vm: vm)
-                    .frame(width: size.width, height: size.height)
-                    .modifier(PresentationEffect(state: vm.presentation, style: .fade))
-                if vm.showWidgetGallery {
-                    WidgetGalleryModal(vm: vm, store: store, rootSize: size)
-                        .frame(width: size.width, height: size.height)
-                        .transition(.opacity.combined(with: .scale(scale: 0.94)))
-                }
-                if vm.showWeatherCityPicker {
-                    ZStack {
-                        Color.black.opacity(0.48)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                    vm.showWeatherCityPicker = false
-                                }
-                            }
-                        WeatherCityPickerSheet(
-                            onTextFocusChanged: { focused in
-                                vm.textInputActive = focused
-                            },
-                            onClose: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                    vm.showWeatherCityPicker = false
-                                }
-                            }
-                        )
-                    }
-                    .frame(width: size.width, height: size.height)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    .zIndex(480)
-                }
-                if let customAppID = customIconManager.activePickerAppID {
-                    ZStack {
-                        Color.black.opacity(0.48)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                customIconManager.activePickerAppID = nil
-                            }
-                        AppCustomIconPickerSheet(
-                            appID: customAppID,
-                            appName: store.displayName(customAppID),
-                            isPresented: Binding(
-                                get: { customIconManager.activePickerAppID != nil },
-                                set: { if !$0 { customIconManager.activePickerAppID = nil } }
-                            )
-                        )
-                    }
-                    .frame(width: size.width, height: size.height)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    .zIndex(500)
-                }
-            } else {
-                Color.clear
-                    .frame(width: size.width, height: size.height)
             }
+            if let burst = vm.dockSuctionBurst {
+                DockSuctionFlyingView(burst: burst)
+                    .frame(width: size.width, height: size.height)
+                    .allowsHitTesting(false)
+                    .zIndex(268)
+            }
+            if vm.isDraggingAppForDock || vm.dockSuctionBurst != nil {
+                MacOSDockDropBar(
+                    vm: vm,
+                    draggedTile: vm.drag.map { tileModel(for: $0.id) }
+                )
+                .position(x: size.width / 2, y: size.height - 38)
+                .zIndex(260)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .allowsHitTesting(false)
+            }
+            if let folder = vm.overlayFolder {
+                let anchor = folderAnchor(for: folder.id, in: size)
+                // Voile plein écran découplé du zoom pour éviter tout carré sombre qui grandit à l'ouverture.
+                Color.black.opacity(backgroundStyle == .light ? 0.12 : 0.18)
+                    .contentShape(Rectangle())
+                    .onTapGesture { vm.closeFolder() }
+                    .frame(width: size.width, height: size.height)
+                    .transition(.opacity)
+                    .zIndex(249)
+
+                FolderOverlayView(vm: vm, store: store, folder: folder, grid: layout.grid, rootSize: size,
+                                  anchor: anchor, showLabels: showLabels, showRunning: showRunning, reduceMotion: reduceMotion, tint: activeTintColor)
+                    .frame(width: size.width, height: size.height)
+                    .modifier(PresentationEffect(state: vm.presentation, style: .zoom))
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .identity,
+                                removal: .opacity.combined(with: .scale(scale: 0.93, anchor: anchor))
+                            )
+                    )
+                    .zIndex(250)
+            }
+            LaunchpadOverlays(vm: vm)
+                .frame(width: size.width, height: size.height)
+                .modifier(PresentationEffect(state: vm.presentation, style: .fade))
+            if vm.showWidgetGallery {
+                WidgetGalleryModal(vm: vm, store: store, rootSize: size)
+                    .frame(width: size.width, height: size.height)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
+            if vm.showWeatherCityPicker {
+                ZStack {
+                    Color.black.opacity(0.48)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                vm.showWeatherCityPicker = false
+                            }
+                        }
+                    WeatherCityPickerSheet(
+                        onTextFocusChanged: { focused in
+                            vm.textInputActive = focused
+                        },
+                        onClose: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                vm.showWeatherCityPicker = false
+                            }
+                        }
+                    )
+                }
+                .frame(width: size.width, height: size.height)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(480)
+            }
+            CustomIconPickerModalLayer(store: store)
+                .frame(width: size.width, height: size.height)
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: windowed ? 26 : 0, style: .continuous))
-        .overlay {
+
+        return Group {
             if windowed {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .strokeBorder(
-                        backgroundStyle == .liquidGlass
-                            ? LinearGradient(colors: [Color.white.opacity(0.45), Color.white.opacity(0.10), Color.white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            : LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.18)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1
-                    )
-                    .modifier(PresentationEffect(state: vm.presentation, style: .fade))
-                    .allowsHitTesting(false)
+                inner
+                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .strokeBorder(
+                                backgroundStyle == .liquidGlass
+                                    ? LinearGradient(colors: [Color.white.opacity(0.45), Color.white.opacity(0.10), Color.white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    : LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.18)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1
+                            )
+                            .modifier(PresentationEffect(state: vm.presentation, style: .fade))
+                            .allowsHitTesting(false)
+                    }
+            } else {
+                inner
             }
         }
         .coordinateSpace(.named(launchpadSpace))
@@ -523,10 +551,19 @@ struct LaunchpadRootView: View {
 /// Un seul ForEach pour toutes les pages : l'identité des icônes reste stable pendant un glisser.
 /// Le décalage horizontal vit dans `PageScroll` : suivre le doigt à 120 Hz ne reconstruit
 /// ni le fond, ni la recherche, ni la vue racine — uniquement cette bande d'icônes.
+private struct PageScrollOffsetContainer<Content: View>: View {
+    @ObservedObject var pageScroll: PageScroll
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .offset(x: pageScroll.offset)
+    }
+}
+
 struct PagesLayer: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
-    @ObservedObject private var pageScroll: PageScroll
     let metrics: GridMetrics
     let showLabels: Bool
     let showRunning: Bool
@@ -537,7 +574,6 @@ struct PagesLayer: View {
          showLabels: Bool, showRunning: Bool, reduceMotion: Bool, tint: Color?) {
         self.vm = vm
         self.store = store
-        self._pageScroll = ObservedObject(wrappedValue: vm.pageScroll)
         self.metrics = metrics
         self.showLabels = showLabels
         self.showRunning = showRunning
@@ -549,26 +585,28 @@ struct PagesLayer: View {
         let m = metrics
         let placed = vm.placedDisplayItems(metrics: m)
         let width = m.size.width
-        let offset = pageScroll.offset
         let draggingID = vm.drag?.id
-        let currentPos = width > 0 ? (-offset / width) : CGFloat(vm.page)
-        let fromPage = min(vm.page, vm.lastPage)
-        let toPage = max(vm.page, vm.lastPage)
-        let isSettled = abs(currentPos - CGFloat(vm.page)) < 0.005 && vm.page == vm.lastPage && draggingID == nil
-        let minPage = isSettled ? vm.page : (draggingID != nil ? min(fromPage - 1, Int(floor(currentPos)) - 1) : min(fromPage, Int(floor(currentPos))))
-        let maxPage = isSettled ? vm.page : (draggingID != nil ? max(toPage + 1, Int(ceil(currentPos)) + 1) : max(toPage, Int(ceil(currentPos))))
+        let baseMin = min(vm.page, vm.lastPage)
+        let baseMax = max(vm.page, vm.lastPage)
+        let bounds = vm.scrollPageBounds
+        let rawMin = min(baseMin, bounds?.lowerBound ?? baseMin)
+        let rawMax = max(baseMax, bounds?.upperBound ?? baseMax)
+        let minPage = draggingID != nil ? (rawMin - 1) : rawMin
+        let maxPage = draggingID != nil ? (rawMax + 1) : rawMax
         let visiblePlaced = placed.filter { entry in
             (entry.page >= minPage && entry.page <= maxPage) || entry.id == draggingID
         }
-        _ = store.iconsVersion
-        return ZStack(alignment: .topLeading) {
-            ForEach(visiblePlaced) { entry in
-                tile(entry, metrics: m)
-                    .position(x: CGFloat(entry.page) * width + entry.center.x, y: entry.center.y)
+        let _ = store.iconsVersion
+
+        PageScrollOffsetContainer(pageScroll: vm.pageScroll) {
+            ZStack(alignment: .topLeading) {
+                ForEach(visiblePlaced) { entry in
+                    tile(entry, metrics: m)
+                        .position(x: CGFloat(entry.page) * width + entry.center.x, y: entry.center.y)
+                }
             }
+            .frame(width: width, height: m.size.height, alignment: .topLeading)
         }
-        .frame(width: width, height: m.size.height, alignment: .topLeading)
-        .offset(x: offset)
     }
 
     private func isRemovable(_ item: LayoutItem) -> Bool {
@@ -588,6 +626,7 @@ struct PagesLayer: View {
             widgetGridTile(entry, metrics: m)
         } else {
             let item = entry.item
+            let deterministicPhase = Double(abs(item.id.hashValue % 17)) / 17.0
             AppTileView(
                 model: tileModel(for: item),
                 iconSize: m.iconSize,
@@ -599,6 +638,7 @@ struct PagesLayer: View {
                 isKeyboardFocused: vm.keyboardIndex == entry.index,
                 isMergeTarget: vm.mergeTargetID == item.id,
                 isPlaceholder: vm.drag?.id == item.id,
+                phase: deterministicPhase,
                 onDelete: { vm.requestUninstall(for: item) }
             )
             .equatable()
@@ -877,7 +917,7 @@ struct TileModel: Equatable {
             return TileModel(
                 title: folder.name,
                 icon: nil,
-                folderIcons: folder.apps.prefix(9).map { IconCache.shared.icon(for: $0) },
+                folderIcons: folder.apps.prefix(9).map { IconCache.shared.miniIcon(for: $0) },
                 folderStyle: folder.style,
                 folderColorHex: folder.colorHex,
                 folderSymbol: folder.iconSymbol,
@@ -927,10 +967,10 @@ struct AppTileView: View, Equatable {
     var isKeyboardFocused = false
     var isMergeTarget = false
     var isPlaceholder = false
+    var phase: Double = 0
     var onDelete: () -> Void = {}
 
     @State private var hovering = false
-    @State private var phase = Double.random(in: 0..<1)
 
     /// Marge transparente des icônes macOS : la forme visible occupe ~80 % du cadre.
     static let visibleInset: CGFloat = 0.1
@@ -1044,14 +1084,16 @@ struct JiggleEffect: ViewModifier {
     let active: Bool
     let phase: Double
     var maxAngle: Double = 1.4
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var tilted = false
 
     func body(content: Content) -> some View {
+        let shouldJiggle = active && !systemReduceMotion
         content
-            .environment(\.isJiggling, active)
-            .rotationEffect(.degrees(active ? (tilted ? maxAngle : -maxAngle) : 0))
-            .onAppear { if active { start() } }
-            .onChange(of: active) { _, isActive in
+            .environment(\.isJiggling, shouldJiggle)
+            .rotationEffect(.degrees(shouldJiggle ? (tilted ? maxAngle : -maxAngle) : 0))
+            .onAppear { if shouldJiggle { start() } }
+            .onChange(of: shouldJiggle) { _, isActive in
                 if isActive { start() } else { stop() }
             }
     }
@@ -1081,8 +1123,12 @@ struct IconImage: View {
                 style: model.folderStyle,
                 customColorHex: model.folderColorHex,
                 customSymbol: model.folderSymbol,
-                isJiggling: isJiggling
+                isJiggling: isJiggling,
+                resolvedIconStyle: model.iconStyle,
+                resolvedIsPro: model.isProCrystal,
+                resolvedTintColor: model.tintColor ?? Color(red: 0.08, green: 0.54, blue: 0.98)
             )
+            .equatable()
         } else if let icon = model.icon {
             CrystalAppIconImage(
                 image: icon,
@@ -1093,6 +1139,7 @@ struct IconImage: View {
                 useLiveGlass: true,
                 isJiggling: isJiggling
             )
+            .equatable()
         } else {
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .fill(Color.white.opacity(0.15))
@@ -1106,7 +1153,7 @@ struct FolderIconView: View {
     let size: CGFloat
 
     var body: some View {
-        PremiumFolderIconView(icons: icons, size: size)
+        PremiumFolderIconView(icons: icons, size: size).equatable()
     }
 }
 
@@ -1170,9 +1217,20 @@ private struct MacOSDockDropBar: View {
 
         HStack(spacing: hovering ? 13 : 10) {
             if !vm.dockPreviewApps.isEmpty {
+                let dockIconStyle = IconCache.shared.currentAppearanceStyle
+                let isProUnlocked = LicenseManager.shared.isPro
+                let dockTint = isProUnlocked && dockIconStyle == .tinted ? IconCache.shared.activeTintColor : nil
                 HStack(spacing: hovering ? 9 : 7) {
                     ForEach(vm.dockPreviewApps) { dockApp in
-                        LiveAppIconView(image: IconCache.shared.icon(for: dockApp.id), size: 28, useLiveGlass: false)
+                        CrystalAppIconImage(
+                            image: IconCache.shared.miniIcon(for: dockApp.id),
+                            size: 28,
+                            style: dockIconStyle,
+                            isPro: isProUnlocked,
+                            tintColor: dockTint,
+                            useLiveGlass: false
+                        )
+                        .equatable()
                     }
                 }
 
@@ -1518,6 +1576,7 @@ struct FolderOverlayView: View {
     let showLabels: Bool
     let showRunning: Bool
     let reduceMotion: Bool
+    var tint: Color? = nil
 
     @State private var title = ""
     @State private var isRevealed = false
@@ -1683,8 +1742,9 @@ struct FolderOverlayView: View {
             ForEach(Array(appsToRender.enumerated()), id: \.element) { index, id in
                 let center = fm.center(ofSlot: index)
                 let item = LayoutItem.app(id)
+                let phase = Double(abs(id.hashValue % 17)) / 17.0
                 AppTileView(
-                    model: TileModel.make(item, store: store, showRunning: showRunning),
+                    model: vm.cachedTileModel(for: item, showRunning: showRunning, tint: tint),
                     iconSize: fm.iconSize,
                     labelWidth: fm.cellWidth - 8,
                     showLabel: showLabels,
@@ -1692,6 +1752,7 @@ struct FolderOverlayView: View {
                     showDelete: vm.showsDeleteBadges && (id.hasPrefix("web:") || id.hasPrefix("shortcut:") || store.catalog[id]?.isRemovable == true),
                     isMergeTarget: false,
                     isPlaceholder: vm.drag?.id == id,
+                    phase: phase,
                     onDelete: { vm.requestUninstall(for: item) }
                 )
                 .equatable()
@@ -1802,6 +1863,7 @@ struct WidgetGalleryModal: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
     @ObservedObject private var locManager = LocalizationManager.shared
+    @ObservedObject private var weatherService = WeatherService.shared
     let rootSize: CGSize
 
     enum GalleryCategory: String, CaseIterable, Identifiable {
@@ -1835,15 +1897,15 @@ struct WidgetGalleryModal: View {
     }
 
     @ObservedObject private var licenseManager = LicenseManager.shared
-    @ObservedObject private var weatherService = WeatherService.shared
     @State private var selectedCategory: GalleryCategory = .all
     @State private var searchText: String = ""
     @State private var selectedCardID: String = "weather-darkPremium"
     @State private var selectedSize: WidgetSize = .medium
     @State private var selectedMusicAppearance: WidgetAppearanceMode = WidgetManager.shared.widgets.first(where: { $0.kind == .vinylPlayer })?.musicAppearance ?? .light
     @State private var isCollectionsExpanded: Bool = true
+    @State private var allCards: [GalleryCardItem] = Self.buildAllCards()
 
-    private var allCards: [GalleryCardItem] {
+    private static func buildAllCards() -> [GalleryCardItem] {
         var list: [GalleryCardItem] = []
 
         for theme in WeatherWidgetTheme.allCases {
@@ -2001,7 +2063,10 @@ struct WidgetGalleryModal: View {
             .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
         }
         .onAppear {
-            weatherService.refreshIfNeeded(requestLocationPermission: true)
+            WeatherService.shared.refreshIfNeeded(requestLocationPermission: true)
+        }
+        .onChange(of: LocalizationManager.shared.effectiveLanguageCode) { _, _ in
+            allCards = Self.buildAllCards()
         }
     }
 
@@ -2526,7 +2591,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
     let effectiveConfig: CustomWidgetConfig
     let isSelected: Bool
     let isActiveOnBoard: Bool
-    let languageCode: String = LocalizationManager.activeLanguageCode
+    let languageCode: String = LocalizationManager.shared.effectiveLanguageCode
     let onSelect: () -> Void
 
     @State private var isHovered: Bool = false

@@ -9,11 +9,11 @@ import OpenDirectory
 // Garantit que même si l'utilisateur supprime l'application (ou les préférences UserDefaults)
 // et la réinstalle, la date et le décompte exact de son essai gratuit restent préservés.
 
-enum KeychainTrialStorage {
+nonisolated enum KeychainTrialStorage {
     private static let service = "me.LaucnhPad.trial"
     private static let account = "device_trial_info"
 
-    static func save(startDate: Date, endDate: Date, hasUsed: Bool) {
+    nonisolated static func save(startDate: Date, endDate: Date, hasUsed: Bool) {
         let dict: [String: Any] = [
             "start": startDate.timeIntervalSince1970,
             "end": endDate.timeIntervalSince1970,
@@ -34,7 +34,7 @@ enum KeychainTrialStorage {
         SecItemAdd(addQuery as CFDictionary, nil)
     }
 
-    static func load() -> (startDate: Date, endDate: Date, hasUsed: Bool)? {
+    nonisolated static func load() -> (startDate: Date, endDate: Date, hasUsed: Bool)? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -54,13 +54,25 @@ enum KeychainTrialStorage {
         return (Date(timeIntervalSince1970: startTs), Date(timeIntervalSince1970: endTs), hasUsed)
     }
 
-    static func clear() {
+    nonisolated static func clear() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
+    }
+
+    static func saveInBackground(startDate: Date, endDate: Date, hasUsed: Bool) {
+        Task.detached(priority: .utility) {
+            save(startDate: startDate, endDate: endDate, hasUsed: hasUsed)
+        }
+    }
+
+    static func clearInBackground() {
+        Task.detached(priority: .utility) {
+            clear()
+        }
     }
 }
 
@@ -121,6 +133,8 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var appleAccountAvatar: NSImage? = nil
 
     private var countdownTimer: Timer?
+    private var activeCountdownObservers: Int = 0
+    private var expirationWatchdogTask: Task<Void, Never>?
 
     /// Identifiant de l'instance d'activation attribué par l'API de licence (Lemon Squeezy / Polar)
     /// Permet de comptabiliser exactement 1, 2 ou 5 appareils Mac activés.
@@ -138,30 +152,11 @@ final class LicenseManager: ObservableObject {
         let loadedLicenseKey = Prefs.licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let loadedIsProLifetime = Prefs.isProLifetime && !loadedLicenseKey.isEmpty
 
-        // Synchronisation avec le trousseau d'accès (Keychain)
-        // Conserve le minuteur exact même après désinstallation / réinstallation !
-        var loadedTrialStartDate = Prefs.trialStartDate
-        var loadedTrialEndDate = Prefs.trialEndDate
-        var loadedHasUsedTrial = Prefs.hasUsedTrial
-        var loadedIsTrialActive = Prefs.isTrialActive
-
-        if let keychain = KeychainTrialStorage.load() {
-            // Le trousseau fait autorité en cas de réinstallation
-            if loadedTrialStartDate == nil || loadedTrialEndDate == nil || !loadedHasUsedTrial {
-                loadedTrialStartDate = keychain.startDate
-                loadedTrialEndDate = keychain.endDate
-                loadedHasUsedTrial = keychain.hasUsed
-                loadedIsTrialActive = keychain.hasUsed && Date() < keychain.endDate
-
-                Prefs.trialStartDate = loadedTrialStartDate
-                Prefs.trialEndDate = loadedTrialEndDate
-                Prefs.hasUsedTrial = loadedHasUsedTrial
-                Prefs.isTrialActive = loadedIsTrialActive
-            }
-        } else if let start = loadedTrialStartDate, let end = loadedTrialEndDate {
-            // Première synchronisation vers le trousseau
-            KeychainTrialStorage.save(startDate: start, endDate: end, hasUsed: loadedHasUsedTrial)
-        }
+        // Lecture instantanée depuis UserDefaults au démarrage, puis réconciliation Keychain hors fil principal.
+        let loadedTrialStartDate = Prefs.trialStartDate
+        let loadedTrialEndDate = Prefs.trialEndDate
+        let loadedHasUsedTrial = Prefs.hasUsedTrial
+        let loadedIsTrialActive = Prefs.isTrialActive
 
         let trialValid = loadedIsTrialActive && (loadedTrialEndDate ?? Date.distantPast) > Date()
         let calculatedIsPro = loadedIsProLifetime || trialValid
@@ -174,9 +169,8 @@ final class LicenseManager: ObservableObject {
         self.trialEndDate = loadedTrialEndDate
         self.hasUsedTrial = loadedHasUsedTrial
 
-        Prefs.isProUnlocked = calculatedIsPro
-        Prefs.isProLifetime = loadedIsProLifetime
-        Prefs.isTrialActive = trialValid
+        if Prefs.isProUnlocked != calculatedIsPro { Prefs.isProUnlocked = calculatedIsPro }
+        if Prefs.isTrialActive != trialValid { Prefs.isTrialActive = trialValid }
 
         // Si l'essai était marqué actif mais est expiré à l'ouverture, on nettoie
         if loadedIsTrialActive && !loadedIsProLifetime {
@@ -184,11 +178,49 @@ final class LicenseManager: ObservableObject {
                 handleTrialExpiration(notify: false)
             } else if trialValid {
                 updateCountdownValues()
-                startCountdownTicker()
+                scheduleExpirationWatchdog()
             }
         }
 
+        reconcileKeychainInBackground(
+            cachedStart: loadedTrialStartDate,
+            cachedEnd: loadedTrialEndDate,
+            cachedHasUsed: loadedHasUsedTrial
+        )
         loadAppleAccountProfile()
+    }
+
+    private func reconcileKeychainInBackground(cachedStart: Date?, cachedEnd: Date?, cachedHasUsed: Bool) {
+        Task.detached(priority: .utility) { [weak self] in
+            if let keychain = KeychainTrialStorage.load() {
+                if cachedStart == nil || cachedEnd == nil || !cachedHasUsed {
+                    await MainActor.run { [weak self] in
+                        guard let self, !self.isProLifetime else { return }
+                        let trialValid = keychain.hasUsed && Date() < keychain.endDate
+                        self.trialStartDate = keychain.startDate
+                        self.trialEndDate = keychain.endDate
+                        self.hasUsedTrial = keychain.hasUsed
+                        self.isTrialActive = trialValid
+                        self.isPro = trialValid
+                        Prefs.trialStartDate = keychain.startDate
+                        Prefs.trialEndDate = keychain.endDate
+                        Prefs.hasUsedTrial = keychain.hasUsed
+                        Prefs.isTrialActive = trialValid
+                        if trialValid {
+                            self.updateCountdownValues()
+                            self.scheduleExpirationWatchdog()
+                            if self.activeCountdownObservers > 0 {
+                                self.startCountdownTicker()
+                            }
+                        } else if keychain.hasUsed {
+                            self.handleTrialExpiration(notify: false)
+                        }
+                    }
+                }
+            } else if let start = cachedStart, let end = cachedEnd {
+                KeychainTrialStorage.save(startDate: start, endDate: end, hasUsed: cachedHasUsed)
+            }
+        }
     }
 
     /// Extrait la photo de profil et le prénom du compte Apple / macOS local sans bloquer le thread principal au démarrage.
@@ -295,18 +327,58 @@ final class LicenseManager: ObservableObject {
         Prefs.isProUnlocked = true
 
         // Persistance indestructible dans le Keychain de macOS (survit à la désinstallation)
-        KeychainTrialStorage.save(startDate: now, endDate: end, hasUsed: true)
+        KeychainTrialStorage.saveInBackground(startDate: now, endDate: end, hasUsed: true)
 
         updateCountdownValues()
-        startCountdownTicker()
+        scheduleExpirationWatchdog()
+        if activeCountdownObservers > 0 {
+            startCountdownTicker()
+        }
 
         AppNotificationManager.shared.sendTrialStartedNotification(days: 7)
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
         AdminManager.shared.log(category: "Licence", message: "Essai gratuit de 7 jours activé jusqu'au \(end.formatted(date: .abbreviated, time: .shortened))")
     }
 
-    /// Démarre le minuteur qui rafraîchit le compte à rebours chaque seconde.
+    func beginCountdownObservation() {
+        activeCountdownObservers += 1
+        if isTrialActive && !isProLifetime {
+            updateCountdownValues()
+            if countdownTimer == nil {
+                startCountdownTicker()
+            }
+        }
+    }
+
+    func endCountdownObservation() {
+        activeCountdownObservers = max(0, activeCountdownObservers - 1)
+        if activeCountdownObservers == 0 {
+            stopCountdownTicker()
+        }
+    }
+
+    private func scheduleExpirationWatchdog() {
+        expirationWatchdogTask?.cancel()
+        expirationWatchdogTask = nil
+        guard isTrialActive, !isProLifetime, let end = trialEndDate else { return }
+        expirationWatchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let remaining = end.timeIntervalSinceNow
+                if remaining <= 0 {
+                    await MainActor.run { [weak self] in
+                        self?.checkTrialStatus()
+                    }
+                    break
+                }
+                let step = min(remaining, 3600)
+                try? await Task.sleep(for: .seconds(step))
+            }
+        }
+    }
+
+    /// Démarre le minuteur qui rafraîchit le compte à rebours chaque seconde uniquement lorsqu'une UI l'affiche.
     private func startCountdownTicker() {
+        guard activeCountdownObservers > 0 else { return }
         countdownTimer?.invalidate()
         let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -368,6 +440,8 @@ final class LicenseManager: ObservableObject {
     /// Traite l'expiration de l'essai de 7 jours et remet l'application en version gratuite.
     private func handleTrialExpiration(notify: Bool = true) {
         stopCountdownTicker()
+        expirationWatchdogTask?.cancel()
+        expirationWatchdogTask = nil
 
         self.isTrialActive = false
         self.isPro = false
@@ -378,16 +452,12 @@ final class LicenseManager: ObservableObject {
         countdown.trialSecondsRemaining = 0
         countdown.trialProgress = 1.0
 
-        Prefs.isTrialActive = false
-        Prefs.isProUnlocked = false
-
         Prefs.defaults.removeObject(forKey: PrefKey.isTrialActive)
-        Prefs.defaults.removeObject(forKey: PrefKey.isProUnlocked)
         Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
         Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
 
         // Maintien permanent de l'état "essai consommé" dans le trousseau Keychain
-        KeychainTrialStorage.save(
+        KeychainTrialStorage.saveInBackground(
             startDate: self.trialStartDate ?? Date.distantPast,
             endDate: self.trialEndDate ?? Date(),
             hasUsed: true
@@ -577,19 +647,13 @@ final class LicenseManager: ObservableObject {
 
         Prefs.isProLifetime = false
         Prefs.isTrialActive = false
-        Prefs.isProUnlocked = false
-        Prefs.licenseKey = ""
-        Prefs.trialStartDate = nil
-        Prefs.trialEndDate = nil
-
         Prefs.defaults.removeObject(forKey: PrefKey.licenseKey)
-        Prefs.defaults.removeObject(forKey: PrefKey.isProLifetime)
-        Prefs.defaults.removeObject(forKey: PrefKey.isTrialActive)
-        Prefs.defaults.removeObject(forKey: PrefKey.isProUnlocked)
         Prefs.defaults.removeObject(forKey: PrefKey.trialStartDate)
         Prefs.defaults.removeObject(forKey: PrefKey.trialEndDate)
         UserDefaults.standard.removeObject(forKey: instanceIdKey)
 
+        expirationWatchdogTask?.cancel()
+        expirationWatchdogTask = nil
         resetProOnlyPreferencesToFreeDefaults()
 
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
@@ -650,10 +714,13 @@ final class LicenseManager: ObservableObject {
         Prefs.hasUsedTrial = true
         Prefs.isProUnlocked = true
 
-        KeychainTrialStorage.save(startDate: start, endDate: end, hasUsed: true)
+        KeychainTrialStorage.saveInBackground(startDate: start, endDate: end, hasUsed: true)
 
         updateCountdownValues()
-        startCountdownTicker()
+        scheduleExpirationWatchdog()
+        if activeCountdownObservers > 0 {
+            startCountdownTicker()
+        }
         NotificationCenter.default.post(name: .trialStatusDidChange, object: nil)
     }
 
@@ -668,6 +735,6 @@ final class LicenseManager: ObservableObject {
         deactivate()
         hasUsedTrial = false
         Prefs.hasUsedTrial = false
-        KeychainTrialStorage.clear()
+        KeychainTrialStorage.clearInBackground()
     }
 }

@@ -51,17 +51,12 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.reorganizeRule) private var reorganizeRule: SortRule = .nameAscending
     @AppStorage(PrefKey.folderPlacement) private var folderPlacement: FolderPlacement = .before
     @AppStorage(PrefKey.sortFolderContents) private var sortFolderContents = false
-    @AppStorage(PrefKey.iconStyle) private var iconStyle = "original"
     @AppStorage(PrefKey.displayMode) private var displayMode: DisplayMode = .fullScreen
     @AppStorage(PrefKey.hideDock) private var hideDock = true
     @AppStorage(PrefKey.appLogo) private var appLogo: AppLogo = .noir
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
-    @AppStorage(PrefKey.showWidgetBanner) private var showWidgetBanner = true
-    @AppStorage(PrefKey.widgetClockEnabled) private var widgetClockEnabled = true
-    @AppStorage(PrefKey.widgetSystemEnabled) private var widgetSystemEnabled = true
-    @AppStorage(PrefKey.widgetQuickNoteEnabled) private var widgetQuickNoteEnabled = true
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var customTileManager = CustomTileManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
@@ -89,6 +84,7 @@ struct SettingsPanel: View {
     @State private var threeFingerDragConflict = false
     @State private var hotCornerConflict = false
     @State private var settingsToastTask: Task<Void, Never>? = nil
+    @State private var iconScalePreviewTask: Task<Void, Never>? = nil
     @AppStorage(PrefKey.autoCheckUpdates) private var autoCheckUpdates = true
     @AppStorage("LaunchpadEnableUsageTips") private var enableUsageTips = true
     @AppStorage("LaunchpadEnableSoundFeedback") private var enableSoundFeedback = true
@@ -173,6 +169,8 @@ struct SettingsPanel: View {
                 }
             }
             .onDisappear {
+                iconScalePreviewTask?.cancel()
+                iconScalePreviewTask = nil
                 NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { note in
@@ -246,7 +244,7 @@ struct SettingsPanel: View {
                     Divider().background(SettingsStyle.separator)
 
                     ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 14) {
+                        LazyVStack(alignment: .leading, spacing: 14) {
                             switch selectedTab {
                             case .interface: interfaceTab
                             case .apps: customizationAndAppsTab
@@ -555,7 +553,6 @@ struct SettingsPanel: View {
                 VStack(alignment: .leading, spacing: 10) {
                     IconAppearanceShowcaseView(
                         onStyleChanged: {
-                            store.reloadIcons()
                             triggerSettingsToast(loc("custom.icon_style_toast"))
                         },
                         onRequirePro: { title, msg in
@@ -575,7 +572,6 @@ struct SettingsPanel: View {
                     ) {
                         Button(loc("custom.restore_all_defaults")) {
                             CustomIconManager.shared.removeAllOverrides()
-                            store.reloadIcons()
                             triggerSettingsToast(loc("custom.restore_all_toast"))
                         }
                         .controlSize(.small)
@@ -661,8 +657,11 @@ struct SettingsPanel: View {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
                                     iconScale = value
                                 }
+                                iconScalePreviewTask?.cancel()
                                 NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: true)
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                iconScalePreviewTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(350))
+                                    guard !Task.isCancelled else { return }
                                     NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
                                 }
                                 triggerSettingsToast(loc("custom.icon_size_toast", label))
@@ -1682,6 +1681,8 @@ struct SettingsPanel: View {
                     }
                 }
             )
+            .onAppear { LicenseManager.shared.beginCountdownObservation() }
+            .onDisappear { LicenseManager.shared.endCountdownObservation() }
         } else if !licenseManager.isPro && !licenseManager.hasUsedTrial {
             // Proposition de démarrer l'essai 7 jours
             SettingsCardBox {
@@ -3138,7 +3139,7 @@ struct ProCelebrationPopup: View {
     @State private var ringRotation: Double = 0
     @AppStorage(PrefKey.appLogo) private var appLogo: AppLogo = .noir
 
-    private let particles: [CelebrationParticle] = {
+    private static let particles: [CelebrationParticle] = {
         let colors: [Color] = [
             Color(red: 1.0, green: 0.84, blue: 0.20),  // Or étincelant
             Color(red: 0.68, green: 0.45, blue: 1.0),   // Violet royal
@@ -3171,7 +3172,7 @@ struct ProCelebrationPopup: View {
 
             // Explosion radiale de particules et confettis
             ZStack {
-                ForEach(particles) { p in
+                ForEach(Self.particles) { p in
                     Group {
                         if p.symbol == "sparkle" {
                             Image(systemName: "sparkle")
@@ -3392,6 +3393,12 @@ struct ProCelebrationPopup: View {
             .opacity(appear ? 1.0 : 0.0)
         }
         .onAppear {
+            if Prefs.reduceMotion {
+                appear = true
+                logoBounce = true
+                particlesExploded = true
+                return
+            }
             withAnimation(.spring(response: 0.48, dampingFraction: 0.72)) {
                 appear = true
             }
@@ -3723,6 +3730,8 @@ private struct SettingsTrialDaysBadgeView: View {
             .padding(.vertical, 2.5)
             .background(Color(red: 1.00, green: 0.78, blue: 0.05).opacity(0.18), in: Capsule())
             .foregroundStyle(Color(red: 0.85, green: 0.55, blue: 0.00))
+            .onAppear { LicenseManager.shared.beginCountdownObservation() }
+            .onDisappear { LicenseManager.shared.endCountdownObservation() }
     }
 }
 

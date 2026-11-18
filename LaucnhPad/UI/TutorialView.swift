@@ -195,11 +195,21 @@ struct TutorialCardView: View {
                             .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     )
 
-                // Halo d'ambiance avec flou
+                // Halo d'ambiance sans passe de flou coûteuse
                 Circle()
-                    .fill(currentStep.iconColor.opacity(0.18))
-                    .frame(width: 220, height: 220)
-                    .blur(radius: 40)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                currentStep.iconColor.opacity(0.24),
+                                currentStep.iconColor.opacity(0.08),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 160
+                        )
+                    )
+                    .frame(width: 320, height: 320)
                     .allowsHitTesting(false)
 
                 // Animation dédiée selon l'étape
@@ -514,11 +524,17 @@ private struct AnimStep0OpenClose: View {
                         endPoint: .bottomTrailing
                     )
 
-                    // Vague abstraite lumineuse dans le fond d'écran
+                    // Vague abstraite lumineuse (RadialGradient léger au lieu de blur GPU)
                     Circle()
-                        .fill(Color.orange.opacity(0.35))
-                        .frame(width: 180, height: 180)
-                        .blur(radius: 40)
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.orange.opacity(0.42), Color.orange.opacity(0.12), Color.clear],
+                                center: .center,
+                                startRadius: 8,
+                                endRadius: 130
+                            )
+                        )
+                        .frame(width: 260, height: 260)
                         .offset(x: 60, y: 30)
 
                     // 2. Barre des menus macOS supérieure (Apple, Finder, Heure)
@@ -1426,19 +1442,24 @@ private struct AnimStep4WidgetsVinyl: View {
                             )
                     )
 
-                // Reflet traversant
+                // Reflet traversant doux (gradient lissé sans passe blur)
                 Rectangle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.clear, Color.white.opacity(0.35), Color.clear],
+                            colors: [
+                                Color.clear,
+                                Color.white.opacity(0.14),
+                                Color.white.opacity(0.32),
+                                Color.white.opacity(0.14),
+                                Color.clear
+                            ],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: 40, height: 110)
+                    .frame(width: 52, height: 110)
                     .rotationEffect(.degrees(25))
                     .offset(x: sheenOffset)
-                    .blur(radius: 6)
                     .mask(RoundedRectangle(cornerRadius: 16, style: .continuous).frame(width: 150, height: 95))
 
                 VStack(spacing: 4) {
@@ -1455,6 +1476,7 @@ private struct AnimStep4WidgetsVinyl: View {
             }
         }
         .onAppear {
+            guard !Prefs.reduceMotion else { return }
             withAnimation(.linear(duration: 8.0).repeatForever(autoreverses: false)) {
                 rotation = 360
             }
@@ -1783,6 +1805,8 @@ private struct TrialCountdownBoxesView: View {
             .frame(height: 4)
             .padding(.top, 2)
         }
+        .onAppear { LicenseManager.shared.beginCountdownObservation() }
+        .onDisappear { LicenseManager.shared.endCountdownObservation() }
     }
 
     private func countdownBox(val: String, unit: String) -> some View {
@@ -1805,11 +1829,11 @@ private struct TrialCountdownBoxesView: View {
 // MARK: - Modal intégré au Launchpad
 
 struct TutorialModalView: View {
-    @ObservedObject var vm: LaunchpadViewModel
+    let vm: LaunchpadViewModel
 
     var body: some View {
         ZStack {
-            // Fond d'ambiance avec flou
+            // Fond d'ambiance sans passe blur géante
             Color.black.opacity(0.40)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
@@ -1819,18 +1843,38 @@ struct TutorialModalView: View {
                     }
                 }
 
-            // Orbes lumineuses d'ambiance avec flou (ne capturent pas les clics !)
+            // Orbes lumineuses d'ambiance via RadialGradient doux (zéro blur 110px)
             Circle()
-                .fill(Color(red: 0.22, green: 0.64, blue: 1.0).opacity(0.22))
-                .frame(width: 460, height: 460)
-                .blur(radius: 110)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.22, green: 0.64, blue: 1.0).opacity(0.24),
+                            Color(red: 0.22, green: 0.64, blue: 1.0).opacity(0.06),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 340
+                    )
+                )
+                .frame(width: 680, height: 680)
                 .offset(x: -160, y: -100)
                 .allowsHitTesting(false)
 
             Circle()
-                .fill(Color(red: 0.85, green: 0.40, blue: 1.0).opacity(0.18))
-                .frame(width: 400, height: 400)
-                .blur(radius: 120)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.85, green: 0.40, blue: 1.0).opacity(0.20),
+                            Color(red: 0.85, green: 0.40, blue: 1.0).opacity(0.05),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 320
+                    )
+                )
+                .frame(width: 640, height: 640)
                 .offset(x: 180, y: 120)
                 .allowsHitTesting(false)
 
@@ -1840,7 +1884,6 @@ struct TutorialModalView: View {
                     vm.showTutorial = false
                 }
             }
-            .transition(.scale(scale: 0.94).combined(with: .opacity))
         }
         .zIndex(100)
     }

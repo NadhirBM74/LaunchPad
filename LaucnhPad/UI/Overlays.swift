@@ -7,8 +7,45 @@ struct LaunchpadOverlays: View {
     @ObservedObject private var permissionManager = PermissionManager.shared
 
     var body: some View {
+        LaunchpadOverlaysContent(
+            dialog: vm.dialog,
+            rename: vm.rename,
+            uninstall: vm.uninstall,
+            customTileModal: vm.customTileModal,
+            showTutorial: vm.showTutorial,
+            toast: vm.toast,
+            showPermissionBanner: permissionManager.showPermissionCard && !permissionManager.isAccessibilityGranted,
+            vm: vm,
+            permissionManager: permissionManager
+        )
+        .equatable()
+    }
+}
+
+private struct LaunchpadOverlaysContent: View, Equatable {
+    let dialog: DialogModel?
+    let rename: RenameRequest?
+    let uninstall: UninstallSession?
+    let customTileModal: CustomTileModalModel?
+    let showTutorial: Bool
+    let toast: String?
+    let showPermissionBanner: Bool
+    let vm: LaunchpadViewModel
+    let permissionManager: PermissionManager
+
+    static func == (lhs: LaunchpadOverlaysContent, rhs: LaunchpadOverlaysContent) -> Bool {
+        lhs.dialog?.id == rhs.dialog?.id
+            && lhs.rename?.id == rhs.rename?.id
+            && lhs.uninstall?.id == rhs.uninstall?.id
+            && lhs.customTileModal?.id == rhs.customTileModal?.id
+            && lhs.showTutorial == rhs.showTutorial
+            && lhs.toast == rhs.toast
+            && lhs.showPermissionBanner == rhs.showPermissionBanner
+    }
+
+    var body: some View {
         ZStack {
-            if let dialog = vm.dialog {
+            if let dialog {
                 dimmer { vm.dialog = nil }
                 ConfirmCard(dialog: dialog, onCancel: { vm.dialog = nil }, onConfirm: {
                     vm.dialog = nil
@@ -16,26 +53,26 @@ struct LaunchpadOverlays: View {
                 })
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
-            if let request = vm.rename {
+            if let request = rename {
                 dimmer { vm.rename = nil; vm.textInputActive = false; vm.focusSearch() }
                 RenameCard(request: request, vm: vm)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
-            if let session = vm.uninstall {
+            if let session = uninstall {
                 dimmer { if !session.working { vm.uninstall = nil; vm.focusSearch() } }
                 UninstallCard(session: session, onCancel: { vm.uninstall = nil; vm.focusSearch() }, onConfirm: { vm.confirmUninstall() })
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
-            if let modal = vm.customTileModal {
+            if let modal = customTileModal {
                 dimmer { vm.customTileModal = nil; vm.focusSearch() }
                 AddCustomTileCard(modal: modal, vm: vm)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
-            if vm.showTutorial {
+            if showTutorial {
                 TutorialModalView(vm: vm)
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
-            if permissionManager.showPermissionCard && !permissionManager.isAccessibilityGranted {
+            if showPermissionBanner {
                 dimmer {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         permissionManager.showPermissionCard = false
@@ -45,7 +82,7 @@ struct LaunchpadOverlays: View {
                 AccessibilityPermissionCard()
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
-            if let toast = vm.toast {
+            if let toast {
                 VStack {
                     Spacer()
                     Text(toast)
@@ -62,12 +99,12 @@ struct LaunchpadOverlays: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.dialog?.id)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.rename?.id)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.uninstall?.id)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.customTileModal?.id)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: vm.showTutorial)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: permissionManager.showPermissionCard)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: dialog?.id)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: rename?.id)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: uninstall?.id)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: customTileModal?.id)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showTutorial)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showPermissionBanner)
     }
 
     private func dimmer(_ action: @escaping () -> Void) -> some View {
@@ -246,6 +283,7 @@ struct AddCustomTileCard: View {
     @State private var target = ""
     @State private var symbol: String
     @State private var colorHex: String
+    @State private var previewImage: NSImage
     @FocusState private var focusedField: Field?
 
     enum Field { case title, target }
@@ -272,9 +310,12 @@ struct AddCustomTileCard: View {
     init(modal: CustomTileModalModel, vm: LaunchpadViewModel) {
         self.modal = modal
         self.vm = vm
+        let initialSym = modal.kind == .web ? "globe" : "bolt.fill"
+        let initialHex = modal.kind == .web ? "#0A84FF" : "#5E5CE6"
         _kind = State(initialValue: modal.kind)
-        _symbol = State(initialValue: modal.kind == .web ? "globe" : "bolt.fill")
-        _colorHex = State(initialValue: modal.kind == .web ? "#0A84FF" : "#5E5CE6")
+        _symbol = State(initialValue: initialSym)
+        _colorHex = State(initialValue: initialHex)
+        _previewImage = State(initialValue: CustomTileRenderer.renderImage(symbol: initialSym, colorHex: initialHex, size: 128))
     }
 
     var body: some View {
@@ -302,12 +343,18 @@ struct AddCustomTileCard: View {
                 }
             }
 
-            // Aperçu interactif
+            // Aperçu interactif (cache mis à jour uniquement lorsque le symbole ou la couleur change)
             HStack(spacing: 16) {
-                Image(nsImage: CustomTileRenderer.renderImage(symbol: symbol, colorHex: colorHex, size: 128))
+                Image(nsImage: previewImage)
                     .resizable()
                     .frame(width: 58, height: 58)
                     .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                    .onChange(of: symbol) { _, newSym in
+                        previewImage = CustomTileRenderer.renderImage(symbol: newSym, colorHex: colorHex, size: 128)
+                    }
+                    .onChange(of: colorHex) { _, newHex in
+                        previewImage = CustomTileRenderer.renderImage(symbol: symbol, colorHex: newHex, size: 128)
+                    }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title.isEmpty ? (kind == .web ? loc("overlay.web_bookmark") : loc("overlay.apple_shortcut")) : title)

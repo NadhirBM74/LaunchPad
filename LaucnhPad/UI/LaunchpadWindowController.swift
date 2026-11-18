@@ -39,7 +39,6 @@ final class LaunchpadWindowController: NSObject {
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 2)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-        panel.orderFrontRegardless()
         viewModel.focusSearch()
     }
 
@@ -48,6 +47,7 @@ final class LaunchpadWindowController: NSObject {
     private(set) var isVisible = false
     private var lastHidden = Date.distantPast
     private var hideTask: Task<Void, Never>?
+    private var appliedPresentationOptions: NSApplication.PresentationOptions = []
 
     init(store: LaunchpadStore) {
         self.store = store
@@ -96,7 +96,7 @@ final class LaunchpadWindowController: NSObject {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(appDidResignActive), name: NSApplication.didResignActiveNotification, object: nil)
         center.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: UserDefaults.standard)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(systemDidWake), name: NSWorkspace.didWakeNotification, object: nil)
     }
 
@@ -138,7 +138,6 @@ final class LaunchpadWindowController: NSObject {
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-        panel.orderFrontRegardless()
         applyDockOption()
         if !interactive { viewModel.setAppeared(true) }
     }
@@ -228,16 +227,22 @@ final class LaunchpadWindowController: NSObject {
     /// Masque le Dock pendant l'affichage (utile en mode fenêtre ; en plein écran le panneau le recouvre déjà).
     private func applyDockOption() {
         let wanted: NSApplication.PresentationOptions = Prefs.hideDock && Prefs.displayMode == .window ? [.autoHideDock] : []
-        if NSApp.presentationOptions != wanted { NSApp.presentationOptions = wanted }
+        if appliedPresentationOptions != wanted || NSApp.presentationOptions != wanted {
+            NSApp.presentationOptions = wanted
+            appliedPresentationOptions = wanted
+        }
     }
 
     private func restoreDock() {
-        if !NSApp.presentationOptions.isEmpty { NSApp.presentationOptions = [] }
+        if !appliedPresentationOptions.isEmpty || !NSApp.presentationOptions.isEmpty {
+            NSApp.presentationOptions = []
+            appliedPresentationOptions = []
+        }
     }
 
-    @objc private func defaultsChanged() {
-        guard isVisible else { return }
-        MainActor.assumeIsolated {
+    @objc nonisolated private func defaultsChanged() {
+        Task { @MainActor [weak self] in
+            guard let self, self.isVisible else { return }
             let currentMode = Prefs.displayMode
             if self.appliedMode != currentMode {
                 let screen = self.panel.screen ?? self.targetScreen()
@@ -316,6 +321,7 @@ final class LaunchpadWindowController: NSObject {
                 }
                 return self.viewModel.handleKeyDown(event) ? nil : event
             case .flagsChanged:
+                guard event.window === self.panel else { return event }
                 self.viewModel.handleFlags(event.modifierFlags)
                 return event
             case .scrollWheel:

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import AppKit
 
@@ -17,50 +18,50 @@ public enum LiquidGlassProminence: Sendable {
 
 public enum LiquidGlassStyle {
     /// Biseau spéculaire supérieur-gauche vers inférieur-droit simulant la réfraction sur l'arête du verre (luminosité constante)
-    public static var specularBorder: LinearGradient { specularBorder() }
+    public static let specularBorder = LinearGradient(
+        colors: [
+            Color.white.opacity(0.68),
+            Color.white.opacity(0.24),
+            Color.white.opacity(0.06),
+            Color.white.opacity(0.20)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     public static func specularBorder(intensity: Double = 1.0) -> LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.68),
-                Color.white.opacity(0.24),
-                Color.white.opacity(0.06),
-                Color.white.opacity(0.20)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        specularBorder
     }
 
     /// Biseau spéculaire accentué pour les éléments interactifs survolés (luminosité constante)
-    public static var specularBorderHovered: LinearGradient { specularBorderHovered() }
+    public static let specularBorderHovered = LinearGradient(
+        colors: [
+            Color.white.opacity(0.85),
+            Color.white.opacity(0.35),
+            Color.white.opacity(0.12),
+            Color.white.opacity(0.32)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     public static func specularBorderHovered(intensity: Double = 1.0) -> LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.85),
-                Color.white.opacity(0.35),
-                Color.white.opacity(0.12),
-                Color.white.opacity(0.32)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        specularBorderHovered
     }
 
     /// Reflet supérieur doux simulant la source de lumière zénithale (luminosité constante)
-    public static var surfaceSheen: LinearGradient { surfaceSheen() }
+    public static let surfaceSheen = LinearGradient(
+        colors: [
+            Color.white.opacity(0.18),
+            Color.white.opacity(0.04),
+            Color.clear
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
 
     public static func surfaceSheen(intensity: Double = 1.0) -> LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.18),
-                Color.white.opacity(0.04),
-                Color.clear
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        surfaceSheen
     }
 
     /// Ombre douce portée caractéristique des surfaces de verre flottantes d'Apple
@@ -82,6 +83,39 @@ public extension EnvironmentValues {
     }
 }
 
+private struct LiquidGlassFallbackBackground<S: InsettableShape>: View {
+    let shape: S
+    let tint: Color?
+    let prominence: LiquidGlassProminence
+    let explicitIntensity: Double?
+    let reduceTransparency: Bool
+    let isJiggling: Bool
+
+    @AppStorage(PrefKey.liquidGlassIntensity) private var storedIntensity: Double = 0.85
+
+    var body: some View {
+        let i = max(0.0, min(1.0, explicitIntensity ?? storedIntensity))
+        ZStack {
+            if reduceTransparency {
+                shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
+            } else if !isJiggling {
+                shape
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.25 + 0.75 * i)
+            } else {
+                shape
+                    .fill(Color.white.opacity(prominence == .clear ? 0.08 : 0.14 * (0.4 + 0.6 * i)))
+            }
+            if let tint {
+                shape.fill(tint.opacity(0.16 + 0.10 * i))
+            }
+            if prominence != .clear {
+                shape.fill(LiquidGlassStyle.surfaceSheen)
+            }
+        }
+    }
+}
+
 public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
     let shape: S
     let interactive: Bool
@@ -90,7 +124,6 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
     let borderLineWidth: CGFloat
     let explicitIntensity: Double?
 
-    @AppStorage(PrefKey.liquidGlassIntensity) private var storedIntensity: Double = 0.85
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isJiggling) private var isJiggling
@@ -112,18 +145,12 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
         self.explicitIntensity = intensity
     }
 
-    private var effectiveIntensity: Double {
-        max(0.0, min(1.0, explicitIntensity ?? storedIntensity))
-    }
-
     public func body(content: Content) -> some View {
-        let i = effectiveIntensity
         if #available(macOS 26.0, *), !isJiggling {
             let glassBase: Glass = {
                 switch prominence {
                 case .clear: return .clear
-                case .prominent: return .regular
-                case .regular: return .regular
+                case .prominent, .regular: return .regular
                 }
             }()
             let configuredGlass: Glass = {
@@ -155,34 +182,26 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                 }
                 .onHover { hovering in
                     guard interactive else { return }
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    if reduceMotion {
                         isHovered = hovering
+                    } else {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            isHovered = hovering
+                        }
                     }
                 }
         } else {
-            // Fallback haute fidélité pour macOS antérieur avec support d'Accessibilité (Réduire la transparence)
+            // Fallback haute fidélité pour macOS antérieur ou rotation animée (jiggle)
             content
                 .background {
-                    shape
-                        .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.92) : Color.clear)
-                }
-                .background {
-                    ZStack {
-                        if !reduceTransparency && !isJiggling {
-                            shape
-                                .fill(.ultraThinMaterial)
-                                .opacity(0.25 + 0.75 * i)
-                        } else if !reduceTransparency {
-                            shape
-                                .fill(Color.white.opacity(prominence == .clear ? 0.08 : 0.14 * (0.4 + 0.6 * i)))
-                        }
-                        if let tint {
-                            shape.fill(tint.opacity(0.16 + 0.10 * i))
-                        }
-                        if prominence != .clear {
-                            shape.fill(LiquidGlassStyle.surfaceSheen)
-                        }
-                    }
+                    LiquidGlassFallbackBackground(
+                        shape: shape,
+                        tint: tint,
+                        prominence: prominence,
+                        explicitIntensity: explicitIntensity,
+                        reduceTransparency: reduceTransparency,
+                        isJiggling: isJiggling
+                    )
                 }
                 .overlay {
                     shape
@@ -614,7 +633,7 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
 }
 
 /// Rendu unifié des icônes d'applications (Version 1 Cristal Pur lorsque le thème & Pro l'activent).
-public struct CrystalAppIconImage: View {
+public struct CrystalAppIconImage: View, Equatable {
     public let image: NSImage
     public let size: CGFloat
     public let style: IconAppearanceStyle
@@ -639,6 +658,16 @@ public struct CrystalAppIconImage: View {
         self.tintColor = tintColor
         self.useLiveGlass = useLiveGlass
         self.isJiggling = isJiggling
+    }
+
+    public static func == (lhs: CrystalAppIconImage, rhs: CrystalAppIconImage) -> Bool {
+        lhs.image === rhs.image
+            && lhs.size == rhs.size
+            && lhs.style == rhs.style
+            && lhs.isPro == rhs.isPro
+            && lhs.useLiveGlass == rhs.useLiveGlass
+            && lhs.isJiggling == rhs.isJiggling
+            && lhs.tintColor == rhs.tintColor
     }
 
     public var body: some View {
@@ -679,17 +708,26 @@ public struct CrystalAppIconImage: View {
                     .frame(width: bodySize, height: bodySize)
                 }
 
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .antialiased(true)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: size, height: size)
-                    .shadow(
-                        color: .black.opacity(useLiveGlass ? 0.20 : 0.14),
-                        radius: max(0.5, size * 0.020),
-                        y: max(0.4, size * 0.010)
-                    )
+                if useLiveGlass {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .antialiased(true)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: size, height: size)
+                        .shadow(
+                            color: .black.opacity(0.20),
+                            radius: max(0.5, size * 0.020),
+                            y: max(0.4, size * 0.010)
+                        )
+                } else {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .antialiased(true)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: size, height: size)
+                }
 
                 CrystalGlassBackdrop.specularRim(shape: shape, spec: spec, lineWidth: rimWidth)
                     .frame(width: bodySize, height: bodySize)
@@ -704,16 +742,56 @@ public struct CrystalAppIconImage: View {
     }
 }
 
+@MainActor
+private final class AppIconAppearanceState: ObservableObject {
+    static let shared = AppIconAppearanceState()
+    @Published private(set) var style: IconAppearanceStyle = .original
+    @Published private(set) var isPro: Bool = false
+    @Published private(set) var tint: Color? = nil
+
+    private var observer: NSObjectProtocol?
+
+    private init() {
+        refresh()
+        observer = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: UserDefaults.standard,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
+        }
+    }
+
+    func refresh() {
+        let d = UserDefaults.standard
+        let pro = d.bool(forKey: PrefKey.isProUnlocked)
+        let tinted = d.bool(forKey: PrefKey.tintedIcons)
+        let raw = d.string(forKey: PrefKey.iconStyle) ?? "original"
+        let resolved: IconAppearanceStyle
+        if tinted && pro {
+            resolved = .tinted
+        } else {
+            let parsed = IconAppearanceStyle(rawValue: raw) ?? .original
+            resolved = (parsed.requiresPro && !pro) ? .original : parsed
+        }
+        let nextTint: Color? = (tinted && pro)
+            ? CrystalGlassSpec.activeTintColor(forKey: d.string(forKey: PrefKey.tintedIconColor) ?? "accent")
+            : nil
+        if style != resolved { style = resolved }
+        if isPro != pro { isPro = pro }
+        if tint != nextTint { tint = nextTint }
+    }
+}
+
 /// Enveloppe légère qui suit automatiquement les préférences globales d'apparence (hors grille 120 Hz).
 public struct LiveAppIconView: View {
     public let image: NSImage
     public let size: CGFloat
     public var useLiveGlass: Bool = true
 
-    @AppStorage(PrefKey.iconStyle) private var iconStyleRaw = "original"
-    @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
-    @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
-    @AppStorage(PrefKey.isProUnlocked) private var isPro = false
+    @ObservedObject private var state = AppIconAppearanceState.shared
 
     public init(image: NSImage, size: CGFloat, useLiveGlass: Bool = true) {
         self.image = image
@@ -721,26 +799,15 @@ public struct LiveAppIconView: View {
         self.useLiveGlass = useLiveGlass
     }
 
-    private var effectiveStyle: IconAppearanceStyle {
-        if tintedIcons && isPro { return .tinted }
-        let parsed = IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
-        if parsed.requiresPro && !isPro { return .original }
-        return parsed
-    }
-
-    private var activeTint: Color? {
-        guard tintedIcons && isPro else { return nil }
-        return CrystalGlassSpec.activeTintColor(forKey: tintedIconColor)
-    }
-
     public var body: some View {
         CrystalAppIconImage(
             image: image,
             size: size,
-            style: effectiveStyle,
-            isPro: isPro,
-            tintColor: activeTint,
+            style: state.style,
+            isPro: state.isPro,
+            tintColor: state.tint,
             useLiveGlass: useLiveGlass
         )
+        .equatable()
     }
 }

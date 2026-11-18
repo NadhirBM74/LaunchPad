@@ -410,6 +410,7 @@ struct ReferenceMusicWidgetView: View {
         .environment(\.colorScheme, isDarkMusic ? .dark : .light)
         .onAppear {
             if !isPreview {
+                musicManager.beginObserving()
                 musicManager.refreshNowPlaying()
             }
             if LaunchpadViewModel.isLaunchpadVisible {
@@ -417,6 +418,9 @@ struct ReferenceMusicWidgetView: View {
             }
         }
         .onDisappear {
+            if !isPreview {
+                musicManager.endObserving()
+            }
             spinTracker.reset()
             bounceTask?.cancel()
         }
@@ -935,16 +939,18 @@ struct ReferenceMusicWidgetView: View {
                 .frame(width: size, height: size)
                 .shadow(color: .black.opacity(shadowOpacity), radius: shadowRadius, y: shadowY)
 
+            let disc = ReferenceVinylDiscView(
+                size: size,
+                variant: variant,
+                artwork: track.displayImage
+            )
+            .equatable()
+
             TimelineView(.animation(paused: !isSpinning)) { timeline in
                 let angle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
-                ReferenceVinylDiscView(
-                    size: size,
-                    variant: variant,
-                    artwork: track.displayImage
-                )
-                .equatable()
-                .scaleEffect(discBounceScale)
-                .rotationEffect(.degrees(angle + extraDiscRotation))
+                disc
+                    .scaleEffect(discBounceScale)
+                    .rotationEffect(.degrees(angle + extraDiscRotation))
             }
         }
         .frame(width: size, height: size)
