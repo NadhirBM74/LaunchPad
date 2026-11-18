@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.17",
-  "name": "LaunchPad v1.2.17",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.17",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.17\n\n- 🎨 **Boutons d'Édition Liquid Glass** : Les boutons `+ Widgets` et `Terminé` adoptent désormais exactement le même style de capsule Liquid Glass transparente que la barre de recherche.\n- 🔍 **Barre de Recherche Épurée** : Suppression du bouton Widgets à l'intérieur de la barre de recherche pour afficher plus d'espace et garder un design plus minimaliste.",
+  "tag_name": "v1.2.18",
+  "name": "LaunchPad v1.2.18",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.18",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.18\n\n- 🔍 **Barre de Recherche Plus Compacte** : Taille affinée et proportionnée pour plus de discrétion tout en gardant une lecture claire du champ de recherche.\n- ✨ **Boutons d'Édition Plus Compacts** : Les boutons `+ Widgets` et `Terminé` sont eux aussi réduits pour s'harmoniser avec la nouvelle barre de recherche.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.17.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.17/LaunchPad-v1.2.17.zip"
+      "name": "LaunchPad-v1.2.18.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.18/LaunchPad-v1.2.18.zip"
     },
     {
-      "name": "LaunchPad-v1.2.17.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.17/LaunchPad-v1.2.17.dmg"
+      "name": "LaunchPad-v1.2.18.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.18/LaunchPad-v1.2.18.dmg"
     }
   ]
 }

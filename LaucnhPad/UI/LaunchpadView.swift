@@ -26,12 +26,12 @@ struct RootLayout {
         self.widgetBannerCenterY = 0
 
         let searchTop = max(topInset + 12, size.height * 0.035 + 10)
-        searchCenterY = searchTop + 18
+        searchCenterY = searchTop + 16
         searchCenterX = size.width / 2
         dotsX = size.width / 2
 
         let bannerExtra: CGFloat = hasAccessibilityBanner ? 34 : 0
-        let gridTop = searchTop + 36 + bannerExtra + max(18, size.height * 0.03)
+        let gridTop = searchTop + 32 + bannerExtra + max(18, size.height * 0.03)
         let bottomArea = hasFavorites ? max(96, size.height * 0.13) : max(60, size.height * 0.08)
         let gridHeight = max(160, size.height - gridTop - bottomArea)
 
@@ -307,19 +307,19 @@ struct LaunchpadRootView: View {
                 Button {
                     vm.showWidgetGallery = true
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Image(systemName: "plus")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 12, weight: .bold))
                         Text(loc("widget.add_widget_short"))
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(.white.opacity(0.92))
-                    .padding(.horizontal, 16)
-                    .frame(height: 38)
+                    .padding(.horizontal, 12)
+                    .frame(height: 30)
                     .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
                 }
                 .buttonStyle(.plain)
-                .position(x: max(70, layout.size.width * 0.06), y: layout.searchCenterY)
+                .position(x: max(58, layout.size.width * 0.055), y: layout.searchCenterY)
                 .transition(.opacity)
 
                 // Bouton "Terminé" en haut à droite
@@ -327,14 +327,14 @@ struct LaunchpadRootView: View {
                     vm.setEditing(false)
                 } label: {
                     Text(loc("common.done"))
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.92))
-                        .padding(.horizontal, 18)
-                        .frame(height: 38)
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
                         .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
                 }
                 .buttonStyle(.plain)
-                .position(x: layout.size.width - max(70, layout.size.width * 0.06), y: layout.searchCenterY)
+                .position(x: layout.size.width - max(58, layout.size.width * 0.055), y: layout.searchCenterY)
                 .transition(.opacity)
             }
             searchBar
@@ -376,15 +376,8 @@ struct LaunchpadRootView: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 8)
                 .frame(height: 30)
-                .liquidGlass(
-                    in: Capsule(),
-                    interactive: true,
-                    tint: nil,
-                    prominence: .clear,
-                    intensity: liquidGlassIntensity
-                )
-                .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
-                .position(x: layout.searchCenterX, y: layout.searchCenterY + 46)
+                .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
+                .position(x: layout.searchCenterX, y: layout.searchCenterY + 41)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
             PagesLayer(
@@ -419,28 +412,28 @@ struct LaunchpadRootView: View {
     // Barre de recherche façon LaunchOS : capsule en Liquid Glass blanc
     private var searchBar: some View {
         let typing = !vm.query.isEmpty
-        return HStack(spacing: 9) {
+        return HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 13.5, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
             ZStack(alignment: .leading) {
                 if !typing {
                     Text(loc("grid.search_placeholder"))
-                        .font(.system(size: 15))
+                        .font(.system(size: 13.5))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
                 TextField("", text: $vm.query)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 15))
+                    .font(.system(size: 13.5))
                     .foregroundStyle(.white)
                     .tint(.white)
                     .focused($searchFocused)
             }
             if typing {
                 Button { vm.query = "" } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 14))
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 12.5))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white.opacity(0.65))
@@ -456,9 +449,9 @@ struct LaunchpadRootView: View {
                              onReorganize: { vm.requestReorganize() },
                              onRefresh: { store.refresh() })
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 8)
-        .frame(width: 340, height: 38)
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .frame(width: 280, height: 32)
         .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
         .onTapGesture { searchFocused = true }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
@@ -717,9 +710,9 @@ struct SearchMenuButton: View {
     var body: some View {
         Button(action: onSettings) {
             Image(systemName: "gearshape.fill")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(foreground.opacity(hoveringSettings ? 1.0 : 0.85))
-                .frame(width: 26, height: 26)
+                .frame(width: 22, height: 22)
                 .background(Color.white.opacity(hoveringSettings ? 0.16 : 0.0), in: Circle())
                 .contentShape(Circle())
         }
