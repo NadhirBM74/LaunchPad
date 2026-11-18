@@ -1372,7 +1372,7 @@ struct SettingsPanel: View {
                 ForEach(Array(hiddenApps.enumerated()), id: \.element.id) { index, app in
                     if index > 0 { SettingsSeparator() }
                     HStack(spacing: 10) {
-                        Image(nsImage: IconCache.shared.icon(for: app.id)).resizable().frame(width: 24, height: 24)
+                        LiveAppIconView(image: IconCache.shared.icon(for: app.id), size: 24, useLiveGlass: false)
                         Text(app.name).font(.system(size: 14))
                         Spacer()
                         Button(loc("apps.unhide")) { store.unhide(app.id) }

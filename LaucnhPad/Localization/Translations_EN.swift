@@ -1210,5 +1210,8 @@ nonisolated enum Translations_EN: Sendable {
         "weather.picker.popular_header": "POPULAR CITIES",
         "weather.picker.results_header": "SEARCH RESULTS",
         "weather.picker.no_results": "No city found",
+        "dock.drag_hint": "Drop in Dock",
+        "dock.release_to_add": "Release to add to Dock",
+        "dock.already_present": "Already in Dock",
     ]
 }

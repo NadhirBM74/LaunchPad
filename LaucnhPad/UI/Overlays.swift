@@ -168,7 +168,7 @@ struct UninstallCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                Image(nsImage: IconCache.shared.icon(for: session.app.id)).resizable().frame(width: 52, height: 52)
+                LiveAppIconView(image: IconCache.shared.icon(for: session.app.id), size: 52)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         Text(loc("overlay.uninstall_confirm", session.app.name)).font(.headline).foregroundStyle(.white)

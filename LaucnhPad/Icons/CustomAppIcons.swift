@@ -46,18 +46,30 @@ public enum IconAppearanceStyle: String, Codable, CaseIterable, Identifiable, Se
     }
 
     /// Indique si le style applique un rendu vitré / transparent sur les icônes (réservé à la licence Pro).
-    public var isTransparentGlassStyle: Bool {
+    nonisolated public var isTransparentGlassStyle: Bool {
         switch self {
         case .transparent, .clearDark, .frostedGlass, .clearLiquid:
             return true
-        default:
+        case .original, .dark, .light, .tinted, .monochrome, .classicApple, .system:
             return false
         }
     }
 
     /// Indique si le style d'icône nécessite une licence Pro active.
-    public var requiresPro: Bool {
+    nonisolated public var requiresPro: Bool {
         isTransparentGlassStyle || self == .tinted
+    }
+
+    /// Indique si ce thème utilise le rendu optique Liquid Glass « Cristal Pur » (sans transparence pour les comptes gratuits).
+    nonisolated public func usesCrystalGlassBackdrop(isPro: Bool) -> Bool {
+        switch self {
+        case .transparent, .clearDark, .frostedGlass, .clearLiquid:
+            return true
+        case .dark, .light, .tinted, .monochrome, .classicApple:
+            return isPro
+        case .original, .system:
+            return false
+        }
     }
 }
 
@@ -230,6 +242,12 @@ public struct CustomAppIconView: View {
     public var tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0)
     public var size: CGFloat = 128
 
+    @AppStorage(PrefKey.isProUnlocked) private var isPro = false
+
+    private var usesCrystalPreview: Bool {
+        style.usesCrystalGlassBackdrop(isPro: isPro || style.requiresPro)
+    }
+
     public init(
         kind: CustomAppIconKind,
         style: IconAppearanceStyle = .dark,
@@ -321,6 +339,16 @@ public struct CustomAppIconView: View {
             // Plans Photo 1 : Fond carte routière complet
             mapsBackgroundCanvas(size: s)
                 .clipShape(shape)
+        } else if usesCrystalPreview && style != .classicApple {
+            let spec = CrystalGlassSpec.resolve(style: style, tintColor: tintColor)
+            ZStack {
+                CrystalGlassBackdrop(shape: shape, spec: spec)
+                if style == .dark {
+                    ambientGlowForDarkIcon(size: s)
+                        .opacity(0.65)
+                        .clipShape(shape)
+                }
+            }
         } else {
             switch style {
             case .dark, .system, .original:
@@ -373,85 +401,8 @@ public struct CustomAppIconView: View {
                     .clipShape(shape)
                 }
 
-            case .clearDark:
-                // Photo 1 (Clear Colored Row 1) : Verre sombre bleuté/indigo translucide
-                ZStack {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.14, green: 0.15, blue: 0.34).opacity(0.84),
-                                Color(red: 0.08, green: 0.09, blue: 0.22).opacity(0.90)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    RadialGradient(
-                        colors: [Color.white.opacity(0.12), Color.clear],
-                        center: .topLeading,
-                        startRadius: 0,
-                        endRadius: s * 0.75
-                    )
-                    .clipShape(shape)
-                }
-
-            case .frostedGlass:
-                // Photo 1 (Clear Colored Row 2) : Verre givré clair avec reflet diagonal soyeux
-                ZStack {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.86, green: 0.88, blue: 0.98).opacity(0.88),
-                                Color(red: 0.74, green: 0.77, blue: 0.94).opacity(0.82),
-                                Color(red: 0.88, green: 0.90, blue: 0.99).opacity(0.90)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    // Bande de réflexion diagonale brillante (comme sur Social / Clear Row 2)
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.55), location: 0.0),
-                            .init(color: Color.white.opacity(0.12), location: 0.32),
-                            .init(color: Color.clear, location: 0.52),
-                            .init(color: Color.white.opacity(0.42), location: 0.78),
-                            .init(color: Color.white.opacity(0.15), location: 1.0)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .clipShape(shape)
-                }
-
-            case .clearLiquid, .transparent:
-                // Photo 1 (Clear Colored Row 3) : Liquid Glass cristallin avec bulle de réfraction
-                ZStack {
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(style == .transparent ? 0.14 : 0.28),
-                                Color(red: 0.55, green: 0.62, blue: 1.0).opacity(style == .transparent ? 0.10 : 0.22),
-                                Color.white.opacity(style == .transparent ? 0.06 : 0.14)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    // Reflet lenticulaire incurvé en haut à gauche
-                    Ellipse()
-                        .fill(
-                            RadialGradient(
-                                colors: [Color.white.opacity(0.52), Color.white.opacity(0.12), Color.clear],
-                                center: .topLeading,
-                                startRadius: 2,
-                                endRadius: s * 0.62
-                            )
-                        )
-                        .frame(width: s * 0.95, height: s * 0.75)
-                        .offset(x: -s * 0.15, y: -s * 0.18)
-                        .clipShape(shape)
-                }
+            case .clearDark, .frostedGlass, .clearLiquid, .transparent:
+                CrystalGlassBackdrop(shape: shape, spec: CrystalGlassSpec.resolve(style: style, tintColor: tintColor))
 
             case .monochrome:
                 shape.fill(
@@ -509,54 +460,62 @@ public struct CustomAppIconView: View {
 
     @ViewBuilder
     private func squircleGlassOverlay(size s: CGFloat, shape: RoundedRectangle) -> some View {
-        let lineWidth = max(0.8, s * 0.014)
-        switch style {
-        case .light:
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.95), Color.black.opacity(0.10)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: lineWidth
+        if usesCrystalPreview {
+            CrystalGlassBackdrop.specularRim(
+                shape: shape,
+                spec: CrystalGlassSpec.resolve(style: style, tintColor: tintColor),
+                lineWidth: max(0.95, s * 0.0155)
             )
-        case .tinted:
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [tintColor.opacity(0.55), tintColor.opacity(0.12), Color.white.opacity(0.15)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: lineWidth
-            )
-        case .frostedGlass, .clearLiquid, .classicApple:
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.85),
-                        Color.white.opacity(0.35),
-                        Color.white.opacity(0.15),
-                        Color.white.opacity(0.55)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: lineWidth * 1.15
-            )
-        default:
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.38),
-                        Color.white.opacity(0.10),
-                        Color.white.opacity(0.04),
-                        Color.white.opacity(0.18)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: lineWidth
-            )
+        } else {
+            let lineWidth = max(0.8, s * 0.014)
+            switch style {
+            case .light:
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.95), Color.black.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: lineWidth
+                )
+            case .tinted:
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [tintColor.opacity(0.55), tintColor.opacity(0.12), Color.white.opacity(0.15)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: lineWidth
+                )
+            case .frostedGlass, .clearLiquid, .classicApple:
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.85),
+                            Color.white.opacity(0.35),
+                            Color.white.opacity(0.15),
+                            Color.white.opacity(0.55)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: lineWidth * 1.15
+                )
+            default:
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.38),
+                            Color.white.opacity(0.10),
+                            Color.white.opacity(0.04),
+                            Color.white.opacity(0.18)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: lineWidth
+                )
+            }
         }
     }
 
@@ -1661,10 +1620,7 @@ public struct AppCustomIconPickerSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Image(nsImage: IconCache.shared.icon(for: appID))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 56, height: 56)
+                LiveAppIconView(image: IconCache.shared.icon(for: appID), size: 56)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(loc("icon_picker.title", appName))

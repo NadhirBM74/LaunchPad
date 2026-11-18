@@ -1211,6 +1211,9 @@ nonisolated enum Translations_IT: Sendable {
         "weather.picker.search_placeholder": "Cerca una città (es. Roma, Milano, Parigi…)",
         "weather.picker.popular_header": "CITTÀ POPOLARI",
         "weather.picker.results_header": "RISULTATI DI RICERCA",
-        "weather.picker.no_results": "Nessuna città trovata",
+        "weather.picker.no_results": "Nessuna città trouvata",
+        "dock.drag_hint": "Rilascia nel Dock",
+        "dock.release_to_add": "Rilascia per aggiungere al Dock",
+        "dock.already_present": "Già nel Dock",
     ]
 }

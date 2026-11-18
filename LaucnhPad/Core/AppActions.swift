@@ -63,14 +63,44 @@ enum AppActions {
         }
     }
 
+    /// Lit un aperçu des premières applications présentes dans le Dock macOS.
+    static func dockPreviewApps(from catalog: [String: AppInfo], maxCount: Int = 5) -> [AppInfo] {
+        guard let tiles = CFPreferencesCopyAppValue("persistent-apps" as CFString, "com.apple.dock" as CFString) as? [[String: Any]] else {
+            return []
+        }
+        var result: [AppInfo] = []
+        result.reserveCapacity(maxCount)
+        for tile in tiles {
+            guard result.count < maxCount else { break }
+            let data = (tile["tile-data"] as? [String: Any])?["file-data"] as? [String: Any]
+            guard let raw = data?["_CFURLString"] as? String else { continue }
+            let decodedPath: String
+            if let url = URL(string: raw), url.isFileURL {
+                decodedPath = url.path
+            } else {
+                decodedPath = raw.removingPercentEncoding ?? raw
+            }
+            let normalized = decodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if let matched = catalog[decodedPath] ?? catalog["/" + normalized] ?? catalog.values.first(where: {
+                $0.url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == normalized
+            }) {
+                result.append(matched)
+            }
+        }
+        return result
+    }
+
     /// Ajoute l'app au Dock (préférences com.apple.dock puis redémarrage du Dock).
-    static func addToDock(_ app: AppInfo) -> Bool {
+    static func addToDock(_ app: AppInfo, delayMs: Int = 0) -> Bool {
         guard !isInDock(app) else { return false }
         let url = app.url.absoluteString
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
         let entry = "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>\(url)</string><key>_CFURLStringType</key><integer>15</integer></dict></dict></dict>"
         Task.detached {
+            if delayMs > 0 {
+                try? await Task.sleep(for: .milliseconds(delayMs))
+            }
             _ = ProcessRunner.run("/usr/bin/defaults", ["write", "com.apple.dock", "persistent-apps", "-array-add", entry])
             _ = ProcessRunner.run("/usr/bin/killall", ["Dock"])
         }

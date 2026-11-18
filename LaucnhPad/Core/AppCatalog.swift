@@ -247,6 +247,7 @@ final class IconCache {
 
         let style = currentAppearanceStyle
         let tintRGB = activeTintRGB
+        let isPro = UserDefaults.standard.bool(forKey: PrefKey.isProUnlocked)
         if !path.hasPrefix("web:") && !path.hasPrefix("shortcut:"),
            CustomIconManager.shared.hasOverride(for: path) {
             let appName = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
@@ -265,7 +266,7 @@ final class IconCache {
         }
 
         // Rendu haute résolution 512×512 Retina (apps & tuiles personnalisées)
-        if let cg = IconRenderer.renderStyledHighResIcon(for: path, style: style, tintRGB: tintRGB) {
+        if let cg = IconRenderer.renderStyledHighResIcon(for: path, style: style, tintRGB: tintRGB, isPro: isPro) {
             let hdImage = CustomAppIconRenderer.wrapCGImageAsRetinaNSImage(cg)
             images[path] = hdImage
             fallbackCachedPaths.remove(path)
@@ -454,7 +455,8 @@ nonisolated enum IconRenderer {
     static func renderStyledHighResIcon(
         for path: String,
         style: IconAppearanceStyle,
-        tintRGB: (r: Double, g: Double, b: Double)
+        tintRGB: (r: Double, g: Double, b: Double),
+        isPro: Bool = UserDefaults.standard.bool(forKey: PrefKey.isProUnlocked)
     ) -> CGImage? {
         let preferOriginal = (style != .system)
         let primarySource = sourceIcon(for: path, original: preferOriginal)
@@ -470,7 +472,8 @@ nonisolated enum IconRenderer {
             validCG,
             style: style,
             tintRGB: tintRGB,
-            forceSquircleClip: false
+            forceSquircleClip: false,
+            isPro: isPro
         )
     }
 
@@ -553,7 +556,8 @@ nonisolated enum IconRenderer {
         _ sourceCG: CGImage,
         style: IconAppearanceStyle,
         tintRGB: (r: Double, g: Double, b: Double),
-        forceSquircleClip: Bool
+        forceSquircleClip: Bool,
+        isPro: Bool = UserDefaults.standard.bool(forKey: PrefKey.isProUnlocked)
     ) -> CGImage? {
         let size = pixelSize
         guard let cs = sRGBColorSpace else { return sourceCG }
@@ -637,12 +641,14 @@ nonisolated enum IconRenderer {
         // 2. Application du filtre de style pixel par pixel en 512×512 (détourage haute précision + décontamination des bords)
         var strippedSquircleCard = false
         if style != .original && style != .system && style != .classicApple {
-            strippedSquircleCard = applyPixelStyleShader(&normPixels, size: size, style: style, tintRGB: tintRGB)
+            strippedSquircleCard = applyPixelStyleShader(&normPixels, size: size, style: style, tintRGB: tintRGB, isPro: isPro)
         }
 
         guard let styledCG = normCtx.makeImage() else { return sourceCG }
 
-        // 3. Composition finale : socle Liquid Glass continu + reflets caustiques + contour spéculaire multicouche
+        // 3. Composition finale :
+        // En mode Cristal Pur (Version 1), on conserve uniquement l'avant-plan détouré et net sur fond alpha
+        // afin que SwiftUI applique la véritable réfraction optique macOS 26 (.glassEffect(.clear)) + le biseau spéculaire.
         guard let finalCtx = CGContext(
             data: nil,
             width: size,
@@ -655,124 +661,18 @@ nonisolated enum IconRenderer {
         finalCtx.interpolationQuality = .high
 
         let fSize = CGFloat(size)
-        let isGlassStyle = (style == .transparent || style == .clearLiquid || style == .clearDark || style == .frostedGlass)
+        let usesLiveCrystal = style.usesCrystalGlassBackdrop(isPro: isPro)
 
-        if isGlassStyle {
-            // Ombre portée douce sous le squircle continu
-            finalCtx.saveGState()
-            finalCtx.setShadow(
-                offset: CGSize(width: 0, height: -fSize * 0.012),
-                blur: fSize * 0.030,
-                color: CGColor(gray: 0, alpha: style == .transparent ? 0.16 : 0.24)
-            )
-            finalCtx.addPath(bodySquirclePath)
-            let baseFill: CGColor
-            switch style {
-            case .transparent:
-                baseFill = CGColor(red: 0.94, green: 0.97, blue: 1.0, alpha: 0.075)
-            case .clearLiquid:
-                baseFill = CGColor(red: 0.86, green: 0.92, blue: 1.0, alpha: 0.15)
-            case .clearDark:
-                baseFill = CGColor(red: 0.09, green: 0.11, blue: 0.19, alpha: 0.56)
-            case .frostedGlass:
-                baseFill = CGColor(red: 0.91, green: 0.94, blue: 1.0, alpha: 0.36)
-            default:
-                baseFill = CGColor(red: 1, green: 1, blue: 1, alpha: 0.12)
-            }
-            finalCtx.setFillColor(baseFill)
-            finalCtx.fillPath()
-            finalCtx.restoreGState()
-
-            // Clip au squircle continu d'Apple
-            finalCtx.saveGState()
-            finalCtx.addPath(bodySquirclePath)
-            finalCtx.clip()
-
-            // Dégradé vertical de profondeur vitrée
-            let glassGradColors: CFArray
-            switch style {
-            case .clearDark:
-                glassGradColors = [
-                    CGColor(red: 0.18, green: 0.21, blue: 0.34, alpha: 0.22),
-                    CGColor(red: 0.04, green: 0.05, blue: 0.10, alpha: 0.10)
-                ] as CFArray
-            case .frostedGlass:
-                glassGradColors = [
-                    CGColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.24),
-                    CGColor(red: 0.84, green: 0.89, blue: 1.0, alpha: 0.06)
-                ] as CFArray
-            default:
-                glassGradColors = [
-                    CGColor(red: 1.0, green: 1.0, blue: 1.0, alpha: style == .clearLiquid ? 0.18 : 0.11),
-                    CGColor(red: 0.78, green: 0.88, blue: 1.0, alpha: 0.02)
-                ] as CFArray
-            }
-            if let glassGrad = CGGradient(colorsSpace: cs, colors: glassGradColors, locations: [0.0, 1.0]) {
-                finalCtx.drawLinearGradient(
-                    glassGrad,
-                    start: CGPoint(x: targetBodyRect.midX, y: targetBodyRect.maxY),
-                    end: CGPoint(x: targetBodyRect.midX, y: targetBodyRect.minY),
-                    options: []
-                )
-            }
-
-            // Reflet caustique diagonal subtil en verre cristal sur la tuile
-            let sheenColors = [
-                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.10 : 0.22),
-                CGColor(red: 1, green: 1, blue: 1, alpha: 0.00),
-                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.05 : 0.10)
-            ] as CFArray
-            if let sheenGrad = CGGradient(colorsSpace: cs, colors: sheenColors, locations: [0.0, 0.46, 1.0]) {
-                finalCtx.drawLinearGradient(
-                    sheenGrad,
-                    start: CGPoint(x: targetBodyRect.minX, y: targetBodyRect.maxY),
-                    end: CGPoint(x: targetBodyRect.maxX, y: targetBodyRect.minY),
-                    options: []
-                )
-            }
-
-            // Icône détourée et décontaminée, rognée avec la courbe exacte d'Apple (~5 px en retrait du biseau vitré)
-            // afin qu'aucune bordure sombre/cyan d'origine ne déborde sous la bordure Liquid Glass
+        if usesLiveCrystal {
             finalCtx.saveGState()
             if strippedSquircleCard {
                 finalCtx.addPath(fgInnerTrimPath)
                 finalCtx.clip()
+            } else {
+                finalCtx.addPath(bodySquirclePath)
+                finalCtx.clip()
             }
             finalCtx.draw(styledCG, in: CGRect(x: 0, y: 0, width: fSize, height: fSize))
-            finalCtx.restoreGState()
-
-            // Contour automatique Liquid Glass continu (zéro encoche ni cassure) :
-            // Biseau spéculaire interne continu en dégradé 4 points (Liquid Glass Apple)
-            finalCtx.saveGState()
-            let strokePath = CGMutablePath()
-            // Tracé strictement contenu dans le squircle (rayon réduit de la moitié de l'épaisseur)
-            let rimWidth = max(2.2, fSize * 0.0068)
-            let insetRimPath = createAppleSquirclePath(
-                in: targetBodyRect.insetBy(dx: rimWidth * 0.5, dy: rimWidth * 0.5),
-                cornerRatio: 0.225
-            )
-            strokePath.addPath(insetRimPath)
-            let rimColors = [
-                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.44 : 0.82),
-                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.14 : 0.24),
-                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.10 : 0.16),
-                CGColor(red: 1, green: 1, blue: 1, alpha: style == .clearDark ? 0.30 : 0.54)
-            ] as CFArray
-            if let rimGrad = CGGradient(colorsSpace: cs, colors: rimColors, locations: [0.0, 0.36, 0.68, 1.0]) {
-                finalCtx.addPath(strokePath)
-                finalCtx.setLineWidth(rimWidth)
-                finalCtx.setLineCap(.round)
-                finalCtx.setLineJoin(.round)
-                finalCtx.replacePathWithStrokedPath()
-                finalCtx.clip()
-                finalCtx.drawLinearGradient(
-                    rimGrad,
-                    start: CGPoint(x: targetBodyRect.minX, y: targetBodyRect.maxY),
-                    end: CGPoint(x: targetBodyRect.maxX, y: targetBodyRect.minY),
-                    options: []
-                )
-            }
-            finalCtx.restoreGState()
             finalCtx.restoreGState()
         } else {
             finalCtx.saveGState()
@@ -1227,8 +1127,8 @@ nonisolated enum IconRenderer {
         // Passe 1 adaptée à la luminosité du fond
         var isBackground: [Bool]
         if isBrightWhiteBG {
-            isBackground = runFloodFill(directDist: 0.055, gradDistMax: 0.082, stepSqMax: 0.008 * 0.008)
-            if centerForegroundRatio(isBackground) < 0.24 {
+            isBackground = runFloodFill(directDist: 0.072, gradDistMax: 0.105, stepSqMax: 0.011 * 0.011)
+            if centerForegroundRatio(isBackground) < 0.045 {
                 return nil
             }
         } else if isPaleGrayBG {
@@ -1323,11 +1223,13 @@ nonisolated enum IconRenderer {
         _ px: inout [UInt8],
         size: Int,
         style: IconAppearanceStyle,
-        tintRGB: (r: Double, g: Double, b: Double)
+        tintRGB: (r: Double, g: Double, b: Double),
+        isPro: Bool
     ) -> Bool {
         let total = size * size
         let isGlassStyle = (style == .transparent || style == .clearLiquid || style == .clearDark || style == .frostedGlass)
-        let needsMatte = isGlassStyle || style == .dark || style == .light
+        let isCrystalMode = style.usesCrystalGlassBackdrop(isPro: isPro)
+        let needsMatte = isGlassStyle || isCrystalMode || style == .dark || style == .light
         let analysis = needsMatte ? analyzeBackgroundMatte(px: px, size: size) : nil
         let bgMatte = analysis?.matte ?? []
 
@@ -1336,7 +1238,9 @@ nonisolated enum IconRenderer {
         let isPow2Size = (size & (size - 1)) == 0
         let sizeMask = size - 1
         let sizeShift = isPow2Size ? size.trailingZeroBitCount : 0
-        let liftDarkInkOnGlass = (style == .transparent || style == .clearDark) && ((analysis?.avgBGLuminance ?? 0.0) > 0.70)
+        let strippedBrightCard = (analysis?.avgBGLuminance ?? 0.0) > 0.68
+        let liftDarkInkOnGlass = (style == .transparent || style == .clearLiquid || style == .clearDark || (isCrystalMode && style == .dark))
+            && ((analysis?.avgBGLuminance ?? 0.0) > 0.70)
 
         for idx in 0..<total {
             let offset = idx * 4
@@ -1356,7 +1260,7 @@ nonisolated enum IconRenderer {
 
             // Décontamination colorimétrique des pixels de bordure semi-transparents :
             // retire l'aura colorée héritée de l'ancien fond le long du contour détouré
-            if isGlassStyle, bgW > 0.04, bgW < 0.95, let analysis {
+            if (isGlassStyle || isCrystalMode), bgW > 0.04, bgW < 0.95, let analysis {
                 let fgAlpha = max(0.22, 1.0 - bgW)
                 let u = analysis.uLUT[pxXInt]
                 let v = analysis.uLUT[pxYInt]
@@ -1386,51 +1290,96 @@ nonisolated enum IconRenderer {
 
             switch style {
             case .dark:
-                let lumT = min(1.0, max(0.0, (lum - 0.56) / 0.30))
-                let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
-                let t = max(bgW * lumT, lumT * satT)
-                if t > 0.001 {
-                    let darkR: Float = 0.09 + (1.0 - lum) * 0.12
-                    let darkG: Float = 0.095 + (1.0 - lum) * 0.12
-                    let darkB: Float = 0.125 + (1.0 - lum) * 0.14
-                    let oneMinusT = 1.0 - t
-                    r = r * oneMinusT + darkR * t
-                    g = g * oneMinusT + darkG * t
-                    b = b * oneMinusT + darkB * t
+                if isCrystalMode {
+                    if bgW > 0.005 { outA *= (1.0 - bgW) }
+                    if liftDarkInkOnGlass && outA > 0.05 && lum < 0.46 && sat < 0.18 {
+                        let inkT = (1.0 - min(1.0, lum / 0.46)) * (1.0 - min(1.0, sat / 0.18))
+                        let targetW: Float = 0.88 - lum * 0.18
+                        r = r * (1.0 - inkT) + targetW * inkT
+                        g = g * (1.0 - inkT) + targetW * inkT
+                        b = b * (1.0 - inkT) + min(1.0, targetW + 0.03) * inkT
+                    }
+                } else {
+                    let lumT = min(1.0, max(0.0, (lum - 0.56) / 0.30))
+                    let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
+                    let t = max(bgW * lumT, lumT * satT)
+                    if t > 0.001 {
+                        let darkR: Float = 0.09 + (1.0 - lum) * 0.12
+                        let darkG: Float = 0.095 + (1.0 - lum) * 0.12
+                        let darkB: Float = 0.125 + (1.0 - lum) * 0.14
+                        let oneMinusT = 1.0 - t
+                        r = r * oneMinusT + darkR * t
+                        g = g * oneMinusT + darkG * t
+                        b = b * oneMinusT + darkB * t
+                    }
                 }
 
             case .light:
-                let lumT = min(1.0, max(0.0, (0.28 - lum) / 0.24))
-                let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
-                let t = max(bgW * lumT, lumT * satT)
-                if t > 0.001 {
-                    let lightVal: Float = 0.94 - lum * 0.22
-                    let oneMinusT = 1.0 - t
-                    r = r * oneMinusT + lightVal * t
-                    g = g * oneMinusT + lightVal * t
-                    b = b * oneMinusT + (lightVal + 0.02) * t
+                if isCrystalMode {
+                    if bgW > 0.005 { outA *= (1.0 - bgW) }
+                } else {
+                    let lumT = min(1.0, max(0.0, (0.28 - lum) / 0.24))
+                    let satT = 1.0 - min(1.0, max(0.0, (sat - 0.06) / 0.22))
+                    let t = max(bgW * lumT, lumT * satT)
+                    if t > 0.001 {
+                        let lightVal: Float = 0.94 - lum * 0.22
+                        let oneMinusT = 1.0 - t
+                        r = r * oneMinusT + lightVal * t
+                        g = g * oneMinusT + lightVal * t
+                        b = b * oneMinusT + (lightVal + 0.02) * t
+                    }
                 }
 
             case .tinted:
-                let baseDarkR: Float = 0.04, baseDarkG: Float = 0.06, baseDarkB: Float = 0.10
-                let curve = powf(max(0.0, lum), 0.88)
-                r = baseDarkR + (tintR - baseDarkR) * curve
-                g = baseDarkG + (tintG - baseDarkG) * curve
-                b = baseDarkB + (tintB - baseDarkB) * curve
+                if isCrystalMode {
+                    if bgW > 0.005 { outA *= (1.0 - bgW) }
+                    let curve: Float
+                    if strippedBrightCard && lum < 0.26 && sat < 0.16 {
+                        curve = 0.88 - lum * 0.30
+                    } else {
+                        curve = min(1.0, max(0.32, powf(max(0.0, lum), 0.74)))
+                    }
+                    let loR = tintR * 0.20, loG = tintG * 0.20, loB = tintB * 0.22
+                    let hiR = min(1.0, tintR * 0.86 + 0.26)
+                    let hiG = min(1.0, tintG * 0.86 + 0.26)
+                    let hiB = min(1.0, tintB * 0.86 + 0.28)
+                    r = loR + (hiR - loR) * curve
+                    g = loG + (hiG - loG) * curve
+                    b = loB + (hiB - loB) * curve
+                } else {
+                    let baseDarkR: Float = 0.04, baseDarkG: Float = 0.06, baseDarkB: Float = 0.10
+                    let curve = powf(max(0.0, lum), 0.88)
+                    r = baseDarkR + (tintR - baseDarkR) * curve
+                    g = baseDarkG + (tintG - baseDarkG) * curve
+                    b = baseDarkB + (tintB - baseDarkB) * curve
+                }
 
             case .monochrome:
-                let contrasted = min(1.0, max(0.0, (lum - 0.5) * 1.16 + 0.52))
-                r = contrasted * 0.96
-                g = contrasted * 0.97
-                b = contrasted
+                if isCrystalMode {
+                    if bgW > 0.005 { outA *= (1.0 - bgW) }
+                    let monoLum: Float
+                    if strippedBrightCard && lum < 0.26 && sat < 0.16 {
+                        monoLum = 0.90 - lum * 0.28
+                    } else {
+                        monoLum = min(1.0, max(0.24, (lum - 0.5) * 1.10 + 0.58))
+                    }
+                    r = monoLum * 0.96
+                    g = monoLum * 0.97
+                    b = monoLum
+                } else {
+                    let contrasted = min(1.0, max(0.0, (lum - 0.5) * 1.16 + 0.52))
+                    r = contrasted * 0.96
+                    g = contrasted * 0.97
+                    b = contrasted
+                }
 
             case .transparent, .clearLiquid, .clearDark, .frostedGlass:
                 if bgW > 0.005 {
                     outA *= (1.0 - bgW)
                 }
-                if liftDarkInkOnGlass && outA > 0.05 && lum < 0.26 && sat < 0.16 {
-                    let inkT = (1.0 - min(1.0, lum / 0.26)) * (1.0 - min(1.0, sat / 0.16))
-                    let targetW: Float = 0.88 - lum * 0.30
+                if liftDarkInkOnGlass && outA > 0.05 && lum < 0.46 && sat < 0.18 {
+                    let inkT = (1.0 - min(1.0, lum / 0.46)) * (1.0 - min(1.0, sat / 0.18))
+                    let targetW: Float = 0.90 - lum * 0.18
                     r = r * (1.0 - inkT) + targetW * inkT
                     g = g * (1.0 - inkT) + targetW * inkT
                     b = b * (1.0 - inkT) + min(1.0, targetW + 0.03) * inkT
@@ -1457,7 +1406,8 @@ nonisolated enum IconRenderer {
     static func render(
         _ paths: [String],
         style: IconAppearanceStyle,
-        tintRGB: (r: Double, g: Double, b: Double) = (0.08, 0.54, 0.98)
+        tintRGB: (r: Double, g: Double, b: Double) = (0.08, 0.54, 0.98),
+        isPro: Bool = UserDefaults.standard.bool(forKey: PrefKey.isProUnlocked)
     ) -> [String: CGImage] {
         guard !paths.isEmpty else { return [:] }
         var output: [String: CGImage] = [:]
@@ -1466,7 +1416,7 @@ nonisolated enum IconRenderer {
         DispatchQueue.concurrentPerform(iterations: paths.count) { index in
             let path = paths[index]
             autoreleasepool {
-                if let cg = renderStyledHighResIcon(for: path, style: style, tintRGB: tintRGB) {
+                if let cg = renderStyledHighResIcon(for: path, style: style, tintRGB: tintRGB, isPro: isPro) {
                     lock.lock()
                     output[path] = cg
                     lock.unlock()

@@ -101,6 +101,19 @@ struct FolderMetrics: Equatable {
 
 enum DragSource: Equatable { case grid, folder(String) }
 
+struct DockSuctionBurst: Identifiable {
+    let id = UUID()
+    let appID: String
+    let icon: NSImage
+    let startPoint: CGPoint
+    let targetPoint: CGPoint
+    let iconSize: CGFloat
+    let style: IconAppearanceStyle
+    let isPro: Bool
+    let tintColor: Color?
+    let alreadyInDock: Bool
+}
+
 struct DragState {
     let id: String
     let source: DragSource
@@ -202,6 +215,11 @@ final class LaunchpadViewModel: ObservableObject {
     @Published private(set) var keyboardIndex: Int?
     @Published private(set) var drag: DragState?
     @Published private(set) var mergeTargetID: String?
+    @Published private(set) var isHoveringDockDropZone = false
+    @Published private(set) var dockDropAlreadyInDock = false
+    @Published private(set) var dockPreviewApps: [AppInfo] = []
+    @Published private(set) var dockSuctionBurst: DockSuctionBurst?
+    @Published private(set) var dockDropBounce = false
     @Published var dialog: DialogModel?
     @Published var rename: RenameRequest?
     @Published var uninstall: UninstallSession?
@@ -246,6 +264,28 @@ final class LaunchpadViewModel: ObservableObject {
     }
     var folderMetrics: FolderMetrics?
     var gridOrigin: CGPoint = .zero
+    var rootSize: CGSize = .zero
+
+    var isDraggingAppForDock: Bool {
+        guard let drag else { return false }
+        return canDropToMacOSDock(id: drag.id)
+    }
+
+    var dockDropZoneRect: CGRect {
+        guard rootSize.width > 0, rootSize.height > 0 else { return .zero }
+        let barWidth = min(max(340, rootSize.width * 0.44), 560)
+        let height: CGFloat = 104
+        return CGRect(x: (rootSize.width - barWidth) * 0.5, y: rootSize.height - height, width: barWidth, height: height)
+    }
+
+    func canDropToMacOSDock(id: String) -> Bool {
+        guard !id.hasPrefix("widget:"),
+              !id.hasPrefix("web:"),
+              !id.hasPrefix("shortcut:"),
+              store.visibleFolder(id) == nil,
+              store.catalog[id] != nil else { return false }
+        return true
+    }
     var onClose: (_ launchedApp: Bool) -> Void = { _ in }
     var onOpenSettings: () -> Void = {}
     @Published var isAuthenticatingBiometrics = false
@@ -974,6 +1014,14 @@ final class LaunchpadViewModel: ObservableObject {
         let center = iconCenter(for: item.id, source: source) ?? value.startLocation
         lastReorderHoverKey = nil
         pointer.location = value.location
+        if isHoveringDockDropZone { isHoveringDockDropZone = false }
+        if canDropToMacOSDock(id: item.id), let app = store.catalog[item.id] {
+            dockDropAlreadyInDock = AppActions.isInDock(app)
+            dockPreviewApps = AppActions.dockPreviewApps(from: store.catalog, maxCount: 5)
+        } else {
+            dockDropAlreadyInDock = false
+            if !dockPreviewApps.isEmpty { dockPreviewApps = [] }
+        }
         drag = DragState(id: item.id, source: source, isFolder: item.isFolder,
                          grabOffset: CGSize(width: value.startLocation.x - center.x, height: value.startLocation.y - center.y))
         selection.removeAll()
@@ -985,6 +1033,24 @@ final class LaunchpadViewModel: ObservableObject {
     private func updateDrag(to location: CGPoint) {
         guard let state = drag else { return }
         pointer.location = location
+
+        if canDropToMacOSDock(id: state.id), dockDropZoneRect.contains(location) {
+            if !isHoveringDockDropZone {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                    isHoveringDockDropZone = true
+                }
+            }
+            cancelEdge()
+            cancelMerge()
+            cancelReorder()
+            lastReorderHoverKey = nil
+            return
+        } else if isHoveringDockDropZone {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.80)) {
+                isHoveringDockDropZone = false
+            }
+        }
+
         switch state.source {
         case .grid:
             gridHover(location)
@@ -1133,13 +1199,79 @@ final class LaunchpadViewModel: ObservableObject {
         cancelEdge()
         lastReorderHoverKey = nil
         reorderTask?.cancel()
+        mergeTask?.cancel()
+        guard let state = drag else {
+            pendingReorderKey = nil
+            pendingReorderAction = nil
+            isHoveringDockDropZone = false
+            return
+        }
+
+        // Dépôt directement dans le Dock macOS (animation d'aspiration + rebond du Dock)
+        if isHoveringDockDropZone, canDropToMacOSDock(id: state.id), let app = store.catalog[state.id] {
+            pendingReorderKey = nil
+            pendingReorderAction = nil
+            mergeTargetID = nil
+            mergeCandidate = nil
+
+            let alreadyInDock = dockDropAlreadyInDock || AppActions.isInDock(app)
+            let startPt = CGPoint(x: pointer.location.x - state.grabOffset.width,
+                                  y: pointer.location.y - state.grabOffset.height)
+            let previewSlots = max(0, dockPreviewApps.count)
+            let approxTargetX = rootSize.width * 0.5 + (previewSlots > 0 ? 52 : 0)
+            let targetPt = CGPoint(x: approxTargetX, y: rootSize.height - 42)
+            let style = IconCache.shared.currentAppearanceStyle
+            let isPro = LicenseManager.shared.isPro
+            let tintKey = Prefs.defaults.string(forKey: PrefKey.tintedIconColor) ?? "accent"
+            let tintColor: Color? = (Prefs.defaults.bool(forKey: PrefKey.tintedIcons) && isPro)
+                ? CrystalGlassSpec.activeTintColor(forKey: tintKey) : nil
+
+            let burst = DockSuctionBurst(
+                appID: state.id,
+                icon: IconCache.shared.icon(for: state.id),
+                startPoint: startPt,
+                targetPoint: targetPt,
+                iconSize: metrics?.iconSize ?? 72,
+                style: style,
+                isPro: isPro,
+                tintColor: tintColor,
+                alreadyInDock: alreadyInDock
+            )
+
+            drag = nil
+            isHoveringDockDropZone = false
+            dockDropBounce = false
+            dockSuctionBurst = burst
+
+            if !alreadyInDock {
+                _ = AppActions.addToDock(app, delayMs: 240)
+            }
+            if state.detached { closeFolder(refocusSearch: true) }
+
+            let capturedBurstID = burst.id
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(160))
+                guard let self, self.dockSuctionBurst?.id == capturedBurstID else { return }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.56)) {
+                    self.dockDropBounce = true
+                }
+                self.showToast(alreadyInDock ? loc("toast.already_in_dock", app.name) : loc("toast.added_to_dock", app.name))
+                try? await Task.sleep(for: .milliseconds(420))
+                guard self.dockSuctionBurst?.id == capturedBurstID else { return }
+                withAnimation(.easeOut(duration: 0.22)) {
+                    self.dockSuctionBurst = nil
+                    self.dockDropBounce = false
+                }
+            }
+            return
+        }
+
+        isHoveringDockDropZone = false
         if let action = pendingReorderAction {
             withAnimation(motion(.spring(response: 0.3, dampingFraction: 0.85))) { action() }
         }
         pendingReorderKey = nil
         pendingReorderAction = nil
-        mergeTask?.cancel()
-        guard let state = drag else { return }
         // Comme sur iPhone : lâcher une app sur une autre crée un dossier (même si le survol a été bref).
         let target = state.isFolder ? nil : (mergeTargetID ?? mergeCandidate)
         let targetWasApp = target.map { id in store.visibleItems.first { $0.id == id }?.isFolder == false } ?? false

@@ -80,17 +80,7 @@ struct LaunchpadRootView: View {
 
     private var activeTintColor: Color? {
         guard tintedIcons && licenseManager.isPro else { return nil }
-        switch tintedIconColor {
-        case "accent": return Color.accentColor
-        case "graphite": return Color(white: 0.8)
-        case "purple": return Color(red: 0.72, green: 0.45, blue: 0.98)
-        case "orange": return Color(red: 1.0, green: 0.58, blue: 0.15)
-        case "mint": return Color(red: 0.25, green: 0.82, blue: 0.65)
-        case "rose": return Color(red: 1.0, green: 0.35, blue: 0.55)
-        case "gold": return Color(red: 0.98, green: 0.80, blue: 0.25)
-        case "blue": return Color(red: 0.20, green: 0.60, blue: 1.0)
-        default: return Color.accentColor
-        }
+        return CrystalGlassSpec.activeTintColor(forKey: tintedIconColor)
     }
 
     var body: some View {
@@ -141,11 +131,31 @@ struct LaunchpadRootView: View {
                         let placed = vm.placedItem(for: state.id)
                         FloatingDragWidget(pointer: vm.pointer, config: widgetConfig, grabOffset: state.grabOffset, targetSize: placed?.frameSize)
                             .frame(width: size.width, height: size.height)
+                            .zIndex(270)
                     } else {
                         FloatingDragIcon(pointer: vm.pointer, model: tileModel(for: state.id), size: layout.grid.iconSize,
-                                         grabOffset: state.grabOffset, merging: vm.mergeTargetID != nil)
+                                         grabOffset: state.grabOffset, merging: vm.mergeTargetID != nil,
+                                         dockHovering: vm.isHoveringDockDropZone,
+                                         alreadyInDock: vm.dockDropAlreadyInDock)
                             .frame(width: size.width, height: size.height)
+                            .zIndex(270)
                     }
+                }
+                if let burst = vm.dockSuctionBurst {
+                    DockSuctionFlyingView(burst: burst)
+                        .frame(width: size.width, height: size.height)
+                        .allowsHitTesting(false)
+                        .zIndex(268)
+                }
+                if vm.isDraggingAppForDock || vm.dockSuctionBurst != nil {
+                    MacOSDockDropBar(
+                        vm: vm,
+                        draggedTile: vm.drag.map { tileModel(for: $0.id) }
+                    )
+                    .position(x: size.width / 2, y: size.height - 38)
+                    .zIndex(260)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
                 }
                 if let folder = vm.overlayFolder {
                     let anchor = folderAnchor(for: folder.id, in: size)
@@ -248,6 +258,9 @@ struct LaunchpadRootView: View {
         .onChange(of: layout.grid, initial: true) { _, grid in
             vm.metrics = grid
             vm.gridOrigin = layout.gridOrigin
+        }
+        .onChange(of: size, initial: true) { _, newSize in
+            vm.rootSize = newSize
         }
         .onChange(of: vm.focusToken, initial: true) { _, _ in focusSearch() }
         .onChange(of: backgroundStyle) { _, _ in wallpaper.refresh() }
@@ -401,9 +414,13 @@ struct LaunchpadRootView: View {
             }
             pageDots
                 .position(x: layout.dotsX, y: layout.dotsY)
+                .opacity(vm.isDraggingAppForDock || vm.dockSuctionBurst != nil ? 0 : 1)
+                .animation(.easeInOut(duration: 0.18), value: vm.isDraggingAppForDock || vm.dockSuctionBurst != nil)
             if layout.hasFavorites {
                 FavoritesDockView(vm: vm, store: store)
                     .position(x: layout.dotsX, y: layout.favoritesDockY)
+                    .opacity(vm.isDraggingAppForDock || vm.dockSuctionBurst != nil ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.2), value: vm.isDraggingAppForDock || vm.dockSuctionBurst != nil)
             }
         }
         .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
@@ -819,12 +836,16 @@ struct TileModel: Equatable {
     var isRunning: Bool
     var isLocked: Bool = false
     var tintColor: Color? = nil
+    var iconStyle: IconAppearanceStyle = .original
+    var isProCrystal: Bool = false
 
     nonisolated static func == (lhs: TileModel, rhs: TileModel) -> Bool {
         guard lhs.title == rhs.title,
               lhs.isRunning == rhs.isRunning,
               lhs.isLocked == rhs.isLocked,
               lhs.tintColor == rhs.tintColor,
+              lhs.iconStyle == rhs.iconStyle,
+              lhs.isProCrystal == rhs.isProCrystal,
               lhs.folderStyle == rhs.folderStyle,
               lhs.folderColorHex == rhs.folderColorHex,
               lhs.folderSymbol == rhs.folderSymbol,
@@ -838,10 +859,20 @@ struct TileModel: Equatable {
 
     @MainActor
     static func make(_ item: LayoutItem, store: LaunchpadStore, showRunning: Bool) -> TileModel {
+        let style = IconCache.shared.currentAppearanceStyle
+        let isPro = LicenseManager.shared.isPro
         switch item {
         case .app(let id):
             let running = showRunning && (store.catalog[id].map(store.isRunning) ?? false)
-            return TileModel(title: store.displayName(id), icon: IconCache.shared.icon(for: id), folderIcons: nil, isRunning: running, isLocked: false)
+            return TileModel(
+                title: store.displayName(id),
+                icon: IconCache.shared.icon(for: id),
+                folderIcons: nil,
+                isRunning: running,
+                isLocked: false,
+                iconStyle: style,
+                isProCrystal: isPro
+            )
         case .folder(let folder):
             return TileModel(
                 title: folder.name,
@@ -851,7 +882,9 @@ struct TileModel: Equatable {
                 folderColorHex: folder.colorHex,
                 folderSymbol: folder.iconSymbol,
                 isRunning: false,
-                isLocked: folder.isLocked
+                isLocked: folder.isLocked,
+                iconStyle: style,
+                isProCrystal: isPro
             )
         case .widget(let config):
             return TileModel(title: config.kind.title, icon: nil, folderIcons: nil, isRunning: false, isLocked: false)
@@ -1048,13 +1081,14 @@ struct IconImage: View {
                 customSymbol: model.folderSymbol
             )
         } else if let icon = model.icon {
-            // L'ombre et le style (Original, Sombre, Clair, Teinté, Verre, Monochrome) sont déjà pré-rendus en 512×512 Retina dans IconCache.
-            Image(nsImage: icon)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: size, height: size)
+            CrystalAppIconImage(
+                image: icon,
+                size: size,
+                style: model.iconStyle,
+                isPro: model.isProCrystal,
+                tintColor: model.tintColor,
+                useLiveGlass: true
+            )
         } else {
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                 .fill(Color.white.opacity(0.15))
@@ -1078,14 +1112,157 @@ struct FloatingDragIcon: View {
     let size: CGFloat
     let grabOffset: CGSize
     var merging = false
+    var dockHovering = false
+    var alreadyInDock = false
 
     var body: some View {
         IconImage(model: model, size: size)
-            .scaleEffect(merging ? 0.86 : 1.1)
-            .shadow(color: .black.opacity(0.35), radius: 14, y: 10)
+            .overlay(alignment: .topTrailing) {
+                if dockHovering {
+                    Image(systemName: alreadyInDock ? "checkmark.circle.fill" : "plus.circle.fill")
+                        .font(.system(size: max(18, size * 0.26), weight: .bold))
+                        .foregroundStyle(.white, alreadyInDock ? Color.orange : Color.green)
+                        .shadow(color: .black.opacity(0.42), radius: 5, y: 2)
+                        .offset(x: -size * 0.04, y: size * 0.04)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+            .scaleEffect(dockHovering ? 0.52 : (merging ? 0.86 : 1.1))
+            .opacity(dockHovering ? 0.0 : 1.0)
+            .shadow(color: dockHovering ? Color.cyan.opacity(0.32) : .black.opacity(0.35), radius: dockHovering ? 18 : 14, y: 10)
             .animation(.spring(response: 0.25, dampingFraction: 0.75), value: merging)
+            .animation(.spring(response: 0.22, dampingFraction: 0.78), value: dockHovering)
             .position(x: pointer.location.x - grabOffset.width, y: pointer.location.y - grabOffset.height)
             .allowsHitTesting(false)
+    }
+}
+
+/// Barre de dépôt animée façon Liquid Glass pour épingler directement une application au Dock macOS.
+private struct MacOSDockDropBar: View {
+    @ObservedObject var vm: LaunchpadViewModel
+    let draggedTile: TileModel?
+
+    var body: some View {
+        let hovering = vm.isHoveringDockDropZone
+        let already = vm.dockDropAlreadyInDock
+        let bounce = vm.dockDropBounce
+        let accentColor: Color = already ? Color.orange : Color(red: 0.25, green: 0.85, blue: 0.98)
+        let dockSpec = CrystalGlassSpec.resolve(
+            style: .clearLiquid,
+            tintColor: hovering ? accentColor : nil
+        )
+        let accentRim = LinearGradient(
+            colors: hovering
+                ? [
+                    accentColor.opacity(0.92),
+                    Color.white.opacity(0.45),
+                    Color.white.opacity(0.24),
+                    (already ? Color.orange : Color.green).opacity(0.72)
+                ]
+                : dockSpec.specularRimColors,
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        HStack(spacing: hovering ? 13 : 10) {
+            if !vm.dockPreviewApps.isEmpty {
+                HStack(spacing: hovering ? 9 : 7) {
+                    ForEach(vm.dockPreviewApps) { dockApp in
+                        LiveAppIconView(image: IconCache.shared.icon(for: dockApp.id), size: 28, useLiveGlass: false)
+                    }
+                }
+
+                Capsule()
+                    .fill(Color.white.opacity(0.26))
+                    .frame(width: 1.5, height: 24)
+            }
+
+            // Emplacement magnétique où l'icône glissée s'aimante + état localisé sans chevauchement
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            hovering
+                                ? accentColor.opacity(0.22)
+                                : Color.white.opacity(0.10)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(
+                                    hovering ? accentColor.opacity(0.95) : Color.white.opacity(0.32),
+                                    style: StrokeStyle(lineWidth: hovering ? 1.4 : 1.0, dash: hovering ? [] : [4, 3])
+                                )
+                        }
+
+                    if hovering, let draggedTile {
+                        IconImage(model: draggedTile, size: 32)
+                            .opacity(already ? 0.62 : 1.0)
+                            .overlay(alignment: .topTrailing) {
+                                Image(systemName: already ? "checkmark.circle.fill" : "plus.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(.white, already ? Color.orange : Color.green)
+                                    .offset(x: 3, y: -3)
+                            }
+                            .scaleEffect(bounce ? 1.18 : 1.0)
+                            .transition(.scale(scale: 0.68).combined(with: .opacity))
+                    } else {
+                        Image(systemName: already ? "checkmark" : "plus")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(already ? Color.orange : .white.opacity(0.92))
+                    }
+                }
+                .frame(width: hovering ? 38 : 32, height: hovering ? 38 : 32)
+
+                Text(loc(already ? "dock.already_present" : (hovering ? "dock.release_to_add" : "dock.drag_hint")))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.96))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, hovering ? 18 : 15)
+        .padding(.vertical, 8)
+        .background {
+            CrystalGlassBackdrop(shape: Capsule(), spec: dockSpec, interactive: true)
+        }
+        .overlay {
+            Capsule()
+                .strokeBorder(accentRim, lineWidth: hovering ? 1.45 : 1.0)
+                .allowsHitTesting(false)
+        }
+        .shadow(
+            color: (hovering ? accentColor : Color.black).opacity(hovering ? 0.36 : 0.32),
+            radius: hovering ? 22 : 16,
+            x: 0,
+            y: 8
+        )
+        .scaleEffect(bounce ? 1.075 : (hovering ? 1.04 : 1.0))
+        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: hovering)
+        .animation(.spring(response: 0.25, dampingFraction: 0.56), value: bounce)
+    }
+}
+
+/// Animation d'aspiration fluide de l'icône relâchée jusque dans l'emplacement du Dock macOS.
+private struct DockSuctionFlyingView: View {
+    let burst: DockSuctionBurst
+    @State private var settled = false
+
+    var body: some View {
+        CrystalAppIconImage(
+            image: burst.icon,
+            size: burst.iconSize,
+            style: burst.style,
+            isPro: burst.isPro,
+            tintColor: burst.tintColor,
+            useLiveGlass: true
+        )
+        .scaleEffect(settled ? 0.42 : 0.80)
+        .opacity(settled ? 0.0 : 0.98)
+        .position(settled ? burst.targetPoint : burst.startPoint)
+        .onAppear {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.74)) {
+                settled = true
+            }
+        }
     }
 }
 
@@ -1537,53 +1714,25 @@ struct FolderOverlayView: View {
         }
     }
 
-    /// Surface vitrée purement SwiftUI pour un fondu d'ouverture homogène à 120 Hz sans flash de carré noir.
+    /// Surface vitrée « Version 1 — Cristal Pur » pour un fondu d'ouverture homogène à 120 Hz sans flash de carré noir.
     @ViewBuilder
     private func folderPanelSurface(width: CGFloat, height: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
-        let fillColors: [Color] = {
+        let crystalStyle: IconAppearanceStyle = {
             switch theme {
-            case .dark:
-                return [
-                    Color.white.opacity(0.14),
-                    Color(white: 0.18).opacity(0.42),
-                    Color(white: 0.12).opacity(0.38)
-                ]
-            case .light:
-                return [
-                    Color.white.opacity(0.38),
-                    Color(red: 0.94, green: 0.96, blue: 1.0).opacity(0.24),
-                    Color.white.opacity(0.30)
-                ]
-            case .liquidGlass:
-                return [
-                    Color.white.opacity(0.20),
-                    Color(red: 0.88, green: 0.93, blue: 1.0).opacity(0.11),
-                    Color.white.opacity(0.15)
-                ]
+            case .dark: return .clearDark
+            case .light: return .light
+            case .liquidGlass: return .clearLiquid
             }
         }()
+        let spec = CrystalGlassSpec.resolve(style: crystalStyle, isFolder: true)
 
         ZStack {
-            shape
-                .fill(LinearGradient(colors: fillColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-            shape
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(theme == .dark ? 0.10 : 0.18),
-                            Color.white.opacity(0.03),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            shape
-                .strokeBorder(LiquidGlassStyle.specularBorder, lineWidth: 1.15)
+            CrystalGlassBackdrop(shape: shape, spec: spec)
+            CrystalGlassBackdrop.specularRim(shape: shape, spec: spec, lineWidth: 1.2)
         }
         .frame(width: width, height: height)
-        .shadow(color: .black.opacity(0.24), radius: 26, x: 0, y: 12)
+        .shadow(color: .black.opacity(0.26), radius: 26, x: 0, y: 12)
     }
 }
 
@@ -1603,11 +1752,7 @@ struct FavoritesDockView: View {
                     vm.activate(.app(app.id))
                 } label: {
                     VStack(spacing: 3) {
-                        Image(nsImage: IconCache.shared.icon(for: app.id))
-                            .resizable()
-                            .interpolation(.high)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 36, height: 36)
+                        LiveAppIconView(image: IconCache.shared.icon(for: app.id), size: 36)
                             .scaleEffect(isHovered ? 1.15 : 1.0)
                             .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
 

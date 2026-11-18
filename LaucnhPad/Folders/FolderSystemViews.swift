@@ -112,20 +112,23 @@ struct PremiumFolderIconView: View {
         }
     }
 
-    private var glassMaterialScheme: ColorScheme {
-        switch effectiveIconStyle {
-        case .dark, .clearDark:
-            return .dark
-        default:
-            return .light
-        }
+    private var explicitCustomColor: Color? {
+        guard let hex = customColorHex, !hex.isEmpty, let ns = NSColor(hexString: hex) else { return nil }
+        return Color(nsColor: ns)
     }
 
     private var customColor: Color {
-        if let hex = customColorHex, !hex.isEmpty, let ns = NSColor(hexString: hex) {
-            return Color(nsColor: ns)
-        }
-        return effectiveIconStyle == .tinted ? activeThemeTint : Color(red: 0.12, green: 0.56, blue: 1.0)
+        explicitCustomColor ?? (effectiveIconStyle == .tinted ? activeThemeTint : Color(red: 0.12, green: 0.56, blue: 1.0))
+    }
+
+    private func folderCrystalSpec(isPureLightPreset: Bool = false) -> CrystalGlassSpec {
+        CrystalGlassSpec.resolve(
+            style: effectiveIconStyle,
+            tintColor: activeThemeTint,
+            isFolder: true,
+            customFolderColor: explicitCustomColor,
+            isPureLightPreset: isPureLightPreset
+        )
     }
 
     var body: some View {
@@ -140,98 +143,14 @@ struct PremiumFolderIconView: View {
         .frame(width: size, height: size)
     }
 
-    // MARK: - 1. Dossiers Grille Squircle translucides cohérents avec le thème d'icônes
+    // MARK: - 1. Dossiers Grille Squircle « Version 1 — Cristal Pur »
 
     @ViewBuilder
     private func themeCoherentGlassBackground(shape: RoundedRectangle, isPureLightPreset: Bool = false) -> some View {
-        let iconTheme = effectiveIconStyle
-        let baseOpacity: Double = {
-            switch iconTheme {
-            case .transparent, .clearLiquid, .clearDark:
-                return 0.56
-            case .frostedGlass:
-                return 0.74
-            default:
-                return isPureLightPreset ? 0.76 : 0.78
-            }
-        }()
-
-        ZStack {
-            shape
-                .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, glassMaterialScheme)
-                .opacity(baseOpacity)
-
-            switch iconTheme {
-            case .dark:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color(white: 0.14).opacity(0.46), Color(white: 0.05).opacity(0.58)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .clearDark:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color(white: 0.12).opacity(0.28), Color(white: 0.04).opacity(0.38)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .tinted:
-                shape.fill(
-                    LinearGradient(
-                        colors: [activeThemeTint.opacity(0.32), activeThemeTint.opacity(0.16)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .monochrome:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color(white: 0.72).opacity(0.24), Color(white: 0.36).opacity(0.20)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .transparent, .clearLiquid, .frostedGlass:
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.20), Color.white.opacity(0.06)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            case .light, .original, .classicApple, .system:
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isPureLightPreset ? 0.36 : 0.24),
-                            Color.white.opacity(isPureLightPreset ? 0.20 : 0.10)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            }
-
-            // Lueur spéculaire douce en diagonale pour l'effet verre translucide
-            LinearGradient(
-                stops: [
-                    .init(color: Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.16 : 0.28), location: 0.0),
-                    .init(color: Color.clear, location: 0.45),
-                    .init(color: Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.08 : 0.16), location: 1.0)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .clipShape(shape)
-
-            if let hex = customColorHex, !hex.isEmpty {
-                shape.fill(customColor.opacity(0.22))
-            }
-        }
+        CrystalGlassBackdrop(
+            shape: shape,
+            spec: folderCrystalSpec(isPureLightPreset: isPureLightPreset)
+        )
     }
 
     @ViewBuilder
@@ -241,16 +160,11 @@ struct PremiumFolderIconView: View {
         let gap = s * 0.052
         let mini = (s * 0.72 - gap * 2) / 3
         let iconTheme = effectiveIconStyle
+        let isPureLightPreset = (style == .pureWhite)
+        let crystalSpec = folderCrystalSpec(isPureLightPreset: isPureLightPreset)
 
         ZStack {
-            switch style {
-            case .frostedGlass, .clearGlass:
-                themeCoherentGlassBackground(shape: shape, isPureLightPreset: false)
-            case .pureWhite:
-                themeCoherentGlassBackground(shape: shape, isPureLightPreset: true)
-            default:
-                themeCoherentGlassBackground(shape: shape, isPureLightPreset: false)
-            }
+            CrystalGlassBackdrop(shape: shape, spec: crystalSpec)
 
             // Mini-grille d'icônes (ou icône personnalisée si définie manuellement)
             if let symbol = customSymbol, !symbol.isEmpty {
@@ -263,10 +177,14 @@ struct PremiumFolderIconView: View {
                     if !icons.isEmpty {
                         HStack(spacing: s * 0.03) {
                             ForEach(0..<min(3, icons.count), id: \.self) { idx in
-                                Image(nsImage: icons[idx])
-                                    .resizable()
-                                    .interpolation(.high)
-                                    .frame(width: mini * 0.82, height: mini * 0.82)
+                                CrystalAppIconImage(
+                                    image: icons[idx],
+                                    size: mini * 0.82,
+                                    style: iconTheme,
+                                    isPro: licenseManager.isPro,
+                                    tintColor: iconTheme == .tinted ? activeThemeTint : nil,
+                                    useLiveGlass: false
+                                )
                             }
                         }
                     }
@@ -278,11 +196,14 @@ struct PremiumFolderIconView: View {
                             ForEach(0..<3, id: \.self) { column in
                                 let index = row * 3 + column
                                 if index < icons.count {
-                                    Image(nsImage: icons[index])
-                                        .resizable()
-                                        .interpolation(.high)
-                                        .frame(width: mini, height: mini)
-                                        .shadow(color: .black.opacity(0.20), radius: 1.2, y: 0.8)
+                                    CrystalAppIconImage(
+                                        image: icons[index],
+                                        size: mini,
+                                        style: iconTheme,
+                                        isPro: licenseManager.isPro,
+                                        tintColor: iconTheme == .tinted ? activeThemeTint : nil,
+                                        useLiveGlass: false
+                                    )
                                 } else {
                                     Color.clear.frame(width: mini, height: mini)
                                 }
@@ -292,22 +213,20 @@ struct PremiumFolderIconView: View {
                 }
             }
 
-            // Bordure verre subtile cohérente avec le thème actif
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [
-                        (iconTheme == .tinted ? activeThemeTint.opacity(0.72) : Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.30 : 0.56)),
-                        Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.10 : 0.16),
-                        (iconTheme == .tinted ? activeThemeTint.opacity(0.45) : Color.white.opacity(iconTheme == .dark || iconTheme == .clearDark ? 0.18 : 0.32))
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: max(0.85, s * 0.013)
+            // Biseau spéculaire fin « Version 1 — Cristal Pur »
+            CrystalGlassBackdrop.specularRim(
+                shape: shape,
+                spec: crystalSpec,
+                lineWidth: max(0.95, s * 0.0145)
             )
         }
         .frame(width: s, height: s)
-        .shadow(color: .black.opacity(iconTheme == .transparent || iconTheme == .clearLiquid ? 0.18 : 0.24), radius: s * 0.055, x: 0, y: s * 0.03)
+        .shadow(
+            color: .black.opacity(iconTheme == .transparent || iconTheme == .clearLiquid ? 0.20 : 0.24),
+            radius: s * 0.055,
+            x: 0,
+            y: s * 0.03
+        )
     }
 
     // MARK: - 2. Dossiers à Onglet Designer (Photo de Référence 4 : Backup, Design, New projects, Work files, LaunchMe)
@@ -827,9 +746,7 @@ struct FolderAppPickerSheet: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Image(nsImage: IconCache.shared.icon(for: app.id))
-                                    .resizable()
-                                    .frame(width: 26, height: 26)
+                                LiveAppIconView(image: IconCache.shared.icon(for: app.id), size: 26, useLiveGlass: false)
                                 Text(store.displayName(app.id))
                                     .font(.system(size: 12, weight: inFolder ? .semibold : .regular))
                                     .foregroundStyle(.white)
