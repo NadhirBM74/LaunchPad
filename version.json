@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.16",
-  "name": "LaunchPad v1.2.16",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.16",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.16\n\n- 📍 **Météo Locale Automatique** : Les widgets météo détectent désormais automatiquement la ville exacte où vous vous trouvez et affichent les conditions, prévisions horaires et prévisions sur 7 jours en temps réel.\n- 🏙️ **Sélecteur de Ville Intégré** : Cliquez sur un widget météo, passez par son menu contextuel ou depuis la galerie pour rechercher et choisir n'importe quelle ville dans le monde, revenir à votre position exacte ou basculer entre °C et °F.",
+  "tag_name": "v1.2.17",
+  "name": "LaunchPad v1.2.17",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.17",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.17\n\n- 🎨 **Boutons d'Édition Liquid Glass** : Les boutons `+ Widgets` et `Terminé` adoptent désormais exactement le même style de capsule Liquid Glass transparente que la barre de recherche.\n- 🔍 **Barre de Recherche Épurée** : Suppression du bouton Widgets à l'intérieur de la barre de recherche pour afficher plus d'espace et garder un design plus minimaliste.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.16.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.16/LaunchPad-v1.2.16.zip"
+      "name": "LaunchPad-v1.2.17.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.17/LaunchPad-v1.2.17.zip"
     },
     {
-      "name": "LaunchPad-v1.2.16.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.16/LaunchPad-v1.2.16.dmg"
+      "name": "LaunchPad-v1.2.17.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.17/LaunchPad-v1.2.17.dmg"
     }
   ]
 }

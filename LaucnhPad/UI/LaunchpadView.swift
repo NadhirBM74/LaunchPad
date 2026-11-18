@@ -311,16 +311,15 @@ struct LaunchpadRootView: View {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .bold))
                         Text(loc("widget.add_widget_short"))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13.5, weight: .semibold))
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .liquidGlassCapsule(interactive: true, intensity: liquidGlassIntensity)
-                    .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .padding(.horizontal, 16)
+                    .frame(height: 38)
+                    .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
                 }
                 .buttonStyle(.plain)
-                .position(x: max(60, layout.size.width * 0.06), y: layout.searchCenterY)
+                .position(x: max(70, layout.size.width * 0.06), y: layout.searchCenterY)
                 .transition(.opacity)
 
                 // Bouton "Terminé" en haut à droite
@@ -328,15 +327,14 @@ struct LaunchpadRootView: View {
                     vm.setEditing(false)
                 } label: {
                     Text(loc("common.done"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .liquidGlassCapsule(interactive: true, intensity: liquidGlassIntensity)
-                        .shadow(color: LiquidGlassStyle.shadowColor, radius: 8, y: 3)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .padding(.horizontal, 18)
+                        .frame(height: 38)
+                        .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
                 }
                 .buttonStyle(.plain)
-                .position(x: layout.size.width - max(60, layout.size.width * 0.06), y: layout.searchCenterY)
+                .position(x: layout.size.width - max(70, layout.size.width * 0.06), y: layout.searchCenterY)
                 .transition(.opacity)
             }
             searchBar
@@ -461,16 +459,8 @@ struct LaunchpadRootView: View {
         .padding(.leading, 14)
         .padding(.trailing, 8)
         .frame(width: 340, height: 38)
-        .liquidGlass(
-            in: Capsule(),
-            interactive: true,
-            tint: nil,
-            prominence: .clear,
-            intensity: liquidGlassIntensity
-        )
-        .contentShape(Capsule())
+        .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
         .onTapGesture { searchFocused = true }
-        .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
 
@@ -722,58 +712,54 @@ struct SearchMenuButton: View {
     let onSettings: () -> Void
     let onReorganize: () -> Void
     let onRefresh: () -> Void
-    @State private var hoveringWidget = false
     @State private var hoveringSettings = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            if let onAddWidget {
-                Button(action: onAddWidget) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus.square.on.square")
-                            .font(.system(size: 12.5, weight: .semibold))
-                        Text(loc("widget.add_widget_short"))
-                            .font(.system(size: 11.5, weight: .semibold))
-                    }
-                    .foregroundStyle(foreground.opacity(hoveringWidget ? 1.0 : 0.88))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(hoveringWidget ? 0.18 : 0.10), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .onHover { hoveringWidget = $0 }
-                .help(loc("launchpad.widgets_tooltip"))
-                .accessibilityLabel(loc("launchpad.widgets_a11y"))
-            }
-
-            Button(action: onSettings) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(foreground.opacity(hoveringSettings ? 1.0 : 0.85))
-                    .frame(width: 26, height: 26)
-                    .background(Color.white.opacity(hoveringSettings ? 0.16 : 0.0), in: Circle())
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .onHover { hoveringSettings = $0 }
-            .animation(.easeOut(duration: 0.12), value: hoveringSettings)
-            .help(loc("launchpad.settings_tooltip"))
-            .accessibilityLabel(loc("settings.title"))
-            .contextMenu {
-                if let onAddWidget {
-                    Button(loc("menu.widget_gallery"), action: onAddWidget)
-                }
-                if let onNewFolder {
-                    Button(loc("menu.new_folder"), action: onNewFolder)
-                }
-                Divider()
-                Button(loc("menu.settings"), action: onSettings)
-                Button(loc("menu.reorganize"), action: onReorganize)
-                Button(loc("menu.refresh"), action: onRefresh)
-                Divider()
-                Button(loc("menu.quit")) { NSApp.terminate(nil) }
-            }
+        Button(action: onSettings) {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(foreground.opacity(hoveringSettings ? 1.0 : 0.85))
+                .frame(width: 26, height: 26)
+                .background(Color.white.opacity(hoveringSettings ? 0.16 : 0.0), in: Circle())
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
+        .onHover { hoveringSettings = $0 }
+        .animation(.easeOut(duration: 0.12), value: hoveringSettings)
+        .help(loc("launchpad.settings_tooltip"))
+        .accessibilityLabel(loc("settings.title"))
+        .contextMenu {
+            if let onAddWidget {
+                Button(loc("menu.widget_gallery"), action: onAddWidget)
+            }
+            if let onNewFolder {
+                Button(loc("menu.new_folder"), action: onNewFolder)
+            }
+            Divider()
+            Button(loc("menu.settings"), action: onSettings)
+            Button(loc("menu.reorganize"), action: onReorganize)
+            Button(loc("menu.refresh"), action: onRefresh)
+            Divider()
+            Button(loc("menu.quit")) { NSApp.terminate(nil) }
+        }
+    }
+}
+
+/// Apparence capsule Liquid Glass transparente unifiée (identique à la barre de recherche).
+private struct SearchCapsuleGlassModifier: ViewModifier {
+    let intensity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .liquidGlass(
+                in: Capsule(),
+                interactive: true,
+                tint: nil,
+                prominence: .clear,
+                intensity: intensity
+            )
+            .contentShape(Capsule())
+            .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
     }
 }
 
