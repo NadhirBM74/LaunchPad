@@ -31,7 +31,7 @@ struct RuntimeConfig: Equatable {
                                    hotKeyEnabled: Prefs.hotKeyEnabled, hotKeyCode: Prefs.hotKeyCode,
                                    hotKeyModifiers: Prefs.hotKeyModifiers, pinch: Prefs.pinchMode,
                                    hotCorner: Prefs.hotCorner, interceptF4: Prefs.interceptF4, sources: Prefs.allSources,
-                                   iconStyle: Prefs.defaults.string(forKey: PrefKey.iconStyle) ?? "dark",
+                                   iconStyle: Prefs.defaults.string(forKey: PrefKey.iconStyle) ?? "original",
                                    tintedIcons: Prefs.tintedIcons,
                                    tintedIconColor: Prefs.tintedIconColor,
                                    appLogo: Prefs.appLogo)
@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let menuBar = MenuBarManager()
     private var appliedConfig: RuntimeConfig?
     private var configTask: Task<Void, Never>?
+    private let launchStartTime: CFTimeInterval = CACurrentMediaTime()
 
     override init() {
         Prefs.migrateLegacyValues()
@@ -66,10 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchpad.onOpenSettings = { [weak self] in self?.openSettings() }
         launchpad.onDidHide = { [weak self] in
             self?.settings.launchpadDidHide()
-            AdminTestWindowController.shared.launchpadDidHide()
+            if AdminTestWindowController.isSharedVisible {
+                AdminTestWindowController.shared.launchpadDidHide()
+            }
         }
         launchpad.isOtherWindowVisible = { [weak self] in
-            (self?.settings.isVisible ?? false) || AdminTestWindowController.shared.isVisible
+            (self?.settings.isVisible ?? false) || AdminTestWindowController.isSharedVisible
         }
         launchpad.onRequestCloseOtherWindow = { [weak self] in
             if self?.settings.isVisible == true {
@@ -115,9 +118,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         store.start()
-        AppNotificationManager.shared.configure()
         applyConfiguration(force: true)
-        importLaunchOSOnce()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard let self else { return }
+            AppNotificationManager.shared.configure()
+            self.importLaunchOSOnce()
+        }
 
         let isFirstLaunch = !Prefs.defaults.bool(forKey: PrefKey.hasLaunchedBefore)
         if isFirstLaunch {
@@ -197,7 +204,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if UpdateManager.shared.autoCheckEnabled {
+        let autoCheckEnabled = (Prefs.defaults.object(forKey: PrefKey.autoCheckUpdates) as? Bool) ?? true
+        if autoCheckEnabled {
             Task {
                 try? await Task.sleep(for: .seconds(3))
                 UpdateManager.shared.checkForUpdates(manual: false)
@@ -390,6 +398,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else if arguments.contains("--show-settings") {
             settings.show()
+        } else if arguments.contains("--perf-benchmark") {
+            let launchMs = (CACurrentMediaTime() - launchStartTime) * 1000.0
+            PerformanceBenchmark.run(delegate: self, didFinishLaunchingMs: launchMs)
         }
     }
 
@@ -400,7 +411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        store.saveNow()
+        store.flushSavesSync()
         WidgetManager.shared.saveWidgetsNow()
         HotKeyManager.shared.unregister()
         InputEventMonitor.shared.stopAll()
@@ -424,7 +435,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func openSettings() {
+    func openSettings() {
         if launchpad.isVisible {
             settings.show(above: launchpad.panelLevel, on: launchpad.panelScreen)
         } else {
@@ -457,7 +468,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = config.appLogo.image
         }
         if previous?.showDock != config.showDock {
-            NSApp.setActivationPolicy(config.showDock || settings.isVisible || AdminTestWindowController.shared.isVisible ? .regular : .accessory)
+            NSApp.setActivationPolicy(config.showDock || settings.isVisible || AdminTestWindowController.isSharedVisible ? .regular : .accessory)
         }
         if force || previous?.hotKeyEnabled != config.hotKeyEnabled || previous?.hotKeyCode != config.hotKeyCode || previous?.hotKeyModifiers != config.hotKeyModifiers {
             if config.hotKeyEnabled {

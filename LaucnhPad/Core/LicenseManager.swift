@@ -135,6 +135,7 @@ final class LicenseManager: ObservableObject {
     private var countdownTimer: Timer?
     private var activeCountdownObservers: Int = 0
     private var expirationWatchdogTask: Task<Void, Never>?
+    private var hasLoadedAppleProfile = false
 
     /// Identifiant de l'instance d'activation attribué par l'API de licence (Lemon Squeezy / Polar)
     /// Permet de comptabiliser exactement 1, 2 ou 5 appareils Mac activés.
@@ -182,12 +183,19 @@ final class LicenseManager: ObservableObject {
             }
         }
 
-        reconcileKeychainInBackground(
-            cachedStart: loadedTrialStartDate,
-            cachedEnd: loadedTrialEndDate,
-            cachedHasUsed: loadedHasUsedTrial
-        )
-        loadAppleAccountProfile()
+        // Ne pas bloquer le démarrage avec le Trousseau si la licence/essai est déjà connu localement
+        if !loadedIsProLifetime && (loadedTrialStartDate == nil || loadedTrialEndDate == nil || !loadedHasUsedTrial) {
+            reconcileKeychainInBackground(
+                cachedStart: loadedTrialStartDate,
+                cachedEnd: loadedTrialEndDate,
+                cachedHasUsed: loadedHasUsedTrial
+            )
+        }
+        // Nom instantané sans IPC OpenDirectory ; l'avatar haute résolution est chargé paresseusement à l'ouverture des Réglages.
+        let userName = NSUserName()
+        let fallbackFull = NSFullUserName()
+        self.appleAccountFirstName = Self.extractFirstName(from: fallbackFull)
+            ?? (userName.prefix(1).uppercased() + userName.dropFirst())
     }
 
     private func reconcileKeychainInBackground(cachedStart: Date?, cachedEnd: Date?, cachedHasUsed: Bool) {
@@ -223,8 +231,16 @@ final class LicenseManager: ObservableObject {
         }
     }
 
+    /// Charge paresseusement le profil Apple (avatar + prénom OpenDirectory) uniquement lorsque les Réglages sont ouverts.
+    func loadAppleAccountProfileIfNeeded() {
+        guard !hasLoadedAppleProfile else { return }
+        hasLoadedAppleProfile = true
+        loadAppleAccountProfile()
+    }
+
     /// Extrait la photo de profil et le prénom du compte Apple / macOS local sans bloquer le thread principal au démarrage.
     func loadAppleAccountProfile() {
+        hasLoadedAppleProfile = true
         let userName = NSUserName()
         let fallbackFull = NSFullUserName()
         self.appleAccountFirstName = Self.extractFirstName(from: fallbackFull)
@@ -235,46 +251,43 @@ final class LicenseManager: ObservableObject {
             var extractedAvatarData: Data? = nil
             var extractedPicPath: String? = nil
 
-            if let identity = CBIdentity(name: userName, authority: .default()) {
-                if let tiff = identity.image?.tiffRepresentation {
-                    extractedAvatarData = tiff
+            if let node = try? ODNode(session: .default(), type: ODNodeType(kODNodeTypeLocalNodes)),
+               let record = try? node.record(withRecordType: kODRecordTypeUsers, name: userName, attributes: nil),
+               let attrs = try? record.recordDetails(forAttributes: [
+                    kODAttributeTypeFirstName,
+                    kODAttributeTypeFullName,
+                    kODAttributeTypeJPEGPhoto,
+                    kODAttributeTypePicture
+               ]) {
+                if let firstArr = attrs[kODAttributeTypeFirstName] as? [Any],
+                   let firstVal = firstArr.first as? String,
+                   !firstVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    extractedFirstName = firstVal.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-                if !identity.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    extractedFirstName = Self.extractFirstName(from: identity.fullName)
+                if extractedFirstName == nil,
+                   let fullArr = attrs[kODAttributeTypeFullName] as? [Any],
+                   let fullVal = fullArr.first as? String,
+                   !fullVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    extractedFirstName = Self.extractFirstName(from: fullVal)
+                }
+                if let photoArr = attrs[kODAttributeTypeJPEGPhoto] as? [Any],
+                   let photoData = photoArr.first as? Data {
+                    extractedAvatarData = photoData
+                }
+                if extractedAvatarData == nil,
+                   let picArr = attrs[kODAttributeTypePicture] as? [Any],
+                   let picPath = picArr.first as? String {
+                    extractedPicPath = picPath
                 }
             }
 
-            if extractedAvatarData == nil || extractedFirstName == nil {
-                if let node = try? ODNode(session: .default(), type: ODNodeType(kODNodeTypeLocalNodes)),
-                   let record = try? node.record(withRecordType: kODRecordTypeUsers, name: userName, attributes: nil),
-                   let attrs = try? record.recordDetails(forAttributes: [
-                        kODAttributeTypeFirstName,
-                        kODAttributeTypeFullName,
-                        kODAttributeTypeJPEGPhoto,
-                        kODAttributeTypePicture
-                   ]) {
-                    if extractedFirstName == nil,
-                       let firstArr = attrs[kODAttributeTypeFirstName] as? [Any],
-                       let firstVal = firstArr.first as? String,
-                       !firstVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        extractedFirstName = firstVal.trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
-                    if extractedFirstName == nil,
-                       let fullArr = attrs[kODAttributeTypeFullName] as? [Any],
-                       let fullVal = fullArr.first as? String,
-                       !fullVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        extractedFirstName = Self.extractFirstName(from: fullVal)
-                    }
-                    if extractedAvatarData == nil,
-                       let photoArr = attrs[kODAttributeTypeJPEGPhoto] as? [Any],
-                       let photoData = photoArr.first as? Data {
-                        extractedAvatarData = photoData
-                    }
-                    if extractedAvatarData == nil,
-                       let picArr = attrs[kODAttributeTypePicture] as? [Any],
-                       let picPath = picArr.first as? String {
-                        extractedPicPath = picPath
-                    }
+            if extractedAvatarData == nil && extractedPicPath == nil,
+               let identity = CBIdentity(name: userName, authority: .default()) {
+                if let tiff = identity.image?.tiffRepresentation {
+                    extractedAvatarData = tiff
+                }
+                if extractedFirstName == nil, !identity.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    extractedFirstName = Self.extractFirstName(from: identity.fullName)
                 }
             }
 

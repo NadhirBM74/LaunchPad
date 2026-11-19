@@ -78,9 +78,7 @@ struct IconAppearanceShowcaseView: View {
                 Spacer()
 
                 Button {
-                    IconCache.shared.removeStyleImages()
                     NotificationCenter.default.post(name: .launchpadIconStyleDidChange, object: "force")
-                    onStyleChanged?()
                     showFeedback(loc("icon_showcase.refresh_done"))
                 } label: {
                     Label(loc("icon_showcase.refresh_btn"), systemImage: "arrow.clockwise")
@@ -314,7 +312,8 @@ struct IconAppearanceShowcaseView: View {
                     tintColor: resolvedTint,
                     iconSize: 48,
                     isSelected: activeStyle == .dark,
-                    isDarkBackground: false
+                    isDarkBackground: false,
+                    isPro: licenseManager.isPro
                 ) {
                     selectMode(.dark)
                 }
@@ -327,7 +326,8 @@ struct IconAppearanceShowcaseView: View {
                     tintColor: resolvedTint,
                     iconSize: 48,
                     isSelected: activeStyle == .light,
-                    isDarkBackground: false
+                    isDarkBackground: false,
+                    isPro: licenseManager.isPro
                 ) {
                     selectMode(.light)
                 }
@@ -340,7 +340,8 @@ struct IconAppearanceShowcaseView: View {
                     tintColor: resolvedTint,
                     iconSize: 48,
                     isSelected: activeStyle == .tinted,
-                    isDarkBackground: false
+                    isDarkBackground: false,
+                    isPro: licenseManager.isPro
                 ) {
                     selectMode(.tinted)
                 }
@@ -395,7 +396,8 @@ struct IconAppearanceShowcaseView: View {
                         tintColor: resolvedTint,
                         iconSize: 44,
                         isSelected: activeStyle == .clearDark,
-                        isDarkBackground: true
+                        isDarkBackground: true,
+                        isPro: licenseManager.isPro
                     ) {
                         selectMode(.clearDark)
                     }
@@ -408,7 +410,8 @@ struct IconAppearanceShowcaseView: View {
                         tintColor: resolvedTint,
                         iconSize: 44,
                         isSelected: activeStyle == .frostedGlass,
-                        isDarkBackground: true
+                        isDarkBackground: true,
+                        isPro: licenseManager.isPro
                     ) {
                         selectMode(.frostedGlass)
                     }
@@ -421,7 +424,8 @@ struct IconAppearanceShowcaseView: View {
                         tintColor: resolvedTint,
                         iconSize: 44,
                         isSelected: activeStyle == .clearLiquid,
-                        isDarkBackground: true
+                        isDarkBackground: true,
+                        isPro: licenseManager.isPro
                     ) {
                         selectMode(.clearLiquid)
                     }
@@ -479,6 +483,7 @@ private struct IconShowcaseRowButton: View, Equatable {
     let iconSize: CGFloat
     let isSelected: Bool
     let isDarkBackground: Bool
+    let isPro: Bool
     let action: () -> Void
 
     static func == (lhs: IconShowcaseRowButton, rhs: IconShowcaseRowButton) -> Bool {
@@ -487,6 +492,7 @@ private struct IconShowcaseRowButton: View, Equatable {
             && lhs.iconSize == rhs.iconSize
             && lhs.isSelected == rhs.isSelected
             && lhs.isDarkBackground == rhs.isDarkBackground
+            && lhs.isPro == rhs.isPro
             && (lhs.style != .tinted || lhs.tintColor == rhs.tintColor)
     }
 
@@ -498,7 +504,8 @@ private struct IconShowcaseRowButton: View, Equatable {
                         kind: kind,
                         style: style,
                         tintColor: tintColor,
-                        size: iconSize
+                        size: iconSize,
+                        isPro: isPro
                     )
                     .equatable()
                 }

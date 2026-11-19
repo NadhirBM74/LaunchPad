@@ -104,12 +104,16 @@ nonisolated struct LayoutFile: Codable, Sendable {
 
 @MainActor
 final class LaunchpadStore: ObservableObject {
-    @Published private(set) var catalog: [String: AppInfo] = [:]
+    @Published private(set) var catalog: [String: AppInfo] = [:] {
+        didSet { cachedHiddenApps = nil }
+    }
     /// Disposition enregistrée (peut contenir des apps absentes ou masquées : elles restent à leur place).
     @Published private(set) var items: [LayoutItem] = []
     /// Disposition affichée (uniquement les apps présentes et visibles).
     @Published private(set) var visibleItems: [LayoutItem] = []
-    @Published private(set) var hidden: Set<String> = []
+    @Published private(set) var hidden: Set<String> = [] {
+        didSet { cachedHiddenApps = nil }
+    }
     @Published private(set) var customNames: [String: String] = [:]
     @Published private(set) var runningBundleIDs: Set<String> = []
     private(set) var runningRevision = 0
@@ -118,6 +122,8 @@ final class LaunchpadStore: ObservableObject {
     /// Incrémenté à chaque modification du catalogue ou de la visibilité (cache de recherche).
     private(set) var revision = 0
 
+    private var visibleFoldersByID: [String: FolderData] = [:]
+    private var cachedHiddenApps: [AppInfo]?
     private var hasLayoutFile = false
     private var started = false
     private var isLaunchpadVisible = false
@@ -148,7 +154,9 @@ final class LaunchpadStore: ObservableObject {
         IconCache.shared.onAsyncBatchReady = { [weak self] in
             self?.iconsVersion &+= 1
         }
-        updateRunningApps()
+        Task { @MainActor [weak self] in
+            self?.updateRunningApps()
+        }
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(self, selector: #selector(runningAppsChanged), name: NSWorkspace.didLaunchApplicationNotification, object: nil)
         center.addObserver(self, selector: #selector(runningAppsChanged), name: NSWorkspace.didTerminateApplicationNotification, object: nil)
@@ -180,7 +188,10 @@ final class LaunchpadStore: ObservableObject {
     @objc private func launchpadVisibilityNotification(_ note: Notification) {
         let visible = (note.object as? Bool) ?? false
         isLaunchpadVisible = visible
-        guard visible else { return }
+        guard visible else {
+            IconCache.shared.trimTransientCaches()
+            return
+        }
         if needsRunningAppsRefresh {
             needsRunningAppsRefresh = false
             updateRunningApps()
@@ -220,9 +231,11 @@ final class LaunchpadStore: ObservableObject {
         guard let snap = note.object as? LiveWeatherSnapshot else { return }
         var copy = items
         var changed = false
+        var shouldPersist = false
         for idx in copy.indices {
             guard var w = copy[idx].widget, w.kind == .weather else { continue }
-            if w.weatherCity != snap.city || w.weatherUnit != snap.unit || w.weatherTemp != snap.temp || w.weatherCondition != snap.condition || w.weatherFeelsLike != snap.feelsLike {
+            let cityOrUnitChanged = w.weatherCity != snap.city || w.weatherUnit != snap.unit
+            if cityOrUnitChanged || w.weatherTemp != snap.temp || w.weatherCondition != snap.condition || w.weatherFeelsLike != snap.feelsLike {
                 w.weatherCity = snap.city
                 w.weatherUnit = snap.unit
                 w.weatherTemp = snap.temp
@@ -230,10 +243,11 @@ final class LaunchpadStore: ObservableObject {
                 w.weatherFeelsLike = snap.feelsLike
                 copy[idx] = .widget(w)
                 changed = true
+                if cityOrUnitChanged { shouldPersist = true }
             }
         }
         if changed {
-            commit(copy)
+            commit(copy, save: shouldPersist)
         }
     }
 
@@ -273,7 +287,7 @@ final class LaunchpadStore: ObservableObject {
             needsRunningAppsRefresh = false
             updateRunningApps()
         }
-        if needsScanRefresh || Date().timeIntervalSince(lastScan) > 30 {
+        if needsScanRefresh || Date().timeIntervalSince(lastScan) > 300 {
             needsScanRefresh = false
             refresh()
         }
@@ -289,21 +303,27 @@ final class LaunchpadStore: ObservableObject {
     }
 
     /// Vide le cache de style d'icônes (en préservant les icônes personnalisées) et les régénère en arrière-plan.
-    func reloadIcons() {
+    func reloadIcons(force: Bool = false) {
         IconCache.shared.invalidateStyleCache()
-        lastAppliedIconSignature = currentIconSignature()
+        let signature = currentIconSignature()
+        guard force || signature != lastAppliedIconSignature else { return }
+        lastAppliedIconSignature = signature
         IconCache.shared.removeStyleImages()
         iconsVersion &+= 1
         prewarmIcons(Array(catalog.keys))
     }
 
-    /// Pré-rend en parallèle et hors thread principal toutes les icônes manquantes dans le style actif.
+    /// Pré-rend en parallèle et hors thread principal les icônes prioritaires (pages 1–2 en RAM, pages lointaines sur disque).
     private func prewarmIcons(_ candidateIDs: [String]) {
-        let missingIcons = candidateIDs.filter { !IconCache.shared.contains($0) && !CustomIconManager.shared.hasOverride(for: $0) }
+        let hiddenSet = hidden
+        let missingIcons = candidateIDs.filter {
+            !hiddenSet.contains($0) && !IconCache.shared.contains($0) && !CustomIconManager.shared.hasOverride(for: $0)
+        }
         guard !missingIcons.isEmpty else { return }
 
         // Prioriser les éléments visibles en tête de grille pour un affichage instantané
         var orderedSet = Set<String>()
+        var folderPreviewIDs = Set<String>()
         var prioritized: [String] = []
         prioritized.reserveCapacity(missingIcons.count)
         let missingLookup = Set(missingIcons)
@@ -312,8 +332,11 @@ final class LaunchpadStore: ObservableObject {
             case .app(let id) where missingLookup.contains(id):
                 if orderedSet.insert(id).inserted { prioritized.append(id) }
             case .folder(let folder):
-                for id in folder.apps.prefix(9) where missingLookup.contains(id) {
-                    if orderedSet.insert(id).inserted { prioritized.append(id) }
+                for id in folder.apps.prefix(9) {
+                    folderPreviewIDs.insert(id)
+                    if missingLookup.contains(id), orderedSet.insert(id).inserted {
+                        prioritized.append(id)
+                    }
                 }
             default: break
             }
@@ -326,39 +349,74 @@ final class LaunchpadStore: ObservableObject {
         let tintRGB = IconCache.shared.activeTintRGB
         let tintKey = IconCache.shared.activeTintKey
         let isPro = Prefs.defaults.bool(forKey: PrefKey.isProUnlocked)
+        let miniTargets = folderPreviewIDs
 
         iconPreloadTask?.cancel()
         iconPreloadTask = Task { [weak self] in
-            // Vague 1 : icônes immédiatement visibles en page 1 / premiers dossiers
-            let wave1Count = min(56, prioritized.count)
+            // Vague 1 : icônes immédiatement visibles en page 1 / premiers dossiers (chargement disque prioritaire)
+            let wave1Count = min(44, prioritized.count)
             let wave1 = Array(prioritized.prefix(wave1Count))
             if !wave1.isEmpty {
-                let rendered1 = await IconRenderer.renderAsync(wave1, style: style, tintRGB: tintRGB, isPro: isPro)
+                let batch1 = await IconRenderer.renderAsyncWithDiskCache(
+                    wave1,
+                    style: style,
+                    tintKey: tintKey,
+                    tintRGB: tintRGB,
+                    isPro: isPro,
+                    miniTargetPaths: miniTargets,
+                    priority: .userInitiated
+                )
                 guard let self, !Task.isCancelled else { return }
-                IconCache.shared.store(rendered1, forStyle: style, tintKey: tintKey, isPro: isPro)
+                IconCache.shared.store(
+                    batch1.images,
+                    newlyRendered: batch1.newlyRendered,
+                    miniThumbnails: batch1.miniThumbnails,
+                    forStyle: style,
+                    tintKey: tintKey,
+                    isPro: isPro
+                )
+                IconCache.shared.finishStyleTransition()
                 self.iconsVersion &+= 1
             }
 
-            // Vague 2 : icônes des pages suivantes par paquets bornés
-            if prioritized.count > wave1Count {
-                let chunkSize = 64
-                var idx = wave1Count
-                var storedAny = false
-                while idx < prioritized.count {
-                    guard !Task.isCancelled else { return }
-                    let end = min(prioritized.count, idx + chunkSize)
-                    let chunk = Array(prioritized[idx..<end])
-                    let rendered = await IconRenderer.renderAsync(chunk, style: style, tintRGB: tintRGB, isPro: isPro)
-                    guard !Task.isCancelled else { return }
-                    if !rendered.isEmpty {
-                        IconCache.shared.store(rendered, forStyle: style, tintKey: tintKey, isPro: isPro)
-                        storedAny = true
-                    }
-                    idx = end
-                }
-                if let self, !Task.isCancelled, storedAny {
+            // Vague 2 : page 2 en RAM + miniatures 64×64 hors thread principal (zéro saccade au balayage 120 Hz)
+            let wave2End = min(prioritized.count, wave1Count + 40)
+            if wave2End > wave1Count {
+                let wave2 = Array(prioritized[wave1Count..<wave2End])
+                let batch2 = await IconRenderer.renderAsyncWithDiskCache(
+                    wave2,
+                    style: style,
+                    tintKey: tintKey,
+                    tintRGB: tintRGB,
+                    isPro: isPro,
+                    miniTargetPaths: miniTargets,
+                    priority: .utility
+                )
+                guard let self, !Task.isCancelled else { return }
+                if !batch2.images.isEmpty {
+                    IconCache.shared.store(
+                        batch2.images,
+                        newlyRendered: batch2.newlyRendered,
+                        miniThumbnails: batch2.miniThumbnails,
+                        forStyle: style,
+                        tintKey: tintKey,
+                        isPro: isPro
+                    )
                     self.iconsVersion &+= 1
                 }
+            }
+
+            // Vague 3 : pages lointaines pré-rendues uniquement vers le cache disque (zéro empreinte RAM inutile)
+            if prioritized.count > wave2End {
+                let tail = Array(prioritized[wave2End...])
+                await IconRenderer.warmDiskCacheAsync(
+                    tail,
+                    style: style,
+                    tintKey: tintKey,
+                    tintRGB: tintRGB,
+                    isPro: isPro,
+                    maxConcurrency: 2
+                )
             }
         }
     }
@@ -481,7 +539,7 @@ final class LaunchpadStore: ObservableObject {
     func isVisibleApp(_ id: String) -> Bool { catalog[id] != nil && !hidden.contains(id) }
 
     func visibleFolder(_ id: String) -> FolderData? {
-        visibleItems.lazy.compactMap(\.folder).first { $0.id == id }
+        visibleFoldersByID[id]
     }
 
     func storedFolder(containing appID: String) -> FolderData? {
@@ -489,7 +547,10 @@ final class LaunchpadStore: ObservableObject {
     }
 
     var hiddenApps: [AppInfo] {
-        hidden.compactMap { catalog[$0] }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        if let cached = cachedHiddenApps { return cached }
+        let sorted = hidden.compactMap { catalog[$0] }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        cachedHiddenApps = sorted
+        return sorted
     }
 
     var allVisibleApps: [AppInfo] {
@@ -542,6 +603,13 @@ final class LaunchpadStore: ObservableObject {
         let computed = computeVisibleItems(from: items)
         if computed != visibleItems {
             visibleItems = computed
+            var folders: [String: FolderData] = [:]
+            for item in computed {
+                if case .folder(let folder) = item {
+                    folders[folder.id] = folder
+                }
+            }
+            visibleFoldersByID = folders
             revision &+= 1
         }
     }
@@ -850,6 +918,7 @@ final class LaunchpadStore: ObservableObject {
         } else {
             customNames[id] = trimmed
         }
+        revision &+= 1
         commit(items)
     }
 
@@ -1288,8 +1357,7 @@ final class LaunchpadStore: ObservableObject {
             for vIdx in candidateIndices {
                 var trialVisible = visibleBase
                 trialVisible.insert(newItem, at: vIdx)
-                let assigned = GridLayoutEngine.pageAssignments(items: trialVisible, columns: columns, rows: rows)
-                if vIdx < assigned.count && assigned[vIdx] == desiredPage {
+                if GridLayoutEngine.pageOfItem(at: vIdx, in: trialVisible, columns: columns, rows: rows) == desiredPage {
                     return insert(newItem, atVisibleIndex: vIdx, in: copy, visibleBase: visibleBase)
                 }
             }
@@ -1300,12 +1368,11 @@ final class LaunchpadStore: ObservableObject {
         for vIdx in startSearch...visibleBase.count {
             var trialVisible = visibleBase
             trialVisible.insert(newItem, at: vIdx)
-            let assigned = GridLayoutEngine.pageAssignments(items: trialVisible, columns: columns, rows: rows)
-            if vIdx < assigned.count {
-                if assigned[vIdx] == desiredPage {
+            if let assignedPage = GridLayoutEngine.pageOfItem(at: vIdx, in: trialVisible, columns: columns, rows: rows) {
+                if assignedPage == desiredPage {
                     return insert(newItem, atVisibleIndex: vIdx, in: copy, visibleBase: visibleBase)
                 }
-                if assigned[vIdx] > desiredPage {
+                if assignedPage > desiredPage {
                     break
                 }
             }
@@ -1489,12 +1556,12 @@ final class LaunchpadStore: ObservableObject {
 
     // MARK: Persistance (JSON dans Application Support)
 
-    private var layoutURL: URL {
+    private lazy var layoutURL: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
         return base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "LaucnhPad", isDirectory: true)
             .appendingPathComponent("layout.json")
-    }
+    }()
 
     private func loadFromDisk() {
         guard let data = try? Data(contentsOf: layoutURL) else { return }
@@ -1555,5 +1622,12 @@ final class LaunchpadStore: ObservableObject {
                 NSLog("LaucnhPad: échec d'enregistrement de la disposition: \(error.localizedDescription)")
             }
         }
+    }
+
+    func flushSavesSync() {
+        if saveTask != nil {
+            saveNow()
+        }
+        saveWriteQueue.sync {}
     }
 }

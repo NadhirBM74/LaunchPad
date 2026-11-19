@@ -67,9 +67,30 @@ public final class CalendarEventService: ObservableObject {
     @Published public private(set) var events: [LaunchpadCalendarEvent] = []
     @Published public private(set) var isAuthorized: Bool = false
 
-    private let store = EKEventStore()
+    private var _store: EKEventStore?
     private var lastFetchUptime: TimeInterval = 0
     private var fetchTask: Task<Void, Never>?
+    private var hasRegisteredStoreChanged = false
+
+    private func ensureEventStore() -> EKEventStore {
+        if let existing = _store { return existing }
+        let created = EKEventStore()
+        _store = created
+        if !hasRegisteredStoreChanged {
+            hasRegisteredStoreChanged = true
+            NotificationCenter.default.addObserver(
+                forName: .EKEventStoreChanged,
+                object: created,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, LaunchpadViewModel.isLaunchpadVisible else { return }
+                    self.refreshEvents(force: true)
+                }
+            }
+        }
+        return created
+    }
 
     private init() {
         loadFallbackSchedule()
@@ -83,14 +104,11 @@ public final class CalendarEventService: ObservableObject {
                 self.loadFallbackSchedule()
             }
         }
-        Task { @MainActor [weak self] in
-            self?.refreshEvents(force: true)
-        }
     }
 
     public func refreshEvents(force: Bool = false) {
         let now = ProcessInfo.processInfo.systemUptime
-        if !force && (now - lastFetchUptime) < 3.0 {
+        if !force && (now - lastFetchUptime) < 15.0 {
             return
         }
         let status = EKEventStore.authorizationStatus(for: .event)
@@ -108,8 +126,9 @@ public final class CalendarEventService: ObservableObject {
     public func requestAccessIfNeeded() {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            let store = self.ensureEventStore()
             do {
-                let granted = try await self.store.requestFullAccessToEvents()
+                let granted = try await store.requestFullAccessToEvents()
                 self.isAuthorized = granted
                 if granted {
                     self.loadSystemEvents()
@@ -122,12 +141,12 @@ public final class CalendarEventService: ObservableObject {
 
     private func loadSystemEvents() {
         fetchTask?.cancel()
+        let eventStore = ensureEventStore()
         fetchTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let cal = Calendar.current
             let start = cal.startOfDay(for: Date())
             guard let end = cal.date(byAdding: .day, value: 14, to: start) else { return }
-            let eventStore = self.store
             let loaded = await Task.detached(priority: .utility) { () -> [LaunchpadCalendarEvent] in
                 let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
                 let ekEvents = eventStore.events(matching: predicate).sorted { $0.startDate < $1.startDate }
@@ -283,7 +302,11 @@ struct PremiumCalendarWidgetView: View {
                         lineWidth: 1.0
                     )
             )
-            .shadow(color: .black.opacity(0.34), radius: 14, x: 0, y: 7)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.001))
+                    .shadow(color: .black.opacity(0.34), radius: 14, x: 0, y: 7)
+            )
         }
         .frame(width: w, height: h)
         .onAppear {

@@ -57,7 +57,8 @@ struct LaunchpadRootView: View {
     let wallpaper: WallpaperProvider
 
     var body: some View {
-        if vm.isPanelVisible {
+        // Garde l'arbre SwiftUI chaud après le premier affichage (évite 60-85 ms de reconstruction à chaque réouverture)
+        if vm.hasMountedPanel {
             LaunchpadActiveBody(vm: vm, store: store, wallpaper: wallpaper)
         } else {
             Color.clear
@@ -141,8 +142,15 @@ private struct LaunchpadActiveBody: View {
                 }
                 Group {
                     if windowRect != nil {
-                        launchpad(size: rect.size, windowed: true)
-                            .shadow(color: .black.opacity(0.45), radius: 30, y: 14)
+                        ZStack {
+                            // Ombre découplée de l'arbre vivant : zéro re-flou offscreen 30 pt à 120 Hz
+                            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                .fill(Color.black.opacity(0.001))
+                                .frame(width: rect.size.width, height: rect.size.height)
+                                .shadow(color: .black.opacity(0.45), radius: 30, y: 14)
+                                .allowsHitTesting(false)
+                            launchpad(size: rect.size, windowed: true)
+                        }
                     } else {
                         launchpad(size: rect.size, windowed: false)
                     }
@@ -204,7 +212,8 @@ private struct LaunchpadActiveBody: View {
                 style: backgroundStyle,
                 dimming: backgroundStyle.fixedDimming,
                 liquidGlassIntensity: liquidGlassIntensity,
-                backdropOpacity: backdropOpacity
+                backdropOpacity: backdropOpacity,
+                isActive: vm.isPanelVisible
             )
                 .equatable()
                 .frame(width: size.width, height: size.height)
@@ -217,9 +226,8 @@ private struct LaunchpadActiveBody: View {
             SettingsDimmingOverlay(chrome: vm.settingsChrome)
                 .frame(width: size.width, height: size.height)
             if let state = vm.drag {
-                if let widgetConfig = store.visibleItems.compactMap(\.widget).first(where: { $0.id == state.id }) {
-                    let placed = vm.placedItem(for: state.id)
-                    FloatingDragWidget(pointer: vm.pointer, config: widgetConfig, grabOffset: state.grabOffset, targetSize: placed?.frameSize)
+                if let placed = vm.placedItem(for: state.id), let widgetConfig = placed.item.widget {
+                    FloatingDragWidget(pointer: vm.pointer, config: widgetConfig, grabOffset: state.grabOffset, targetSize: placed.frameSize)
                         .frame(width: size.width, height: size.height)
                         .zIndex(270)
                 } else {
@@ -446,6 +454,7 @@ private struct LaunchpadActiveBody: View {
             PagesLayer(
                 vm: vm,
                 store: store,
+                pageRange: vm.pageRange,
                 metrics: layout.grid,
                 showLabels: showLabels,
                 showRunning: showRunning,
@@ -453,10 +462,10 @@ private struct LaunchpadActiveBody: View {
                 tint: activeTintColor
             )
                 .offset(x: layout.gridOrigin.x, y: layout.gridOrigin.y)
-                .scaleEffect(vm.overlayFolder != nil ? 0.93 : 1.0)
-                .opacity(vm.overlayFolder != nil ? 0.32 : 1.0)
-                .allowsHitTesting(vm.overlayFolder == nil && !vm.showWidgetGallery && !vm.showWeatherCityPicker && !vm.isPresentingModal)
-                .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: vm.overlayFolder != nil)
+                .scaleEffect(vm.openFolderID != nil ? 0.93 : 1.0)
+                .opacity(vm.openFolderID != nil ? 0.32 : 1.0)
+                .allowsHitTesting(vm.openFolderID == nil && !vm.showWidgetGallery && !vm.showWeatherCityPicker && !vm.isPresentingModal)
+                .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: vm.openFolderID != nil)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: iconScale)
             if vm.displayItems.isEmpty {
                 emptyState
@@ -561,6 +570,9 @@ private struct LaunchpadActiveBody: View {
     }
 
     private func tileModel(for id: String) -> TileModel {
+        if let placed = vm.placedItem(for: id) {
+            return tileModel(for: placed.item)
+        }
         if let item = vm.displayItems.first(where: { $0.id == id }) ?? store.visibleItems.first(where: { $0.id == id }) {
             return tileModel(for: item)
         }
@@ -572,34 +584,33 @@ private struct LaunchpadActiveBody: View {
     }
 }
 
-// MARK: - Bande des pages (isolée : seul ce calque observe le décalage du trackpad)
+// MARK: - Bande des pages (isolée : seul ce ViewModifier observe le décalage à 120 Hz)
 
-/// Un seul ForEach pour toutes les pages : l'identité des icônes reste stable pendant un glisser.
-/// Le décalage horizontal vit dans `PageScroll` : suivre le doigt à 120 Hz ne reconstruit
-/// ni le fond, ni la recherche, ni la vue racine — uniquement cette bande d'icônes.
-private struct PageScrollOffsetContainer<Content: View>: View {
+/// Applique le décalage horizontal en direct sans jamais réévaluer le ForEach des icônes :
+/// suivre le doigt à 120 Hz ne modifie que la transformation de translation sur le calque.
+private struct PageScrollOffsetEffect: ViewModifier {
     @ObservedObject var pageScroll: PageScroll
-    @ViewBuilder let content: () -> Content
 
-    var body: some View {
-        content()
-            .offset(x: pageScroll.offset)
+    func body(content: Content) -> some View {
+        content.offset(x: pageScroll.offset)
     }
 }
 
 struct PagesLayer: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
+    @ObservedObject var pageRange: PageRangeState
     let metrics: GridMetrics
     let showLabels: Bool
     let showRunning: Bool
     let reduceMotion: Bool
     let tint: Color?
 
-    init(vm: LaunchpadViewModel, store: LaunchpadStore, metrics: GridMetrics,
+    init(vm: LaunchpadViewModel, store: LaunchpadStore, pageRange: PageRangeState, metrics: GridMetrics,
          showLabels: Bool, showRunning: Bool, reduceMotion: Bool, tint: Color?) {
         self.vm = vm
         self.store = store
+        self.pageRange = pageRange
         self.metrics = metrics
         self.showLabels = showLabels
         self.showRunning = showRunning
@@ -607,32 +618,48 @@ struct PagesLayer: View {
         self.tint = tint
     }
 
-    var body: some View {
-        let m = metrics
-        let placed = vm.placedDisplayItems(metrics: m)
-        let width = m.size.width
-        let draggingID = vm.drag?.id
-        let baseMin = min(vm.page, vm.lastPage)
-        let baseMax = max(vm.page, vm.lastPage)
-        let bounds = vm.scrollPageBounds
+    private func visiblePlacedItems(metrics m: GridMetrics, draggingID: String?) -> [PlacedItem] {
+        let _ = vm.placedDisplayItems(metrics: m)
+        let maxValidPage = max(0, vm.pageCount - 1)
+        let baseMin = min(vm.page, pageRange.lastPage)
+        let baseMax = max(vm.page, pageRange.lastPage)
+        let bounds = pageRange.scrollPageBounds
         let rawMin = min(baseMin, bounds?.lowerBound ?? baseMin)
         let rawMax = max(baseMax, bounds?.upperBound ?? baseMax)
-        let minPage = draggingID != nil ? (rawMin - 1) : rawMin
-        let maxPage = draggingID != nil ? (rawMax + 1) : rawMax
-        let visiblePlaced = placed.filter { entry in
-            (entry.page >= minPage && entry.page <= maxPage) || entry.id == draggingID
+        // Garde toujours les pages adjacentes (page-1 ... page+1) pré-montées pour un balayage 120 Hz
+        // sans aucun montage/démontage de tuiles ni micro-saccade sur la première frame du geste.
+        let minPage = max(0, rawMin - 1)
+        let maxPage = min(maxValidPage, max(minPage, rawMax + 1))
+        var visiblePlaced: [PlacedItem] = []
+        visiblePlaced.reserveCapacity((maxPage - minPage + 1) * max(1, m.columns * m.rows))
+        var hasDragged = false
+        for p in minPage...maxPage {
+            let pageEntries = vm.placedItems(onPage: p)
+            for entry in pageEntries {
+                if entry.id == draggingID { hasDragged = true }
+                visiblePlaced.append(entry)
+            }
         }
+        if let draggingID, !hasDragged, let draggedEntry = vm.placedItem(for: draggingID) {
+            visiblePlaced.append(draggedEntry)
+        }
+        return visiblePlaced
+    }
+
+    var body: some View {
+        let m = metrics
+        let width = m.size.width
+        let visiblePlaced = visiblePlacedItems(metrics: m, draggingID: vm.drag?.id)
         let _ = store.iconsVersion
 
-        PageScrollOffsetContainer(pageScroll: vm.pageScroll) {
-            ZStack(alignment: .topLeading) {
-                ForEach(visiblePlaced) { entry in
-                    tile(entry, metrics: m)
-                        .position(x: CGFloat(entry.page) * width + entry.center.x, y: entry.center.y)
-                }
+        ZStack(alignment: .topLeading) {
+            ForEach(visiblePlaced) { entry in
+                tile(entry, metrics: m)
+                    .position(x: CGFloat(entry.page) * width + entry.center.x, y: entry.center.y)
             }
-            .frame(width: width, height: m.size.height, alignment: .topLeading)
         }
+        .frame(width: width, height: m.size.height, alignment: .topLeading)
+        .modifier(PageScrollOffsetEffect(pageScroll: vm.pageScroll))
     }
 
     private func isRemovable(_ item: LayoutItem) -> Bool {
@@ -1364,7 +1391,7 @@ struct FloatingDragWidget: View {
     var targetSize: CGSize? = nil
 
     var body: some View {
-        WidgetHostView(config: config, targetSize: targetSize)
+        WidgetHostView(config: config, targetSize: targetSize, isPreview: true)
             .equatable()
             .scaleEffect(1.05)
             .shadow(color: .black.opacity(0.45), radius: 20, y: 12)
@@ -1832,57 +1859,82 @@ struct FolderOverlayView: View {
 
 // MARK: - Barre de favoris épinglée (Pro)
 
+private struct FavoriteDockIconButton: View, Equatable {
+    let app: AppInfo
+    let icon: NSImage
+    let isRunning: Bool
+    let onOpen: () -> Void
+    let onRemove: () -> Void
+    @State private var isHovered = false
+
+    static func == (lhs: FavoriteDockIconButton, rhs: FavoriteDockIconButton) -> Bool {
+        lhs.app.id == rhs.app.id && lhs.app.name == rhs.app.name && lhs.icon === rhs.icon && lhs.isRunning == rhs.isRunning
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(spacing: 3) {
+                LiveAppIconView(image: icon, size: 36)
+                    .scaleEffect(isHovered ? 1.15 : 1.0)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
+
+                if isRunning {
+                    Circle()
+                        .fill(Color.white.opacity(0.85))
+                        .frame(width: 4, height: 4)
+                } else {
+                    Color.clear.frame(width: 4, height: 4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(app.name)
+        .contextMenu {
+            Button(loc("menu.open"), action: onOpen)
+            Divider()
+            Button(loc("menu.remove_from_favorites"), action: onRemove)
+        }
+    }
+}
+
 struct FavoritesDockView: View {
     @ObservedObject var vm: LaunchpadViewModel
     @ObservedObject var store: LaunchpadStore
-    @State private var hoveredID: String?
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
 
     var body: some View {
+        let _ = store.iconsVersion
         HStack(spacing: 12) {
             ForEach(vm.favoriteApps) { app in
-                let isHovered = hoveredID == app.id
-                Button {
-                    vm.activate(.app(app.id))
-                } label: {
-                    VStack(spacing: 3) {
-                        LiveAppIconView(image: IconCache.shared.icon(for: app.id), size: 36)
-                            .scaleEffect(isHovered ? 1.15 : 1.0)
-                            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isHovered)
-
-                        if store.isRunning(app) {
-                            Circle()
-                                .fill(Color.white.opacity(0.85))
-                                .frame(width: 4, height: 4)
-                        } else {
-                            Color.clear.frame(width: 4, height: 4)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .onHover { hovered in hoveredID = hovered ? app.id : nil }
-                .help(app.name)
-                .contextMenu {
-                    Button(loc("menu.open")) { vm.activate(.app(app.id)) }
-                    Divider()
-                    Button(loc("menu.remove_from_favorites")) { vm.toggleFavorite(app.id) }
-                }
+                FavoriteDockIconButton(
+                    app: app,
+                    icon: IconCache.shared.icon(for: app.id),
+                    isRunning: store.isRunning(app),
+                    onOpen: { vm.activate(.app(app.id)) },
+                    onRemove: { vm.toggleFavorite(app.id) }
+                )
+                .equatable()
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .background {
-            if backgroundStyle == .liquidGlass {
+            ZStack {
                 Capsule()
-                    .liquidGlass(in: Capsule(), interactive: false)
-            } else {
-                Capsule()
-                    .fill(Color.black.opacity(0.42))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.8))
+                    .fill(Color.black.opacity(0.001))
+                    .shadow(color: .black.opacity(0.38), radius: 18, x: 0, y: 9)
+                    .shadow(color: .black.opacity(0.16), radius: 4, x: 0, y: 2)
+                if backgroundStyle == .liquidGlass {
+                    Color.clear
+                        .liquidGlass(in: Capsule(), interactive: false)
+                } else {
+                    Capsule()
+                        .fill(Color.black.opacity(0.42))
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.8))
+                }
             }
         }
-        .shadow(color: .black.opacity(0.38), radius: 18, x: 0, y: 9)
-        .shadow(color: .black.opacity(0.16), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -2061,8 +2113,18 @@ struct WidgetGalleryModal: View {
                     .frame(width: 1)
 
                 // 2. Panneau principal à droite (En-tête + Recherche + Grille + Aperçu + Barre d'ajout)
+                let filtered = filteredCards
+                let activeWidgetsByGroup: [WidgetCategoryGroup: CustomWidgetConfig] = {
+                    var map: [WidgetCategoryGroup: CustomWidgetConfig] = [:]
+                    for item in store.items {
+                        if let w = item.widget {
+                            map[w.kind.categoryGroup] = w
+                        }
+                    }
+                    return map
+                }()
                 VStack(spacing: 0) {
-                    rightHeader
+                    rightHeader(filteredCount: filtered.count)
                         .padding(.horizontal, 24)
                         .padding(.top, 22)
                         .padding(.bottom, 14)
@@ -2078,7 +2140,7 @@ struct WidgetGalleryModal: View {
 
                     // Grille visuelle de cartes unifiée
                     ScrollView(.vertical, showsIndicators: false) {
-                        if filteredCards.isEmpty {
+                        if filtered.isEmpty {
                             VStack(spacing: 8) {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 28))
@@ -2094,8 +2156,8 @@ struct WidgetGalleryModal: View {
                                 columns: [GridItem(.adaptive(minimum: 152, maximum: 185), spacing: 14)],
                                 spacing: 16
                             ) {
-                                ForEach(filteredCards) { card in
-                                    galleryGridCard(card)
+                                ForEach(filtered) { card in
+                                    galleryGridCard(card, existingInCategory: activeWidgetsByGroup[card.config.kind.categoryGroup])
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -2109,7 +2171,7 @@ struct WidgetGalleryModal: View {
                         .frame(height: 1)
 
                     // Prévisualisation animée style Apple selon la taille sélectionnée
-                    liveSizePreviewBanner
+                    liveSizePreviewBanner(activeWidgetsByGroup: activeWidgetsByGroup)
                         .padding(.horizontal, 24)
                         .padding(.top, 10)
                         .padding(.bottom, 6)
@@ -2120,7 +2182,7 @@ struct WidgetGalleryModal: View {
                         .frame(height: 1)
 
                     // Barre d'action en bas : Taille + Bouton Ajouter
-                    bottomActionBar
+                    bottomActionBar(activeWidgetsByGroup: activeWidgetsByGroup)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 11)
                         .background(aura.footerBackground)
@@ -2131,18 +2193,26 @@ struct WidgetGalleryModal: View {
             .frame(width: modalWidth, height: modalHeight)
             .background(
                 VelvetAuraWindowBackground(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+                    .equatable()
             )
             .clipShape(RoundedRectangle(cornerRadius: aura.windowCornerRadius, style: .continuous))
             .overlay {
                 VelvetAuraWindowOverlay(theme: backgroundStyle, cornerRadius: aura.windowCornerRadius)
+                    .equatable()
+            }
+            .background {
+                // Ombre découplée de la grille défilante (évite un re-flou offscreen 900×640 à chaque scroll)
+                RoundedRectangle(cornerRadius: aura.windowCornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.001))
+                    .shadow(
+                        color: backgroundStyle == .light ? Color(red: 0.30, green: 0.11, blue: 0.58).opacity(0.18) : Color.black.opacity(0.58),
+                        radius: 36,
+                        y: 16
+                    )
+                    .allowsHitTesting(false)
             }
             .foregroundStyle(aura.primaryText)
             .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
-            .shadow(
-                color: backgroundStyle == .light ? Color(red: 0.30, green: 0.11, blue: 0.58).opacity(0.18) : Color.black.opacity(0.58),
-                radius: 36,
-                y: 16
-            )
             .position(x: rootSize.width / 2, y: rootSize.height / 2)
             .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
@@ -2150,7 +2220,12 @@ struct WidgetGalleryModal: View {
         .onAppear {
             if !searchText.isEmpty { searchText = "" }
             allCards = Self.cachedCards(for: locManager.effectiveLanguageCode)
-            WeatherService.shared.refreshIfNeeded(requestLocationPermission: true)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                if vm.showWidgetGallery {
+                    WeatherService.shared.refreshIfNeeded(requestLocationPermission: true)
+                }
+            }
         }
         .onChange(of: locManager.effectiveLanguageCode) { _, code in
             allCards = Self.cachedCards(for: code)
@@ -2253,13 +2328,13 @@ struct WidgetGalleryModal: View {
         .buttonStyle(.plain)
     }
 
-    private var rightHeader: some View {
+    private func rightHeader(filteredCount: Int) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectedCategory.title)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(aura.primaryText)
-                Text(filteredCards.count > 1 ? loc("widget.gallery.model_plural", filteredCards.count) : loc("widget.gallery.model_single", filteredCards.count))
+                Text(filteredCount > 1 ? loc("widget.gallery.model_plural", filteredCount) : loc("widget.gallery.model_single", filteredCount))
                     .font(.system(size: 12.5))
                     .foregroundStyle(aura.secondaryText)
             }
@@ -2323,9 +2398,8 @@ struct WidgetGalleryModal: View {
         )
     }
 
-    private func galleryGridCard(_ card: GalleryCardItem) -> some View {
+    private func galleryGridCard(_ card: GalleryCardItem, existingInCategory: CustomWidgetConfig?) -> some View {
         let isSelected = (selectedCardID == card.id)
-        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
         let isActiveOnBoard: Bool = {
             guard let existing = existingInCategory else { return false }
             switch card.category {
@@ -2386,9 +2460,9 @@ struct WidgetGalleryModal: View {
     }
 
     @ViewBuilder
-    private var liveSizePreviewBanner: some View {
+    private func liveSizePreviewBanner(activeWidgetsByGroup: [WidgetCategoryGroup: CustomWidgetConfig]) -> some View {
         let card = activeCard
-        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
+        let existingInCategory = activeWidgetsByGroup[card.config.kind.categoryGroup]
         let chosenSize = card.config.kind.allowedSizes.contains(selectedSize) ? selectedSize : card.config.kind.defaultSize
         let previewConfig = applyingGalleryOptions(to: card.config, category: card.category, sizeOverride: chosenSize)
         let pw = previewConfig.size.width
@@ -2554,9 +2628,9 @@ struct WidgetGalleryModal: View {
         }
     }
 
-    private var bottomActionBar: some View {
+    private func bottomActionBar(activeWidgetsByGroup: [WidgetCategoryGroup: CustomWidgetConfig]) -> some View {
         let card = activeCard
-        let existingInCategory = store.widget(in: card.config.kind.categoryGroup)
+        let existingInCategory = activeWidgetsByGroup[card.config.kind.categoryGroup]
         let actionLabel = existingInCategory == nil ? loc("custom_tile.add") : loc("widget.gallery.replace")
         let actionIcon = existingInCategory == nil ? "plus.circle.fill" : "arrow.triangle.2.circlepath.circle.fill"
 

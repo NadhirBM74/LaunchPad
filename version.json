@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.25",
-  "name": "LaunchPad v1.2.25",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.25",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.25\n\n- ✨ **Refonte Unifiée « Aura Nocturne Velvet » (Réglages & Menu Widgets)** : Les fenêtres des Réglages et de la galerie de widgets partagent désormais exactement le même design modernisé, tout en conservant votre format familier (barre latérale gauche et panneau droit).\n- 🎨 **Réactivité Complète aux 3 Thèmes** : Adaptation harmonieuse et automatique en temps réel selon le thème choisi (*Liquid Glass*, *Sombre* ou *Clair*), y compris dans le Menu Widgets qui réagit désormais parfaitement au mode clair comme au mode sombre.\n- 💜 **Finitions Velours & Signatures Lumineuses** : Filet lumineux subtil au sommet des fenêtres, aura ambiante douce, cartes fondues sans contours rigides et barre verticale lumineuse sur l’onglet actif.\n- 🧩 **Cohérence Visuelle & Contraste Optimisé** : Synchronisation automatique de l’apparence AppKit de la fenêtre des Réglages pour un contraste impeccable quelle que soit l’apparence système de macOS, et pastille *ESC* harmonisée dans les deux menus.",
+  "tag_name": "v1.2.26",
+  "name": "LaunchPad v1.2.26",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.26",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.26\n\n- ⚡ **Fluidité 120 FPS & Balayage Zéro Saccade** : Optimisation complète du pipeline de rendu SwiftUI et Metal, préchargement des pages adjacentes et découplage des ombres GPU pour des transitions d'une fluidité exemplaire, sans aucun compromis visuel.\n- 🧠 **Mémoire RAM & Cache d'Icônes Optimisés** : Enveloppe Retina zéro-copie, cache mémoire borné, chargement disque asynchrone prioritaire et accélération du rendu d'icônes 512×512 pour diviser l'empreinte mémoire de moitié.\n- 🔋 **Veille Silencieuse & CPU Quasi-Nul en Arrière-Plan** : Démontage automatique des Réglages à la fermeture, désactivation du flou GPU hors écran, filtrage clavier sur thread dédié et suspension intelligente des services Météo, Musique et Calendrier.\n- 🚀 **Démarrage & Réouverture Éclair** : Différé des initialisations non critiques, recherche pré-indexée, localisation sans verrou sur le fil principal et panneau maintenu prêt pour un affichage quasi instantané.\n- 🛠️ **Build Release Haute Performance (ThinLTO)** : Activation de l'optimisation inter-procédurale et de l'élimination du code mort en production, tout en préservant intégralement le design, les animations et l'ensemble de vos fonctionnalités.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.25.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.25/LaunchPad-v1.2.25.zip"
+      "name": "LaunchPad-v1.2.26.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.26/LaunchPad-v1.2.26.zip"
     },
     {
-      "name": "LaunchPad-v1.2.25.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.25/LaunchPad-v1.2.25.dmg"
+      "name": "LaunchPad-v1.2.26.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.26/LaunchPad-v1.2.26.dmg"
     }
   ]
 }

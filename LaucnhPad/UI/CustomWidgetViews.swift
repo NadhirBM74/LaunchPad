@@ -667,7 +667,7 @@ struct VinylPlayerWidgetView: View {
                 .frame(width: size, height: size)
                 .shadow(color: .black.opacity(shadowOpacity), radius: shadowRadius, x: shadowX, y: shadowY)
 
-            TimelineView(.animation(paused: !isSpinning)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isSpinning)) { timeline in
                 let spinAngle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
                 disc
                     .scaleEffect(discScale)

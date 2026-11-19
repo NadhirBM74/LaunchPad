@@ -1,6 +1,8 @@
 import Foundation
 import AppKit
 import UserNotifications
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Gestionnaire centralisé des notifications système macOS avec logo de l'application intégré.
 @MainActor
@@ -144,7 +146,7 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
             return logoFile
         }
         guard let sourceImage else { return nil }
-        let pxSize = 512
+        let pxSize = 128
         var proposed = NSRect(origin: .zero, size: NSSize(width: pxSize, height: pxSize))
         guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(
@@ -166,18 +168,15 @@ public final class AppNotificationManager: NSObject, UNUserNotificationCenterDel
             NSGraphicsContext.restoreGraphicsState()
         }
         guard let outCG = ctx.makeImage(),
-              let pngData = NSBitmapImageRep(cgImage: outCG).representation(using: .png, properties: [:]) else {
+              let dest = CGImageDestinationCreateWithURL(logoFile as CFURL, UTType.png.identifier as CFString, 1, nil) else {
             return nil
         }
-        do {
-            try pngData.write(to: logoFile, options: .atomic)
-            logoCacheLock.lock()
-            cachedLogoURLByRaw[logoRaw] = logoFile
-            logoCacheLock.unlock()
-            return logoFile
-        } catch {
-            return nil
-        }
+        CGImageDestinationAddImage(dest, outCG, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        logoCacheLock.lock()
+        cachedLogoURLByRaw[logoRaw] = logoFile
+        logoCacheLock.unlock()
+        return logoFile
     }
 
     // MARK: - Notifications Métier Utiles

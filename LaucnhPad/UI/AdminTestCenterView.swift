@@ -38,7 +38,14 @@ enum AdminTestCategory: String, CaseIterable, Identifiable {
 
 @MainActor
 final class AdminTestWindowController: NSObject, NSWindowDelegate {
-    static let shared = AdminTestWindowController()
+    private static var _shared: AdminTestWindowController?
+    static var shared: AdminTestWindowController {
+        if let existing = _shared { return existing }
+        let created = AdminTestWindowController()
+        _shared = created
+        return created
+    }
+    static var isSharedVisible: Bool { _shared?.isVisible == true }
 
     private var window: NSWindow?
     private var isClosing = false
@@ -1180,8 +1187,8 @@ private struct AdminUpdatesSectionView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.25)") {
-                            updates.setDebugState(.upToDate(version: "1.2.25"))
+                        Button("À jour (v1.2.26)") {
+                            updates.setDebugState(.upToDate(version: "1.2.26"))
                             AdminManager.shared.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

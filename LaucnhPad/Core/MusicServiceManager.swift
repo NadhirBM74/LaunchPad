@@ -330,6 +330,26 @@ public final class MusicServiceManager: ObservableObject {
     // Feedback pour l'UI
     @Published public var alertMessage: String? = nil
 
+    private final class BoundedDataCache {
+        private let cache: NSCache<NSString, NSData> = {
+            let c = NSCache<NSString, NSData>()
+            c.countLimit = 24
+            c.totalCostLimit = 12 * 1024 * 1024
+            return c
+        }()
+
+        subscript(_ key: String) -> Data? {
+            get { cache.object(forKey: key as NSString).map { Data(referencing: $0) } }
+            set {
+                if let newValue {
+                    cache.setObject(newValue as NSData, forKey: key as NSString, cost: max(1, newValue.count))
+                } else {
+                    cache.removeObject(forKey: key as NSString)
+                }
+            }
+        }
+    }
+
     // Objets privés
     private let authAnchorProvider = WebAuthPresentationAnchorProvider()
     private var pendingPKCEVerifier: String?
@@ -338,10 +358,11 @@ public final class MusicServiceManager: ObservableObject {
     private var timer: Timer?
     private var progressTimer: Timer?
     private var lastProgressTickUptime: TimeInterval = 0
-    private var artworkCache: [String: Data] = [:]
+    private let artworkCache = BoundedDataCache()
     private var failedArtworkQueries: [String: TimeInterval] = [:]
     private var inFlightArtworkQueries: Set<String> = []
     private var inFlightSpotifyRefreshTask: Task<String?, Never>?
+    private var inFlightNowPlayingTask: Task<Void, Never>?
     private var spotifyNotificationRefreshTask: Task<Void, Never>?
     private var scheduledRefreshTask: Task<Void, Never>?
     private var randomLaunchTask: Task<Void, Never>?
@@ -349,7 +370,6 @@ public final class MusicServiceManager: ObservableObject {
     private var lastRefreshUptime: TimeInterval = 0
     private var lastSystemFetchUptime: TimeInterval = 0
     private var cachedSystemTrack: NowPlayingTrack? = nil
-    private var hasPendingNotificationUpdate = false
     private var isLaunchpadCurrentlyVisible: Bool = LaunchpadViewModel.isLaunchpadVisible
     private var activeWidgetObserverCount: Int = 0
     private var cachedSpotifyInstalled: (value: Bool, uptime: TimeInterval)?
@@ -437,14 +457,14 @@ public final class MusicServiceManager: ObservableObject {
             selector: #selector(handleAppleMusicNotification(_:)),
             name: NSNotification.Name("com.apple.Music.playerInfo"),
             object: nil,
-            suspensionBehavior: .deliverImmediately
+            suspensionBehavior: .drop
         )
         dnc.addObserver(
             self,
             selector: #selector(handleSpotifyNotification(_:)),
             name: NSNotification.Name("com.spotify.client.PlaybackStateChanged"),
             object: nil,
-            suspensionBehavior: .deliverImmediately
+            suspensionBehavior: .drop
         )
         NotificationCenter.default.addObserver(
             self,
@@ -458,7 +478,6 @@ public final class MusicServiceManager: ObservableObject {
         guard let isVisible = notif.object as? Bool else { return }
         self.isLaunchpadCurrentlyVisible = isVisible
         if isVisible {
-            self.hasPendingNotificationUpdate = false
             if self.activeWidgetObserverCount > 0 {
                 self.refreshNowPlaying(force: true)
                 self.startPolling()
@@ -469,11 +488,7 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     @objc private func handleAppleMusicNotification(_ notif: Notification) {
-        guard let info = notif.userInfo, activeWidgetObserverCount > 0 else { return }
-        if !isLaunchpadCurrentlyVisible {
-            hasPendingNotificationUpdate = true
-            return
-        }
+        guard let info = notif.userInfo, activeWidgetObserverCount > 0, isLaunchpadCurrentlyVisible else { return }
         processAppleMusicNotification(info: info)
     }
 
@@ -509,11 +524,7 @@ public final class MusicServiceManager: ObservableObject {
     }
 
     @objc private func handleSpotifyNotification(_ notif: Notification) {
-        guard let info = notif.userInfo, activeWidgetObserverCount > 0 else { return }
-        if !isLaunchpadCurrentlyVisible {
-            hasPendingNotificationUpdate = true
-            return
-        }
+        guard let info = notif.userInfo, activeWidgetObserverCount > 0, isLaunchpadCurrentlyVisible else { return }
         processSpotifyNotification(info: info)
     }
 
@@ -623,6 +634,9 @@ public final class MusicServiceManager: ObservableObject {
         timer = nil
         progressTimer?.invalidate()
         progressTimer = nil
+        inFlightNowPlayingTask?.cancel()
+        inFlightNowPlayingTask = nil
+        isRefreshingNowPlaying = false
         spotifyNotificationRefreshTask?.cancel()
         spotifyNotificationRefreshTask = nil
         scheduledRefreshTask?.cancel()
@@ -1016,11 +1030,13 @@ public final class MusicServiceManager: ObservableObject {
         isRefreshingNowPlaying = true
         lastRefreshUptime = now
 
-        Task { @MainActor [weak self] in
+        inFlightNowPlayingTask?.cancel()
+        inFlightNowPlayingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
                 self.isRefreshingNowPlaying = false
                 self.lastRefreshUptime = ProcessInfo.processInfo.systemUptime
+                self.inFlightNowPlayingTask = nil
             }
             await self.performRefreshNowPlaying(force: force)
         }
@@ -1241,14 +1257,7 @@ public final class MusicServiceManager: ObservableObject {
 
     // MARK: - Résolution Avancée et Cache de Pochettes d'Album
 
-    private static let maxArtworkCacheEntries = 30
-
     private func storeArtwork(_ data: Data, forKey key: String) {
-        if artworkCache.count >= Self.maxArtworkCacheEntries, artworkCache[key] == nil {
-            // Éviction légère de la moitié des entrées pour borner l'empreinte RAM
-            let keysToRemove = Array(artworkCache.keys.prefix(Self.maxArtworkCacheEntries / 2))
-            for k in keysToRemove { artworkCache.removeValue(forKey: k) }
-        }
         artworkCache[key] = data
     }
 
@@ -1312,9 +1321,7 @@ public final class MusicServiceManager: ObservableObject {
             }
 
             // Étape B : Extraction de la pochette locale via osascript hors du thread principal
-            let localData: Data? = allowLocalMusicApp ? await Task.detached(priority: .userInitiated) {
-                Self.extractLocalMusicArtwork()
-            }.value : nil
+            let localData: Data? = allowLocalMusicApp ? await Self.extractLocalMusicArtwork() : nil
 
             if let localData, !localData.isEmpty {
                 let decoded = await Task.detached(priority: .userInitiated) {
@@ -1403,7 +1410,7 @@ public final class MusicServiceManager: ObservableObject {
         return nil
     }
 
-    nonisolated private static func extractLocalMusicArtwork() -> Data? {
+    nonisolated private static func extractLocalMusicArtwork() async -> Data? {
         let tempFile = FileManager.default.temporaryDirectory
             .appendingPathComponent("lp_artwork_\(UUID().uuidString).dat")
         defer { try? FileManager.default.removeItem(at: tempFile) }
@@ -1430,7 +1437,7 @@ public final class MusicServiceManager: ObservableObject {
         end if
         return ""
         """
-        let result = runOsascriptSync(scriptSource, timeoutSeconds: 5.0)
+        let result = await runOsascript(scriptSource, timeoutSeconds: 5.0)
         guard result.success, result.output == "ok",
               let data = try? Data(contentsOf: tempFile), !data.isEmpty else {
             return nil
@@ -1533,13 +1540,13 @@ public final class MusicServiceManager: ObservableObject {
     return ""
     """
 
-    nonisolated private static func executeCachedAppleMusicQuery() -> String? {
-        let res = runOsascriptSync(appleMusicQueryScriptSource, timeoutSeconds: 4.0)
+    nonisolated private static func executeCachedAppleMusicQuery() async -> String? {
+        let res = await runOsascript(appleMusicQueryScriptSource, timeoutSeconds: 4.0)
         return res.success && !res.output.isEmpty ? res.output : nil
     }
 
-    nonisolated private static func executeCachedSpotifyQuery() -> String? {
-        let res = runOsascriptSync(spotifyQueryScriptSource, timeoutSeconds: 4.0)
+    nonisolated private static func executeCachedSpotifyQuery() async -> String? {
+        let res = await runOsascript(spotifyQueryScriptSource, timeoutSeconds: 4.0)
         return res.success && !res.output.isEmpty ? res.output : nil
     }
 
@@ -1548,9 +1555,7 @@ public final class MusicServiceManager: ObservableObject {
             return nil
         }
 
-        let result = await Task.detached(priority: .utility) { () -> String? in
-            Self.executeCachedAppleMusicQuery()
-        }.value
+        let result = await Self.executeCachedAppleMusicQuery()
 
         guard let result, !result.isEmpty else { return nil }
 
@@ -1590,9 +1595,7 @@ public final class MusicServiceManager: ObservableObject {
             return nil
         }
 
-        let result = await Task.detached(priority: .utility) { () -> String? in
-            Self.executeCachedSpotifyQuery()
-        }.value
+        let result = await Self.executeCachedSpotifyQuery()
 
         guard let result, !result.isEmpty else { return nil }
 
@@ -2379,37 +2382,67 @@ public final class MusicServiceManager: ObservableObject {
         }
     }
 
-    nonisolated private static func runOsascriptSync(_ source: String, timeoutSeconds: TimeInterval = 6.0) -> (success: Bool, output: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", source]
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
+    nonisolated private static let osascriptQueue = DispatchQueue(
+        label: "me.LaucnhPad.music.osascript",
+        qos: .utility,
+        attributes: .concurrent
+    )
 
-        let timeoutWorkItem = DispatchWorkItem { [weak process] in
-            guard let process, process.isRunning else { return }
-            process.terminate()
+    nonisolated private static func runOsascript(_ source: String, timeoutSeconds: TimeInterval = 6.0) async -> (success: Bool, output: String) {
+        await withCheckedContinuation { continuation in
+            osascriptQueue.async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                process.arguments = ["-e", source]
+                let stdout = Pipe()
+                process.standardOutput = stdout
+                process.standardError = FileHandle.nullDevice
+
+                final class ResumeBox: @unchecked Sendable {
+                    private let lock = NSLock()
+                    private var resumed = false
+                    func claim() -> Bool {
+                        lock.lock()
+                        defer { lock.unlock() }
+                        if resumed { return false }
+                        resumed = true
+                        return true
+                    }
+                }
+                let resumeBox = ResumeBox()
+
+                let timeoutWorkItem = DispatchWorkItem { [weak process] in
+                    guard let process, process.isRunning else { return }
+                    let pid = process.processIdentifier
+                    process.terminate()
+                    osascriptQueue.asyncAfter(deadline: .now() + 0.5) {
+                        if process.isRunning && pid > 0 {
+                            _ = Darwin.kill(pid, SIGKILL)
+                        }
+                    }
+                }
+                osascriptQueue.asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
+
+                process.terminationHandler = { proc in
+                    timeoutWorkItem.cancel()
+                    let data = stdout.fileHandleForReading.readDataToEndOfFile()
+                    let output = (String(data: data, encoding: .utf8) ?? "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if resumeBox.claim() {
+                        continuation.resume(returning: (proc.terminationStatus == 0, output))
+                    }
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    timeoutWorkItem.cancel()
+                    if resumeBox.claim() {
+                        continuation.resume(returning: (false, ""))
+                    }
+                }
+            }
         }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
-        defer { timeoutWorkItem.cancel() }
-
-        do {
-            try process.run()
-        } catch {
-            return (false, "")
-        }
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let output = (String(data: data, encoding: .utf8) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (process.terminationStatus == 0, output)
-    }
-
-    nonisolated private static func runOsascript(_ source: String) async -> (success: Bool, output: String) {
-        await Task.detached(priority: .userInitiated) {
-            runOsascriptSync(source)
-        }.value
     }
 
     // MARK: - Utilitaires PKCE

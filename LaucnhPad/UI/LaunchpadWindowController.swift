@@ -43,10 +43,11 @@ final class LaunchpadWindowController: NSObject {
     }
 
     private let panel: LaunchpadPanel
-    private var monitors: [Any] = []
+    nonisolated(unsafe) private var monitors: [Any] = []
     private(set) var isVisible = false
     private var lastHidden = Date.distantPast
-    private var hideTask: Task<Void, Never>?
+    nonisolated(unsafe) private var hideTask: Task<Void, Never>?
+    nonisolated(unsafe) private var refreshStaleTask: Task<Void, Never>?
     private var appliedPresentationOptions: NSApplication.PresentationOptions = []
     private weak var currentScreen: NSScreen?
 
@@ -54,7 +55,7 @@ final class LaunchpadWindowController: NSObject {
         self.store = store
         viewModel = LaunchpadViewModel(store: store)
         panel = LaunchpadPanel(contentRect: NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900),
-                               styleMask: [.borderless], backing: .buffered, defer: false)
+                               styleMask: [.borderless], backing: .buffered, defer: true)
         super.init()
 
         panel.isOpaque = false
@@ -132,7 +133,13 @@ final class LaunchpadWindowController: NSObject {
         viewModel.prepareForShow(topInset: topInset(for: screen), resetPage: resetPage)
         applyLayout(on: screen, display: false)
         wallpaper.update(for: screen)
-        store.refreshIfStale()
+        // Diffère la vérification de fraîcheur après l'animation d'ouverture 120 Hz (FolderWatcher surveille déjà en direct)
+        refreshStaleTask?.cancel()
+        refreshStaleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self, !Task.isCancelled, self.isVisible else { return }
+            self.store.refreshIfStale()
+        }
 
         // Réouverture pendant l'animation de fermeture : on repart de l'état courant (pas de saut).
         if !wasOnScreen { viewModel.setPresentation(0) }
@@ -147,6 +154,8 @@ final class LaunchpadWindowController: NSObject {
     func hide(launchedApp: Bool = false) {
         guard isVisible else { return }
         isVisible = false
+        refreshStaleTask?.cancel()
+        LaunchpadViewModel.isLaunchpadVisible = false
         NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: false)
         interactiveOpening = nil
         lastHidden = Date()
@@ -257,6 +266,11 @@ final class LaunchpadWindowController: NSObject {
     }
 
     deinit {
+        hideTask?.cancel()
+        refreshStaleTask?.cancel()
+        for monitor in monitors {
+            NSEvent.removeMonitor(monitor)
+        }
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }

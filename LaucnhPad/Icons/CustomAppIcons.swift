@@ -241,8 +241,7 @@ public struct CustomAppIconView: View, Equatable {
     public var style: IconAppearanceStyle = .dark
     public var tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0)
     public var size: CGFloat = 128
-
-    @AppStorage(PrefKey.isProUnlocked) private var isPro = false
+    public var isPro: Bool = false
 
     private var usesCrystalPreview: Bool {
         style.usesCrystalGlassBackdrop(isPro: isPro || style.requiresPro)
@@ -252,18 +251,21 @@ public struct CustomAppIconView: View, Equatable {
         kind: CustomAppIconKind,
         style: IconAppearanceStyle = .dark,
         tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0),
-        size: CGFloat = 128
+        size: CGFloat = 128,
+        isPro: Bool = false
     ) {
         self.kind = kind
         self.style = style
         self.tintColor = tintColor
         self.size = size
+        self.isPro = isPro
     }
 
     public static func == (lhs: CustomAppIconView, rhs: CustomAppIconView) -> Bool {
         lhs.kind == rhs.kind
             && lhs.style == rhs.style
             && lhs.size == rhs.size
+            && lhs.isPro == rhs.isPro
             && (lhs.style != .tinted || lhs.tintColor == rhs.tintColor)
     }
 
@@ -2142,11 +2144,8 @@ public enum CustomAppIconRenderer {
     }
 
     nonisolated public static func wrapCGImageAsRetinaNSImage(_ cgImage: CGImage) -> NSImage {
-        let rep = NSBitmapImageRep(cgImage: cgImage)
-        rep.size = NSSize(width: logicalPointSize, height: logicalPointSize)
-        let image = NSImage(size: NSSize(width: logicalPointSize, height: logicalPointSize))
-        image.addRepresentation(rep)
-        return image
+        // Enveloppe zéro-copie : évite la duplication NSBitmapImageRep (~1 Mo/icône) tout en gardant la densité Retina 512×512 @2x.
+        NSImage(cgImage: cgImage, size: NSSize(width: logicalPointSize, height: logicalPointSize))
     }
 
     /// Auto-test de validation de la qualité et de la résolution des icônes (Section 9)
@@ -2158,7 +2157,9 @@ public enum CustomAppIconRenderer {
         let sample = Array(paths.prefix(24))
         for path in sample {
             let img = IconCache.shared.highResIconSync(for: path)
-            let maxRepW = img.representations.map(\.pixelsWide).max() ?? Int(img.size.width)
+            let repW = img.representations.map(\.pixelsWide).max() ?? 0
+            let cgW = img.cgImage(forProposedRect: nil, context: nil, hints: nil)?.width ?? 0
+            let maxRepW = max(repW, max(cgW, Int(img.size.width)))
             if maxRepW >= 512 {
                 highRes += 1
             }

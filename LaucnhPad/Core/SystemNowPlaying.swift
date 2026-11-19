@@ -74,13 +74,13 @@ nonisolated enum SystemNowPlayingClient {
     /// - Parameter skipArtworkForTitle: Si fourni et que le titre en cours correspond déjà à ce titre,
     ///   évite d'extraire et d'encoder en base64 la miniature MediaRemote à chaque cycle de polling.
     static func fetch(skipArtworkForTitle: String? = nil) async -> SystemNowPlayingSnapshot? {
-        await Task.detached(priority: .utility) { () -> SystemNowPlayingSnapshot? in
-            var env: [String: String]? = nil
-            if let skipTitle = skipArtworkForTitle, !skipTitle.isEmpty {
-                env = ["LAUNCHPAD_SKIP_ARTWORK_TITLE": skipTitle]
-            }
-            guard let data = runOsascript(script: readScript, extraEnvironment: env),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        var env: [String: String]? = nil
+        if let skipTitle = skipArtworkForTitle, !skipTitle.isEmpty {
+            env = ["LAUNCHPAD_SKIP_ARTWORK_TITLE": skipTitle]
+        }
+        guard let data = await runOsascriptAsync(script: readScript, extraEnvironment: env) else { return nil }
+        return await Task.detached(priority: .utility) { () -> SystemNowPlayingSnapshot? in
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let title = json["title"] as? String else { return nil }
 
             let artist = (json["artist"] as? String) ?? ""
@@ -134,12 +134,10 @@ nonisolated enum SystemNowPlayingClient {
         ObjC.bindFunction('MRMediaRemoteSendCommand', ['bool', ['int', 'id']]);
         $.MRMediaRemoteSendCommand(\(command.rawValue), $());
         """
-        return await Task.detached(priority: .userInitiated) { () -> Bool in
-            guard let data = runOsascript(script: script),
-                  let text = String(data: data, encoding: .utf8) else { return false }
-            let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            return normalized.contains("true") || normalized == "1"
-        }.value
+        guard let data = await runOsascriptAsync(script: script),
+              let text = String(data: data, encoding: .utf8) else { return false }
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.contains("true") || normalized == "1"
     }
 
     /// Déplace la lecture à `seconds` dans l'application source.
@@ -152,48 +150,80 @@ nonisolated enum SystemNowPlayingClient {
         ObjC.bindFunction('MRMediaRemoteSendCommand', ['bool', ['int', 'id']]);
         $.MRMediaRemoteSendCommand(24, $({kMRMediaRemoteOptionPlaybackPosition: \(seconds)}));
         """
-        return await Task.detached(priority: .userInitiated) { () -> Bool in
-            guard let data = runOsascript(script: script),
-                  let text = String(data: data, encoding: .utf8) else { return false }
-            let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            return normalized.contains("true") || normalized == "1"
-        }.value
+        guard let data = await runOsascriptAsync(script: script),
+              let text = String(data: data, encoding: .utf8) else { return false }
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.contains("true") || normalized == "1"
     }
 
-    private static func runOsascript(
+    private static let osascriptQueue = DispatchQueue(
+        label: "me.LaucnhPad.systemNowPlaying.osascript",
+        qos: .utility,
+        attributes: .concurrent
+    )
+
+    private static func runOsascriptAsync(
         script: String,
         extraEnvironment: [String: String]? = nil,
         timeoutSeconds: TimeInterval = 4.0
-    ) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-l", "JavaScript", "-e", script]
-        if let extraEnvironment, !extraEnvironment.isEmpty {
-            var env = ProcessInfo.processInfo.environment
-            for (k, v) in extraEnvironment { env[k] = v }
-            process.environment = env
-        }
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
+    ) async -> Data? {
+        await withCheckedContinuation { continuation in
+            osascriptQueue.async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                process.arguments = ["-l", "JavaScript", "-e", script]
+                if let extraEnvironment, !extraEnvironment.isEmpty {
+                    var env = ProcessInfo.processInfo.environment
+                    for (k, v) in extraEnvironment { env[k] = v }
+                    process.environment = env
+                }
+                let stdout = Pipe()
+                process.standardOutput = stdout
+                process.standardError = FileHandle.nullDevice
 
-        let timeoutWorkItem = DispatchWorkItem { [weak process] in
-            guard let process, process.isRunning else { return }
-            process.terminate()
-        }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
-        defer { timeoutWorkItem.cancel() }
+                final class ResumeBox: @unchecked Sendable {
+                    private let lock = NSLock()
+                    private var resumed = false
+                    func claim() -> Bool {
+                        lock.lock()
+                        defer { lock.unlock() }
+                        if resumed { return false }
+                        resumed = true
+                        return true
+                    }
+                }
+                let resumeBox = ResumeBox()
 
-        do {
-            try process.run()
-        } catch {
-            return nil
+                let timeoutWorkItem = DispatchWorkItem { [weak process] in
+                    guard let process, process.isRunning else { return }
+                    let pid = process.processIdentifier
+                    process.terminate()
+                    osascriptQueue.asyncAfter(deadline: .now() + 0.5) {
+                        if process.isRunning && pid > 0 {
+                            _ = Darwin.kill(pid, SIGKILL)
+                        }
+                    }
+                }
+                osascriptQueue.asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
+
+                process.terminationHandler = { proc in
+                    timeoutWorkItem.cancel()
+                    let data = stdout.fileHandleForReading.readDataToEndOfFile()
+                    if resumeBox.claim() {
+                        continuation.resume(returning: proc.terminationStatus == 0 ? data : nil)
+                    }
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    timeoutWorkItem.cancel()
+                    if resumeBox.claim() {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
         }
-        // Lecture avant waitUntilExit pour éviter tout blocage si le tampon du tube se remplit.
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        return data
     }
 
     /// Indique si l'application peut poster les touches multimédia matérielles.
@@ -202,15 +232,20 @@ nonisolated enum SystemNowPlayingClient {
     nonisolated static var canSendHardwareMediaKeys: Bool { AXIsProcessTrusted() }
 
     @MainActor
-    private static var appIconCache: [String: NSImage] = [:]
+    private static let appIconCache: NSCache<NSString, NSImage> = {
+        let c = NSCache<NSString, NSImage>()
+        c.countLimit = 32
+        return c
+    }()
     @MainActor
     private static var missingBundleIDs: Set<String> = []
 
-    /// Icône de l'application source mise en cache mémoire (repli visuel quand aucune miniature n'est publiée).
+    /// Icône de l'application source mise en cache mémoire borné (repli visuel quand aucune miniature n'est publiée).
     @MainActor
     static func appIcon(bundleID: String) -> NSImage? {
         guard !bundleID.isEmpty else { return nil }
-        if let cached = appIconCache[bundleID] {
+        let key = bundleID as NSString
+        if let cached = appIconCache.object(forKey: key) {
             return cached
         }
         if missingBundleIDs.contains(bundleID) {
@@ -221,7 +256,7 @@ nonisolated enum SystemNowPlayingClient {
             return nil
         }
         let icon = NSWorkspace.shared.icon(forFile: url.path)
-        appIconCache[bundleID] = icon
+        appIconCache.setObject(icon, forKey: key)
         return icon
     }
 }

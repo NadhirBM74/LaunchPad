@@ -109,17 +109,26 @@ enum AppLogo: Int, CaseIterable, Identifiable {
 
     var assetName: String { "AppLogo\(rawValue)" }
 
+    @MainActor private static var cachedImages: [AppLogo: NSImage] = [:]
+
     @MainActor var image: NSImage? {
+        if let cached = Self.cachedImages[self] {
+            return cached
+        }
+        let resolved: NSImage?
         if let img = NSImage(named: NSImage.Name(assetName)) {
-            return img
+            resolved = img
+        } else if let bundleImage = Bundle.main.image(forResource: NSImage.Name(assetName)) {
+            resolved = bundleImage
+        } else if self == .noir {
+            resolved = NSApp.applicationIconImage
+        } else {
+            resolved = nil
         }
-        if let bundleImage = Bundle.main.image(forResource: NSImage.Name(assetName)) {
-            return bundleImage
+        if let resolved {
+            Self.cachedImages[self] = resolved
         }
-        if self == .noir {
-            return NSApp.applicationIconImage
-        }
-        return nil
+        return resolved
     }
 }
 

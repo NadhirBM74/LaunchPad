@@ -158,7 +158,7 @@ struct AnimatedVerifiedSealBadge: View {
                 .fill(isTrial ? Self.trialGlowGradient : Self.proGlowGradient)
                 .frame(width: size * 1.32, height: size * 1.32)
 
-            // Seule la rosace extérieure tourne sur le GPU CoreAnimation sans réévaluer SwiftUI à 120 Hz
+            // La rosace statique est mise en cache une fois puis tournée par matrice CoreAnimation (0 rastérisation/frame)
             Rectangle()
                 .fill(isTrial ? Self.trialBadgeGradient : Self.proBadgeGradient)
                 .frame(width: size * 1.12, height: size * 1.12)
@@ -167,13 +167,13 @@ struct AnimatedVerifiedSealBadge: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: size, height: size)
-                        .rotationEffect(.degrees(spinning && !reduceMotion ? 360 : 0))
-                        .animation(
-                            reduceMotion ? nil : .linear(duration: 8.0).repeatForever(autoreverses: false),
-                            value: spinning
-                        )
                 )
                 .drawingGroup()
+                .rotationEffect(.degrees(spinning && !reduceMotion ? 360 : 0))
+                .animation(
+                    reduceMotion ? nil : .linear(duration: 8.0).repeatForever(autoreverses: false),
+                    value: spinning
+                )
                 .shadow(color: glowColor.opacity(0.45), radius: max(2.0, size * 0.15), y: 1.2)
 
             // Le "V" (coche blanche) au milieu reste strictement immobile
@@ -432,8 +432,19 @@ struct VelvetAuraTheme: Equatable {
     }
 }
 
+private struct VelvetAuraThemeKey: EnvironmentKey {
+    static let defaultValue = VelvetAuraTheme(theme: .liquidGlass)
+}
+
+extension EnvironmentValues {
+    var velvetAuraTheme: VelvetAuraTheme {
+        get { self[VelvetAuraThemeKey.self] }
+        set { self[VelvetAuraThemeKey.self] = newValue }
+    }
+}
+
 /// Fond de fenêtre unifié Aura Nocturne Velvet (Réglages & Menu Widgets)
-struct VelvetAuraWindowBackground: View {
+struct VelvetAuraWindowBackground: View, Equatable {
     let theme: AppTheme
     var liquidGlassIntensity: Double = 0.85
 
@@ -444,7 +455,7 @@ struct VelvetAuraWindowBackground: View {
         ZStack(alignment: .top) {
             switch theme {
             case .dark:
-                VisualEffectBackground(material: .fullScreenUI)
+                // Dégradé velours 100 % opaque : pas de VisualEffectBackground inutile en dessous
                 LinearGradient(
                     colors: [
                         Color(red: 0.067, green: 0.059, blue: 0.102), // #110f1a
@@ -491,7 +502,7 @@ struct VelvetAuraWindowBackground: View {
 }
 
 /// Bordure extérieure + filet lumineux 1.5 pt au sommet (signature 4C)
-struct VelvetAuraWindowOverlay: View {
+struct VelvetAuraWindowOverlay: View, Equatable {
     let theme: AppTheme
     var cornerRadius: CGFloat = 22
 
@@ -518,18 +529,17 @@ struct VelvetAuraWindowOverlay: View {
                 )
 
             // Filet lumineux signature 4C au sommet de la fenêtre
-            Rectangle()
+            Capsule()
                 .fill(aura.topRimGradient)
                 .frame(height: 1.5)
-                .padding(.horizontal, cornerRadius * 0.45)
+                .padding(.horizontal, cornerRadius * 0.55)
         }
-        .clipShape(shape)
         .allowsHitTesting(false)
     }
 }
 
 /// Surface de carte veloutée unifiée (Réglages & Cartes Widgets)
-struct VelvetAuraCardBackground: View {
+struct VelvetAuraCardBackground: View, Equatable {
     let theme: AppTheme
     var cornerRadius: CGFloat = 15
     var isSelected: Bool = false
@@ -575,7 +585,7 @@ struct VelvetAuraCardBackground: View {
 }
 
 /// Contour de carte fondu unifié avec léger reflet supérieur
-struct VelvetAuraCardOverlay: View {
+struct VelvetAuraCardOverlay: View, Equatable {
     let theme: AppTheme
     var cornerRadius: CGFloat = 15
     var isSelected: Bool = false
@@ -608,7 +618,7 @@ struct VelvetAuraCardOverlay: View {
 }
 
 /// Fond d'onglet de barre latérale unifié avec barre verticale lumineuse 3 pt à gauche (signature 4C)
-struct VelvetAuraSidebarRowBackground: View {
+struct VelvetAuraSidebarRowBackground: View, Equatable {
     let theme: AppTheme
     let isSelected: Bool
     var isHovered: Bool = false
@@ -646,8 +656,15 @@ struct VelvetAuraSidebarRowBackground: View {
 struct WindowAppearanceSync: NSViewRepresentable {
     let isLight: Bool
 
+    final class Coordinator {
+        var lastIsLight: Bool?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
+        context.coordinator.lastIsLight = isLight
         DispatchQueue.main.async {
             applyAppearance(to: view.window)
         }
@@ -655,6 +672,8 @@ struct WindowAppearanceSync: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        guard context.coordinator.lastIsLight != isLight else { return }
+        context.coordinator.lastIsLight = isLight
         DispatchQueue.main.async {
             applyAppearance(to: nsView.window)
         }

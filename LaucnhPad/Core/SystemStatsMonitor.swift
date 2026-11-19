@@ -9,13 +9,13 @@ import IOKit.ps
 final class SystemStatsMonitor: ObservableObject {
     static let shared = SystemStatsMonitor()
 
-    @Published private(set) var cpuPercent: Int = 0
-    @Published private(set) var ramPercent: Int = 0
-    @Published private(set) var ramUsedGB: Double = 0.0
-    @Published private(set) var ramTotalGB: Double = 0.0
-    @Published private(set) var batteryPercent: Int = 100
-    @Published private(set) var isCharging: Bool = false
-    @Published private(set) var hasBattery: Bool = true
+    private(set) var cpuPercent: Int = 0
+    private(set) var ramPercent: Int = 0
+    private(set) var ramUsedGB: Double = 0.0
+    private(set) var ramTotalGB: Double = 0.0
+    private(set) var batteryPercent: Int = 100
+    private(set) var isCharging: Bool = false
+    private(set) var hasBattery: Bool = true
 
     private var timer: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
@@ -28,6 +28,7 @@ final class SystemStatsMonitor: ObservableObject {
     private var alwaysVisibleClients = 0
     private var isLaunchpadVisible = LaunchpadViewModel.isLaunchpadVisible
     private var hardwareHasBattery: Bool = true
+    private var batterySampleCountdown: Int = 0
     private var isWidgetMounted: Bool { activeClients > 0 || alwaysVisibleClients > 0 }
     private var shouldRunTimer: Bool {
         alwaysVisibleClients > 0 || (activeClients > 0 && isLaunchpadVisible)
@@ -93,40 +94,51 @@ final class SystemStatsMonitor: ObservableObject {
     nonisolated private static let totalGBStatic: Double = Double(totalBytes) / 1_073_741_824
 
     func refresh() {
-        let shouldSampleBattery = hardwareHasBattery
+        let shouldSampleBattery = hardwareHasBattery && batterySampleCountdown <= 0
+        if shouldSampleBattery {
+            batterySampleCountdown = 9 // ~60 s entre deux sondages IOKit batterie
+        } else if batterySampleCountdown > 0 {
+            batterySampleCountdown -= 1
+        }
         statsQueue.async { [weak self] in
             guard let self else { return }
             let cpu = self.sampleCPU()
             let ram = self.sampleRAM()
-            let bat = shouldSampleBattery ? self.sampleBattery() : (hasBattery: false, percent: 100, isCharging: false)
+            let bat: (hasBattery: Bool, percent: Int, isCharging: Bool)? = shouldSampleBattery ? self.sampleBattery() : nil
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                var changed = false
                 if let cpu, self.cpuPercent != cpu {
-                    self.cpuPercent = cpu
+                    changed = true
                 }
                 if let ram {
-                    if abs(self.ramUsedGB - ram.usedGB) >= 0.05 {
-                        self.ramUsedGB = ram.usedGB
-                    }
-                    if abs(self.ramTotalGB - ram.totalGB) >= 0.05 {
-                        self.ramTotalGB = ram.totalGB
-                    }
-                    if self.ramPercent != ram.percent {
-                        self.ramPercent = ram.percent
+                    if abs(self.ramUsedGB - ram.usedGB) >= 0.05
+                        || abs(self.ramTotalGB - ram.totalGB) >= 0.05
+                        || self.ramPercent != ram.percent {
+                        changed = true
                     }
                 }
-                if self.hasBattery != bat.hasBattery {
+                if let bat {
+                    if self.hasBattery != bat.hasBattery
+                        || (bat.hasBattery && (self.batteryPercent != bat.percent || self.isCharging != bat.isCharging)) {
+                        changed = true
+                    }
+                }
+                guard changed else { return }
+                // Un seul objectWillChange pour les 7 métriques (au lieu de 7 invalidations SwiftUI en rafale)
+                self.objectWillChange.send()
+                if let cpu { self.cpuPercent = cpu }
+                if let ram {
+                    self.ramUsedGB = ram.usedGB
+                    self.ramTotalGB = ram.totalGB
+                    self.ramPercent = ram.percent
+                }
+                if let bat {
                     self.hasBattery = bat.hasBattery
-                }
-                if self.hardwareHasBattery != bat.hasBattery {
                     self.hardwareHasBattery = bat.hasBattery
-                }
-                if bat.hasBattery {
-                    if self.batteryPercent != bat.percent {
+                    if bat.hasBattery {
                         self.batteryPercent = bat.percent
-                    }
-                    if self.isCharging != bat.isCharging {
                         self.isCharging = bat.isCharging
                     }
                 }
@@ -152,10 +164,10 @@ final class SystemStatsMonitor: ObservableObject {
 
         var computedCPU: Int? = nil
         if prevUser > 0 || prevSystem > 0 || prevIdle > 0 {
-            let du = u >= prevUser ? u - prevUser : 0
-            let ds = s >= prevSystem ? s - prevSystem : 0
-            let di = i >= prevIdle ? i - prevIdle : 0
-            let dn = n >= prevNice ? n - prevNice : 0
+            let du = UInt64(u &- prevUser)
+            let ds = UInt64(s &- prevSystem)
+            let di = UInt64(i &- prevIdle)
+            let dn = UInt64(n &- prevNice)
             let total = du + ds + di + dn
             if total > 0 {
                 let active = du + ds + dn

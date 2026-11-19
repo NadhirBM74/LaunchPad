@@ -95,7 +95,11 @@ struct PremiumClockWidgetView: View {
                         lineWidth: 1.0
                     )
             )
-            .shadow(color: .black.opacity(0.34), radius: 14, x: 0, y: 7)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.001))
+                    .shadow(color: .black.opacity(0.34), radius: 14, x: 0, y: 7)
+            )
         }
         .frame(width: w, height: h)
         .onAppear {

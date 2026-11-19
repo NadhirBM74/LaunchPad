@@ -32,12 +32,34 @@ final class SettingsWindow: NSWindow {
     }
 }
 
+// MARK: - Hôte léger de montage/démontage de SettingsPanel (libère 100 % du CPU/GPU à la fermeture)
+
+@MainActor
+private final class SettingsPresentationState: ObservableObject {
+    @Published var isPresented: Bool = false
+}
+
+private struct SettingsRootHost: View {
+    @ObservedObject var state: SettingsPresentationState
+    let store: LaunchpadStore
+
+    var body: some View {
+        if state.isPresented {
+            SettingsPanel(store: store)
+        } else {
+            Color.clear
+                .frame(width: SettingsPanel.size.width, height: SettingsPanel.size.height)
+        }
+    }
+}
+
 // MARK: - Fenêtre des réglages (fenêtre normale : plus de conflit avec le panneau plein écran)
 
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: SettingsWindow?
     private let store: LaunchpadStore
+    private let presentationState = SettingsPresentationState()
     var onRequestReorganize: (() -> Void)?
     /// Appelé à la fermeture (permet de rendre le focus au Launchpad).
     var onClose: (() -> Void)?
@@ -77,11 +99,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.orderOut(nil)
         window.alphaValue = 1.0
         isClosing = false
+        // Démonte l'arbre SwiftUI (déclenche onDisappear, coupe les timers et le badge rotatif) tout en gardant la NSWindow chaude.
+        if presentationState.isPresented {
+            presentationState.isPresented = false
+        }
         let wasAbove = isAboveLaunchpad
         isAboveLaunchpad = false
         window.level = .normal
-        if !Prefs.showDockIcon && !AdminTestWindowController.shared.isVisible { NSApp.setActivationPolicy(.accessory) }
-        if wasAbove && !AdminTestWindowController.shared.isVisible { onClose?() }
+        if !Prefs.showDockIcon && !AdminTestWindowController.isSharedVisible { NSApp.setActivationPolicy(.accessory) }
+        if wasAbove && !AdminTestWindowController.isSharedVisible { onClose?() }
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -98,7 +124,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if window == nil {
             let window = SettingsWindow(contentRect: initialFrame,
                                   styleMask: [.borderless],
-                                  backing: .buffered, defer: false)
+                                  backing: .buffered, defer: true)
             window.title = loc("about.window_title")
             window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
@@ -116,8 +142,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if window.appearance?.name != targetAppearanceName {
             window.appearance = NSAppearance(named: targetAppearanceName)
         }
+        if !presentationState.isPresented {
+            presentationState.isPresented = true
+        }
         if window.contentViewController == nil {
-            let hosting = NSHostingController(rootView: SettingsPanel(store: store))
+            let hosting = NSHostingController(rootView: SettingsRootHost(state: presentationState, store: store))
             // Empêche NSHostingController de modifier la taille/position de la fenêtre lors du premier layout.
             hosting.sizingOptions = []
             window.contentViewController = hosting
@@ -239,10 +268,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         NotificationCenter.default.post(name: .settingsVisibilityDidChange, object: false)
+        if presentationState.isPresented {
+            presentationState.isPresented = false
+        }
         let wasAbove = isAboveLaunchpad
         isAboveLaunchpad = false
         window?.level = .normal
-        if !Prefs.showDockIcon && !AdminTestWindowController.shared.isVisible { NSApp.setActivationPolicy(.accessory) }
-        if wasAbove && !AdminTestWindowController.shared.isVisible { onClose?() }
+        if !Prefs.showDockIcon && !AdminTestWindowController.isSharedVisible { NSApp.setActivationPolicy(.accessory) }
+        if wasAbove && !AdminTestWindowController.isSharedVisible { onClose?() }
     }
 }

@@ -404,7 +404,11 @@ struct ReferenceMusicWidgetView: View {
                         lineWidth: 1.0
                     )
             )
-            .shadow(color: .black.opacity(isDarkMusic ? 0.28 : 0.16), radius: 14, x: 0, y: 7)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.001))
+                    .shadow(color: .black.opacity(isDarkMusic ? 0.28 : 0.16), radius: 14, x: 0, y: 7)
+            )
         }
         .frame(width: w, height: h)
         .environment(\.colorScheme, isDarkMusic ? .dark : .light)
@@ -946,7 +950,7 @@ struct ReferenceMusicWidgetView: View {
             )
             .equatable()
 
-            TimelineView(.animation(paused: !isSpinning)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isSpinning)) { timeline in
                 let angle = spinTracker.advance(to: timeline.date, isSpinning: isSpinning)
                 disc
                     .scaleEffect(discBounceScale)

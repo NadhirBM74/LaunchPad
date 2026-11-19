@@ -104,9 +104,12 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
     private let clManager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var lastAutoLocateAttempt: Date = .distantPast
+    private var lastIPGeoFetch: Date = .distantPast
     private var hasRequestedLocationUpdates: Bool = false
     private var inFlightWeatherTask: Task<Void, Never>?
+    private var inFlightWeatherKey: String?
     private var inFlightLocationTask: Task<Void, Never>?
+    private var visibilityObserver: NSObjectProtocol?
 
     nonisolated private static let jsonDecoder = JSONDecoder()
     nonisolated private static let jsonEncoder = JSONEncoder()
@@ -155,6 +158,26 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
 
         clManager.delegate = self
         clManager.desiredAccuracy = kCLLocationAccuracyKilometer
+
+        visibilityObserver = NotificationCenter.default.addObserver(
+            forName: .launchpadVisibilityDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let visible = (note.object as? Bool) ?? false
+            guard !visible else { return }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.inFlightWeatherTask?.cancel()
+                self.inFlightWeatherTask = nil
+                self.inFlightWeatherKey = nil
+                self.inFlightLocationTask?.cancel()
+                self.inFlightLocationTask = nil
+                self.geocoder.cancelGeocode()
+                if self.isFetchingWeather { self.isFetchingWeather = false }
+                if self.isDetectingLocation { self.isDetectingLocation = false }
+            }
+        }
     }
 
     // MARK: - Actions Publiques
@@ -340,12 +363,12 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
             && snapshot?.unit == unit
             && now.timeIntervalSince(snapshot?.updatedAt ?? .distantPast) < 600
 
-        if !force && isFresh && isPreciseLocation {
-            return
-        }
-
         let status = clManager.authorizationStatus
         authorizationStatus = status
+
+        if !force && isFresh && (isPreciseLocation || !isAuthorized(status)) {
+            return
+        }
 
         if force || now.timeIntervalSince(lastAutoLocateAttempt) > 20 {
             lastAutoLocateAttempt = now
@@ -372,7 +395,19 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
         // Sans autorisation CoreLocation (ou pendant un test headless) : utiliser coordonnées IP ou déjà connues
         if force || snapshot == nil || snapshot?.unit != unit || now.timeIntervalSince(snapshot?.updatedAt ?? .distantPast) > 600 {
             if !isAuthorized(status) {
-                triggerIPFallbackIfStillWaiting()
+                if let lat = savedLatitude, let lon = savedLongitude,
+                   !force, now.timeIntervalSince(lastIPGeoFetch) < 3600 {
+                    startWeatherFetch(
+                        lat: lat,
+                        lon: lon,
+                        city: activeCity,
+                        country: activeCountry,
+                        isAuto: true,
+                        isPrecise: false
+                    )
+                } else {
+                    triggerIPFallbackIfStillWaiting()
+                }
             } else if let lat = savedLatitude, let lon = savedLongitude {
                 startWeatherFetch(
                     lat: lat,
@@ -401,6 +436,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
                     self.isDetectingLocation = false
                     return
                 }
+                self.lastIPGeoFetch = Date()
                 self.activeCity = ipLoc.city
                 self.activeCountry = ipLoc.country
                 self.savedLatitude = ipLoc.latitude
@@ -562,9 +598,14 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
         isAuto: Bool,
         isPrecise: Bool
     ) {
-        inFlightWeatherTask?.cancel()
-        isFetchingWeather = true
         let targetUnit = unit
+        let requestKey = "\(String(format: "%.3f", lat))|\(String(format: "%.3f", lon))|\(targetUnit)"
+        if inFlightWeatherKey == requestKey && inFlightWeatherTask != nil {
+            return
+        }
+        inFlightWeatherTask?.cancel()
+        inFlightWeatherKey = requestKey
+        isFetchingWeather = true
 
         inFlightWeatherTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -579,6 +620,8 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
             )
             guard !Task.isCancelled else { return }
             self.isFetchingWeather = false
+            self.inFlightWeatherKey = nil
+            self.inFlightWeatherTask = nil
             if let fetched {
                 self.applySnapshot(fetched)
             }
@@ -627,7 +670,7 @@ final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegat
             ? "&temperature_unit=fahrenheit&wind_speed_unit=mph"
             : "&temperature_unit=celsius&wind_speed_unit=kmh"
 
-        let urlStr = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max&forecast_days=7&timezone=auto\(unitQuery)"
+        let urlStr = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,is_day&forecast_hours=18&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max&forecast_days=7&timezone=auto\(unitQuery)"
 
         guard let url = URL(string: urlStr) else { return nil }
         var req = URLRequest(url: url)

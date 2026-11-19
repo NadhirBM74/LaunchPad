@@ -107,6 +107,8 @@ final class InputEventMonitor {
     private var lastGestureTimestamp: TimeInterval = 0
     private var keyTap: CFMachPort?
     private var keySource: CFRunLoopSource?
+    private var keyTapThread: Thread?
+    nonisolated(unsafe) private var keyTapRunLoop: CFRunLoop?
     private var mouseMonitors: [Any] = []
 
     // État du pincement
@@ -143,19 +145,53 @@ final class InputEventMonitor {
     private var cachedSensitivity: CGFloat = 1.0
 
     func stopAll() {
-        for (tap, source) in [(gestureTap, gestureSource), (keyTap, keySource)] {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
-            if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+        if let tap = gestureTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
         }
-        gestureTap = nil; gestureSource = nil; keyTap = nil; keySource = nil
+        if let source = gestureSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        gestureTap = nil; gestureSource = nil
+
+        if let tap = keyTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        if let rl = keyTapRunLoop {
+            if let source = keySource {
+                CFRunLoopRemoveSource(rl, source, .commonModes)
+            }
+            CFRunLoopStop(rl)
+        } else if let source = keySource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        keyTap = nil; keySource = nil; keyTapRunLoop = nil; keyTapThread = nil
+
         if let globalGestureMonitor {
             NSEvent.removeMonitor(globalGestureMonitor)
             self.globalGestureMonitor = nil
         }
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
         mouseMonitors.removeAll()
+        if let screenObserver {
+            NotificationCenter.default.removeObserver(screenObserver)
+            self.screenObserver = nil
+        }
         cornerTask?.cancel()
+        cornerTask = nil
         interactiveWatchdog?.cancel()
+        interactiveWatchdog = nil
+        interactiveActive = false
+        resetPinch()
+    }
+
+    nonisolated fileprivate func reenableKeyTap() {
+        Task { @MainActor [weak self] in
+            if let keyTap = self?.keyTap, !CGEvent.tapIsEnabled(tap: keyTap) {
+                CGEvent.tapEnable(tap: keyTap, enable: true)
+            }
+        }
     }
 
     fileprivate func reenableTaps() {
@@ -215,9 +251,15 @@ final class InputEventMonitor {
             return
         }
 
-        // Récupère l'ensemble des contacts physiques actifs (y compris stationnaires) sans allocations superflues
+        // Récupère uniquement les contacts physiques actifs sans fallback inutile sur allTouches() quand aucun doigt ne touche
         let touching = event.touches(matching: .touching, in: nil)
-        let rawTouches = touching.isEmpty ? event.allTouches() : touching
+        if touching.isEmpty {
+            if interactiveActive {
+                finishInteractive()
+            }
+            resetPinch()
+            return
+        }
         var count = 0
         var sumX: CGFloat = 0
         var sumY: CGFloat = 0
@@ -226,7 +268,7 @@ final class InputEventMonitor {
         var p2: CGPoint = .zero
         var p3: CGPoint = .zero
         var p4: CGPoint = .zero
-        for touch in rawTouches {
+        for touch in touching {
             let phase = touch.phase
             if phase != .ended && phase != .cancelled {
                 let pos = touch.normalizedPosition
@@ -283,7 +325,9 @@ final class InputEventMonitor {
         }
 
         guard pinchInitialSpread > 0.015 else { return }
-        let drift = hypot(centroid.x - pinchInitialCentroid.x, centroid.y - pinchInitialCentroid.y)
+        let driftDX = centroid.x - pinchInitialCentroid.x
+        let driftDY = centroid.y - pinchInitialCentroid.y
+        let driftSq = driftDX * driftDX + driftDY * driftDY
         let ratio = spread / pinchInitialSpread
 
         // Détection complémentaire : balayage franc vers le haut à 3 doigts (geste alternatif intuitif)
@@ -330,8 +374,8 @@ final class InputEventMonitor {
                 }
             }
 
-            // Tolérance de dérive équilibrée pour gestes naturels à 3 ou 4 doigts
-            guard shouldStart, drift < 0.38 else { return }
+            // Tolérance de dérive équilibrée pour gestes naturels à 3 ou 4 doigts (distance au carré, zéro hypot)
+            guard shouldStart, driftSq < (0.38 * 0.38) else { return }
 
             // Déclenchement direct rapide si le pincement est déjà bien engagé (> 16%)
             if opening && pinchInwardProgress > 0.16 {
@@ -358,7 +402,7 @@ final class InputEventMonitor {
         }
 
         // Annulation si le geste se transforme en grand balayage (drift excessif)
-        if drift > 0.55 {
+        if driftSq > (0.55 * 0.55) {
             finishInteractive(forceCancel: true)
             return
         }
@@ -441,19 +485,31 @@ final class InputEventMonitor {
         pinchFired = false
     }
 
-    // MARK: Touche Launchpad / F4 (nécessite l'accessibilité pour intercepter la touche)
+    // MARK: Touche Launchpad / F4 (exécuté sur un thread RunLoop dédié : 0 réveil du thread principal pour les frappes ordinaires)
 
     private func startKeyTap() {
         guard Self.accessibilityTrusted else { return }
         let mask = (CGEventMask(1) << CGEventMask(CGEventType.keyDown.rawValue)) | (CGEventMask(1) << CGEventMask(CGEventType.keyUp.rawValue))
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-                                          eventsOfInterest: mask, callback: keyTapCallback, userInfo: refcon) else { return }
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+                                          eventsOfInterest: mask, callback: keyTapCallback, userInfo: refcon),
+              let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else { return }
         keyTap = tap
         keySource = source
+        CGEvent.tapEnable(tap: tap, enable: true)
+
+        struct SendableSource: @unchecked Sendable { let value: CFRunLoopSource }
+        let sendableSource = SendableSource(value: source)
+        let thread = Thread { [weak self] in
+            let rl = CFRunLoopGetCurrent()
+            self?.keyTapRunLoop = rl
+            CFRunLoopAddSource(rl, sendableSource.value, .commonModes)
+            CFRunLoopRun()
+        }
+        thread.name = "me.LaucnhPad.keyEventTap"
+        thread.qualityOfService = .userInteractive
+        keyTapThread = thread
+        thread.start()
     }
 
     // MARK: Coin actif
@@ -536,9 +592,7 @@ nonisolated private func gestureTapCallback(proxy: CGEventTapProxy, type: CGEven
 nonisolated private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, refcon: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
     guard let refcon else { return Unmanaged.passUnretained(event) }
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        MainActor.assumeIsolated {
-            Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue().reenableTaps()
-        }
+        Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue().reenableKeyTap()
         return Unmanaged.passUnretained(event)
     }
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -547,8 +601,11 @@ nonisolated private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventTyp
         return Unmanaged.passUnretained(event)
     }
     if type == .keyDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-        MainActor.assumeIsolated {
-            Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue().onAction?(.toggle)
+        let monitor = Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue()
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                monitor.onAction?(.toggle)
+            }
         }
     }
     return nil // la touche est consommée

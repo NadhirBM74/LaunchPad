@@ -72,9 +72,22 @@ struct RichWeatherData {
     private static var cachedWeekdaysLabels: [String] = []
     private static var cachedLiveDailyKey: String = ""
     private static var cachedLiveDailyPoints: [(String, String, Int, Int, CGFloat, CGFloat)] = []
+    private static var cachedFromKey: String = ""
+    private static var cachedFromValue: RichWeatherData?
 
     static func from(config: CustomWidgetConfig) -> RichWeatherData {
         let live = WeatherService.shared.snapshot
+        let svcCity = WeatherService.shared.activeCity
+        let langCode = LocalizationManager.shared.effectiveLanguageCode
+        let cal = Calendar.current
+        let now = Date()
+        let todayBucket = Int(cal.startOfDay(for: now).timeIntervalSince1970)
+        let liveStamp = live?.updatedAt.timeIntervalSince1970 ?? 0
+        let memoKey = "\(config.weatherCity)|\(config.weatherTemp)|\(config.weatherFeelsLike)|\(config.weatherCondition)|\(config.weatherUnit)|\(liveStamp)|\(live?.city ?? "")|\(live?.unit ?? "")|\(svcCity)|\(langCode)|\(todayBucket)"
+        if cachedFromKey == memoKey, let cached = cachedFromValue {
+            return cached
+        }
+
         let t = live?.temp ?? config.weatherTemp
         let feelsLike = live?.feelsLike ?? config.weatherFeelsLike
         let high = live?.high ?? (t + 4)
@@ -83,7 +96,6 @@ struct RichWeatherData {
         let unit = live?.unit ?? config.weatherUnit
         let resolvedCity: String = {
             if let liveCity = live?.city, !liveCity.isEmpty { return liveCity }
-            let svcCity = WeatherService.shared.activeCity
             if !svcCity.isEmpty { return svcCity }
             return config.weatherCity.isEmpty ? loc("weather.city_default") : config.weatherCity
         }()
@@ -114,13 +126,9 @@ struct RichWeatherData {
         }()
 
         let appLoc = LocalizationManager.shared.effectiveLocale
-        let langCode = LocalizationManager.shared.effectiveLanguageCode
         if sharedDayFormatter.locale != appLoc {
             sharedDayFormatter.locale = appLoc
         }
-        let cal = Calendar.current
-        let now = Date()
-        let todayBucket = Int(cal.startOfDay(for: now).timeIntervalSince1970)
         let weekdayCacheKey = "\(langCode)|\(todayBucket)"
         if cachedWeekdaysKey != weekdayCacheKey {
             cachedWeekdaysLabels = (0..<7).map { offset in
@@ -133,7 +141,6 @@ struct RichWeatherData {
 
         let daily: [(String, String, Int, Int, CGFloat, CGFloat)] = {
             if let liveDaily = live?.daily, !liveDaily.isEmpty {
-                let liveStamp = live?.updatedAt.timeIntervalSince1970 ?? 0
                 let dailyKey = "\(langCode)|\(live?.unit ?? unit)|\(liveStamp)|\(liveDaily.count)"
                 if cachedLiveDailyKey == dailyKey && !cachedLiveDailyPoints.isEmpty {
                     return cachedLiveDailyPoints
@@ -170,7 +177,7 @@ struct RichWeatherData {
         let windVal = live?.windSpeedValue ?? (unit == "C" ? 11 : 7)
         let windStr = unit == "C" ? "\(windVal) km/h" : "\(windVal) mph"
 
-        return RichWeatherData(
+        let result = RichWeatherData(
             city: resolvedCity,
             temp: t,
             feelsLike: feelsLike,
@@ -188,6 +195,9 @@ struct RichWeatherData {
             hourly: hourly,
             daily: daily
         )
+        cachedFromKey = memoKey
+        cachedFromValue = result
+        return result
     }
 
     var outlineSymbol: String {
@@ -255,7 +265,11 @@ struct PremiumWeatherWidgetView: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(borderGradientForTheme, lineWidth: 1.0)
             )
-            .shadow(color: .black.opacity(0.32), radius: 14, x: 0, y: 7)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.001))
+                    .shadow(color: .black.opacity(0.32), radius: 14, x: 0, y: 7)
+            )
         }
         .frame(width: w, height: h)
         .onAppear {

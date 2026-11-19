@@ -118,6 +118,7 @@ struct DragState {
     let id: String
     let source: DragSource
     let isFolder: Bool
+    let canDropToDock: Bool
     var grabOffset: CGSize
     var detached = false
 }
@@ -128,11 +129,19 @@ final class DragPointer: ObservableObject {
     @Published var location: CGPoint = .zero
 }
 
-/// Décalage horizontal des pages. Isolé du modèle principal pour que le trackpad
-/// ne reconstruise que la bande d'icônes, pas le fond, la recherche ni les widgets.
+/// Décalage horizontal des pages. Isolé du modèle principal : seul le ViewModifier d'offset
+/// observe cette valeur à 120 Hz (zéro réévaluation du ForEach des icônes).
 @MainActor
 final class PageScroll: ObservableObject {
     @Published var offset: CGFloat = 0
+}
+
+/// Bornes discrètes de pages visibles durant un glisser ou une animation.
+/// Observé uniquement par `PagesLayer` (n'invalide ni la racine, ni le dock, ni les overlays).
+@MainActor
+final class PageRangeState: ObservableObject {
+    @Published var lastPage: Int = 0
+    @Published var scrollPageBounds: ClosedRange<Int>? = nil
 }
 
 /// Intensité du voile affiché quand les réglages sont ouverts.
@@ -208,10 +217,22 @@ final class LaunchpadViewModel: ObservableObject {
 
     @Published var query = "" { didSet { if query != oldValue { queryChanged(from: oldValue) } } }
     @Published private(set) var page = 0
-    @Published private(set) var lastPage = 0
-    /// Bornes discrètes de pages visibles durant un glisser ou une animation (n'invalide pas à 120 Hz).
-    @Published private(set) var scrollPageBounds: ClosedRange<Int>? = nil
-    private var pageSettleTask: Task<Void, Never>?
+    /// État discret de pages visibles pendant un swipe/changement de page (observé uniquement par `PagesLayer`).
+    let pageRange = PageRangeState()
+    var lastPage: Int {
+        get { pageRange.lastPage }
+        set { if pageRange.lastPage != newValue { pageRange.lastPage = newValue } }
+    }
+    var scrollPageBounds: ClosedRange<Int>? {
+        get { pageRange.scrollPageBounds }
+        set { if pageRange.scrollPageBounds != newValue { pageRange.scrollPageBounds = newValue } }
+    }
+    private var pagingGeneration: UInt64 = 0
+    private var cachedScrollSensitivity: CGFloat = 1.0
+    private var cachedFavoriteApps: [AppInfo] = []
+    private var cachedFavoriteKey: (rev: Int, storeRev: Int) = (-1, -1)
+    private var searchCacheIncludeHidden = false
+    private var searchCacheLang = ""
     /// Décalage des pages. L'écriture est instantanée (sans animation implicite) :
     /// le suivi du doigt ne doit pas être interpolé. Les changements de page animés
     /// écrivent directement dans `pageScroll.offset` à l'intérieur de `withAnimation`.
@@ -253,15 +274,20 @@ final class LaunchpadViewModel: ObservableObject {
     }
     @Published var showWeatherCityPicker: Bool = false
     @Published var showTutorial: Bool = false
-    @Published var tutorialStepIndex: Int = 0
+    var tutorialStepIndex: Int = 0
     @Published private(set) var favoritesRevision = 0
     @Published private(set) var toast: String?
     @MainActor static var isLaunchpadVisible = false
     @Published private(set) var isPanelVisible = false
-    @Published private(set) var appeared = false
+    /// Reste vrai après le premier affichage pour garder l'arbre SwiftUI chaud (réouverture quasi instantanée).
+    @Published private(set) var hasMountedPanel = false
+    private(set) var appeared = false
 
     func setPanelVisible(_ visible: Bool) {
         Self.isLaunchpadVisible = visible
+        if visible && !hasMountedPanel {
+            hasMountedPanel = true
+        }
         if isPanelVisible != visible {
             isPanelVisible = visible
         }
@@ -298,8 +324,16 @@ final class LaunchpadViewModel: ObservableObject {
             return
         }
         let pos = -offset / width
-        let lo = Int(floor(pos))
-        let hi = Int(ceil(pos))
+        let lo = max(0, Int(floor(pos)))
+        let hi = min(max(0, pageCount - 1), Int(ceil(pos)))
+        // PagesLayer maintient déjà [page-1 ... page+1] pré-monté : ne publier scrollPageBounds
+        // que lors d'un défilement rapide franchissant 2+ pages (zéro réévaluation SwiftUI en balayage normal).
+        let preloadedLo = max(0, min(page, lastPage) - 1)
+        let preloadedHi = min(max(0, pageCount - 1), max(page, lastPage) + 1)
+        if lo >= preloadedLo && hi <= preloadedHi {
+            if scrollPageBounds != nil { scrollPageBounds = nil }
+            return
+        }
         let bounds = min(lo, hi)...max(lo, hi)
         if scrollPageBounds != bounds {
             scrollPageBounds = bounds
@@ -310,8 +344,7 @@ final class LaunchpadViewModel: ObservableObject {
     var rootSize: CGSize = .zero
 
     var isDraggingAppForDock: Bool {
-        guard let drag else { return false }
-        return canDropToMacOSDock(id: drag.id)
+        drag?.canDropToDock ?? false
     }
 
     var dockDropZoneRect: CGRect {
@@ -331,13 +364,13 @@ final class LaunchpadViewModel: ObservableObject {
     }
     var onClose: (_ launchedApp: Bool) -> Void = { _ in }
     var onOpenSettings: () -> Void = {}
-    @Published var isAuthenticatingBiometrics = false
+    var isAuthenticatingBiometrics = false
     var lastBiometricCompletionTime: Date = .distantPast
     var onBiometricAuthChange: ((Bool) -> Void)?
 
     // MARK: - Flou d'arrière-plan des Réglages et Aperçu de la taille des icônes
-    @Published public private(set) var isSettingsOpen = false
-    @Published public private(set) var isIconScalePreviewing = false
+    public private(set) var isSettingsOpen = false
+    public private(set) var isIconScalePreviewing = false
 
     /// Intensité du voile (0…1). La valeur animée vit dans `settingsChrome`
     /// pour ne pas invalider la grille à chaque image.
@@ -609,6 +642,8 @@ final class LaunchpadViewModel: ObservableObject {
                 isHidden: store.hidden.contains(app.id)
             ))
         }
+        // Pré-trié une seule fois par nom standard : chaque frappe clavier s'exécute ensuite en O(M) sans tri ICU.
+        entries.sort { $0.display.localizedStandardCompare($1.display) == .orderedAscending }
         cachedSearchIndex = entries
         cachedSearchIndexRev = rev
         cachedSearchIndexLang = lang
@@ -617,11 +652,17 @@ final class LaunchpadViewModel: ObservableObject {
 
     var searchResults: [LayoutItem] {
         let text = trimmedQuery
-        if text == searchCacheKey, store.revision == searchCacheRevision { return searchCache }
-        let needle = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         let includeHidden = Prefs.showHiddenInSearch
+        let lang = LocalizationManager.shared.effectiveLanguageCode
+        if text == searchCacheKey,
+           store.revision == searchCacheRevision,
+           includeHidden == searchCacheIncludeHidden,
+           lang == searchCacheLang {
+            return searchCache
+        }
+        let needle = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         let needleLen = needle.count
-        var scored: [(score: Int, name: String, id: String)] = []
+        var buckets: [[LayoutItem]] = Array(repeating: [], count: 6)
         for entry in currentSearchIndex() where includeHidden || !entry.isHidden {
             let score: Int?
             if entry.foldedDisplay.hasPrefix(needle) { score = 0 }
@@ -631,13 +672,19 @@ final class LaunchpadViewModel: ObservableObject {
             else if entry.normalizedAppName.contains(needle) { score = 4 }
             else if needleLen >= 3, let bundle = entry.normalizedBundleID, bundle.contains(needle) { score = 5 }
             else { score = nil }
-            if let score { scored.append((score, entry.display, entry.id)) }
+            if let score { buckets[score].append(.app(entry.id)) }
         }
-        scored.sort { $0.score == $1.score ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : $0.score < $1.score }
-        searchCache = scored.map { LayoutItem.app($0.id) }
+        var results: [LayoutItem] = []
+        results.reserveCapacity(buckets.reduce(0) { $0 + $1.count })
+        for bucket in buckets where !bucket.isEmpty {
+            results.append(contentsOf: bucket)
+        }
+        searchCache = results
         searchCacheKey = text
         searchCacheRevision = store.revision
-        return searchCache
+        searchCacheIncludeHidden = includeHidden
+        searchCacheLang = lang
+        return results
     }
 
     private func queryChanged(from old: String) {
@@ -666,16 +713,13 @@ final class LaunchpadViewModel: ObservableObject {
     // MARK: Cycle de vie
 
     func prepareForShow(topInset: CGFloat, resetPage: Bool) {
-        self.topInset = topInset
-        if resetPage {
-            page = 0
-            lastPage = 0
-        } else {
-            page = min(page, max(0, pageCount - 1))
-            lastPage = page
-        }
+        if self.topInset != topInset { self.topInset = topInset }
+        cachedScrollSensitivity = CGFloat(Prefs.scrollSensitivity)
+        let nextPage = resetPage ? 0 : min(page, max(0, pageCount - 1))
+        if page != nextPage { page = nextPage }
+        lastPage = nextPage
         let width = metrics?.size.width ?? 1200
-        pageOffset = -CGFloat(page) * width
+        pageOffset = -CGFloat(nextPage) * width
         resetTransientState()
         appeared = false
         focusToken &+= 1
@@ -737,38 +781,49 @@ final class LaunchpadViewModel: ObservableObject {
         resetTransientState()
         if !query.isEmpty { query = "" }
         if Prefs.returnToFirstPage == 0 {
-            page = 0
+            if page != 0 { page = 0 }
             lastPage = 0
             pageOffset = 0
         }
         if !isSettingsOpen {
             settingsBlurIntensity = 0.0
         }
+        // Libère les références fortes d'icônes dans les tuiles en cache pendant que le panneau est masqué
+        cachedTileModels.removeAll(keepingCapacity: false)
     }
 
     private func resetTransientState() {
         [longPressTask, reorderTask, mergeTask, edgeTask].forEach { $0?.cancel() }
+        pagingGeneration &+= 1
         press = nil
-        drag = nil
+        if drag != nil { drag = nil }
         pendingReorderKey = nil
         pendingReorderAction = nil
         mergeCandidate = nil
-        mergeTargetID = nil
+        if mergeTargetID != nil { mergeTargetID = nil }
         edgeDirection = 0
-        editing = false
-        optionHeld = false
-        openFolderID = nil
-        folderFaded = false
+        if editing { editing = false }
+        if optionHeld { optionHeld = false }
+        if openFolderID != nil { openFolderID = nil }
+        if folderFaded { folderFaded = false }
         folderSnapshot = nil
-        showWidgetGallery = false
-        showWeatherCityPicker = false
-        CustomIconManager.shared.activePickerAppID = nil
-        selection.removeAll()
-        keyboardIndex = nil
-        dialog = nil
-        rename = nil
-        uninstall = nil
-        customTileModal = nil
+        if showWidgetGallery { showWidgetGallery = false }
+        if showWeatherCityPicker { showWeatherCityPicker = false }
+        if CustomIconManager.shared.activePickerAppID != nil {
+            CustomIconManager.shared.activePickerAppID = nil
+        }
+        if !selection.isEmpty { selection.removeAll() }
+        if keyboardIndex != nil { keyboardIndex = nil }
+        if isHoveringDockDropZone { isHoveringDockDropZone = false }
+        if dockDropAlreadyInDock { dockDropAlreadyInDock = false }
+        if !dockPreviewApps.isEmpty { dockPreviewApps = [] }
+        if dockSuctionBurst != nil { dockSuctionBurst = nil }
+        if dockDropBounce { dockDropBounce = false }
+        if scrollPageBounds != nil { scrollPageBounds = nil }
+        if dialog != nil { dialog = nil }
+        if rename != nil { rename = nil }
+        if uninstall != nil { uninstall = nil }
+        if customTileModal != nil { customTileModal = nil }
         textInputActive = false
     }
 
@@ -783,27 +838,27 @@ final class LaunchpadViewModel: ObservableObject {
         let clamped = min(max(value, 0), pageCount - 1)
         let changed = clamped != page
         let oldPage = page
-        if lastPage != oldPage { lastPage = oldPage }
+        lastPage = oldPage
         if page != clamped { page = clamped }
         let width = metrics?.size.width ?? 1200
         let targetOffset = -CGFloat(clamped) * width
 
-        pageSettleTask?.cancel()
+        pagingGeneration &+= 1
+        let gen = pagingGeneration
         if Prefs.reduceMotion {
             setLivePageOffset(targetOffset)
             lastPage = clamped
-            if scrollPageBounds != nil { scrollPageBounds = nil }
+            scrollPageBounds = nil
         } else {
-            let bounds = min(oldPage, clamped)...max(oldPage, clamped)
-            if scrollPageBounds != bounds { scrollPageBounds = bounds }
-            withAnimation(motion(.spring(response: 0.38, dampingFraction: 0.86))) {
+            scrollPageBounds = min(oldPage, clamped)...max(oldPage, clamped)
+            withAnimation(motion(.spring(response: 0.38, dampingFraction: 0.86)), completionCriteria: .removed) {
                 pageScroll.offset = targetOffset
-            }
-            pageSettleTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(450))
-                guard let self, !Task.isCancelled else { return }
-                if self.lastPage != self.page { self.lastPage = self.page }
-                if self.scrollPageBounds != nil { self.scrollPageBounds = nil }
+            } completion: { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.pagingGeneration == gen else { return }
+                    self.lastPage = self.page
+                    self.scrollPageBounds = nil
+                }
             }
         }
         if changed, !keepKeyboardSelection, keyboardIndex != nil {
@@ -848,10 +903,12 @@ final class LaunchpadViewModel: ObservableObject {
             let baseOffset = -CGFloat(page) * width
             switch event.phase {
             case .began, .mayBegin:
+                pagingGeneration &+= 1
+                cachedScrollSensitivity = CGFloat(Prefs.scrollSensitivity)
                 scrollAccumulator = 0
-                scrollSamples.removeAll()
+                scrollSamples.removeAll(keepingCapacity: true)
             case .changed:
-                let scaledDelta = delta * CGFloat(Prefs.scrollSensitivity)
+                let scaledDelta = delta * cachedScrollSensitivity
                 scrollAccumulator += scaledDelta
                 scrollSamples.append((now, scaledDelta))
                 while let first = scrollSamples.first, now - first.time > 0.1 {
@@ -865,7 +922,7 @@ final class LaunchpadViewModel: ObservableObject {
                 let velocity = scrollSamples.reduce(0) { $0 + $1.delta } / 0.1
                 let offset = rubberBand(scrollAccumulator)
                 scrollAccumulator = 0
-                scrollSamples.removeAll()
+                scrollSamples.removeAll(keepingCapacity: true)
                 finishPaging(offset: offset, velocity: velocity)
             default:
                 break
@@ -1118,7 +1175,7 @@ final class LaunchpadViewModel: ObservableObject {
             withAnimation(.easeOut(duration: 0.2)) { editing = false }
             return
         }
-        selection.removeAll()
+        if !selection.isEmpty { selection.removeAll() }
         activate(item)
     }
 
@@ -1143,7 +1200,8 @@ final class LaunchpadViewModel: ObservableObject {
         pointer.location = value.location
         if isHoveringDockDropZone { isHoveringDockDropZone = false }
         if dockDropAlreadyInDock { dockDropAlreadyInDock = false }
-        if canDropToMacOSDock(id: item.id), let app = store.catalog[item.id] {
+        let dockEligible = !item.isFolder && !item.isWidget && canDropToMacOSDock(id: item.id)
+        if dockEligible, let app = store.catalog[item.id] {
             let catalogSnapshot = store.catalog
             let draggedID = item.id
             Task.detached(priority: .userInitiated) { [weak self] in
@@ -1161,10 +1219,10 @@ final class LaunchpadViewModel: ObservableObject {
         } else if !dockPreviewApps.isEmpty {
             dockPreviewApps = []
         }
-        drag = DragState(id: item.id, source: source, isFolder: item.isFolder,
+        drag = DragState(id: item.id, source: source, isFolder: item.isFolder, canDropToDock: dockEligible,
                          grabOffset: CGSize(width: value.startLocation.x - center.x, height: value.startLocation.y - center.y))
-        selection.removeAll()
-        keyboardIndex = nil
+        if !selection.isEmpty { selection.removeAll() }
+        if keyboardIndex != nil { keyboardIndex = nil }
         if !editing { withAnimation(.easeOut(duration: 0.2)) { editing = true } }
         updateDrag(to: value.location)
     }
@@ -1173,7 +1231,7 @@ final class LaunchpadViewModel: ObservableObject {
         guard let state = drag else { return }
         pointer.location = location
 
-        if canDropToMacOSDock(id: state.id), dockDropZoneRect.contains(location) {
+        if state.canDropToDock, dockDropZoneRect.contains(location) {
             if !isHoveringDockDropZone {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
                     isHoveringDockDropZone = true
@@ -1596,10 +1654,14 @@ final class LaunchpadViewModel: ObservableObject {
         }
     }
 
-    // Barre de favoris
+    // Barre de favoris (mise en cache : zéro lecture UserDefaults à chaque rendu)
     var favoriteApps: [AppInfo] {
-        _ = favoritesRevision
-        return Prefs.favoriteAppIDs.compactMap { store.catalog[$0] }
+        let key = (favoritesRevision, store.revision)
+        if cachedFavoriteKey != key {
+            cachedFavoriteApps = Prefs.favoriteAppIDs.compactMap { store.catalog[$0] }
+            cachedFavoriteKey = key
+        }
+        return cachedFavoriteApps
     }
 
     func isFavorite(_ id: String) -> Bool {
@@ -1627,7 +1689,6 @@ final class LaunchpadViewModel: ObservableObject {
         }
         Prefs.favoriteAppIDs = ids
         favoritesRevision &+= 1
-        objectWillChange.send()
     }
 
     // Signets Web & Raccourcis Apple

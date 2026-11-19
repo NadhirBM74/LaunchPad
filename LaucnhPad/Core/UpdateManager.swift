@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import UserNotifications
 import Combine
+import os
 
 /// Représente l'état du système de mise à jour.
 public enum UpdateState: Equatable, Sendable {
@@ -387,11 +388,15 @@ public final class UpdateManager: NSObject, ObservableObject {
             }
         }
 
-        var lastProgressUpdate = -1.0
+        let lastProgressLock = OSAllocatedUnfairLock<Double>(initialState: -1.0)
         self.downloadObservation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
             let fraction = progress.fractionCompleted
-            guard fraction >= 0.999 || (fraction - lastProgressUpdate) >= 0.015 else { return }
-            lastProgressUpdate = fraction
+            let shouldEmit = lastProgressLock.withLock { last -> Bool in
+                guard fraction >= 0.999 || (fraction - last) >= 0.015 else { return false }
+                last = fraction
+                return true
+            }
+            guard shouldEmit else { return }
             Task { @MainActor [weak self] in
                 guard let self, case .downloading = self.state else { return }
                 self.state = .downloading(progress: fraction)

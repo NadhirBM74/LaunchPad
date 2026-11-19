@@ -167,58 +167,21 @@ struct PremiumFolderIconView: View, Equatable {
         let isPureLightPreset = (style == .pureWhite)
         let crystalSpec = folderCrystalSpec(isPureLightPreset: isPureLightPreset)
 
-        ZStack {
+        let folderView = ZStack {
             CrystalGlassBackdrop(shape: shape, spec: crystalSpec, preferRotatedMaterial: isJiggling)
 
-            // Mini-grille d'icônes aplatie (sans verre individuel) pour fluidité optimale
-            Group {
-                if let symbol = customSymbol, !symbol.isEmpty {
-                    VStack(spacing: s * 0.04) {
-                        Image(systemName: symbol)
-                            .font(.system(size: s * 0.34, weight: .semibold))
-                            .foregroundStyle(iconTheme == .tinted ? resolvedTintColor : .white.opacity(0.92))
-                            .shadow(color: .black.opacity(0.22), radius: 3, y: 1.5)
-
-                        if !icons.isEmpty {
-                            HStack(spacing: s * 0.03) {
-                                ForEach(0..<min(3, icons.count), id: \.self) { idx in
-                                    CrystalAppIconImage(
-                                        image: icons[idx],
-                                        size: mini * 0.82,
-                                        style: iconTheme,
-                                        isPro: resolvedIsPro,
-                                        tintColor: iconTheme == .tinted ? resolvedTintColor : nil,
-                                        useLiveGlass: false
-                                    )
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    VStack(spacing: gap) {
-                        ForEach(0..<3, id: \.self) { row in
-                            HStack(spacing: gap) {
-                                ForEach(0..<3, id: \.self) { column in
-                                    let index = row * 3 + column
-                                    if index < icons.count {
-                                        CrystalAppIconImage(
-                                            image: icons[index],
-                                            size: mini,
-                                            style: iconTheme,
-                                            isPro: resolvedIsPro,
-                                            tintColor: iconTheme == .tinted ? resolvedTintColor : nil,
-                                            useLiveGlass: false
-                                        )
-                                    } else {
-                                        Color.clear.frame(width: mini, height: mini)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .drawingGroup()
+            // Mini-grille d'icônes aplatie Equatable (sans re-rastérisation lors du basculement jiggle)
+            FolderMiniGridView(
+                icons: icons,
+                customSymbol: customSymbol,
+                s: s,
+                gap: gap,
+                mini: mini,
+                iconTheme: iconTheme,
+                resolvedIsPro: resolvedIsPro,
+                resolvedTintColor: resolvedTintColor
+            )
+            .equatable()
 
             // Biseau spéculaire fin « Version 1 — Cristal Pur »
             CrystalGlassBackdrop.specularRim(
@@ -234,6 +197,16 @@ struct PremiumFolderIconView: View, Equatable {
             x: 0,
             y: s * 0.03
         )
+
+        if isJiggling {
+            let pad = max(8, s * 0.14)
+            folderView
+                .padding(pad)
+                .drawingGroup()
+                .padding(-pad)
+        } else {
+            folderView
+        }
     }
 
     // MARK: - 2. Dossiers à Onglet Designer (Photo de Référence 4 : Backup, Design, New projects, Work files, LaunchMe)
@@ -695,17 +668,90 @@ struct FolderCustomizationBarView: View {
     }
 }
 
+// MARK: - Mini-grille 3×3 Equatable (évite la re-rastérisation Metal lors du basculement jiggle)
+
+private struct FolderMiniGridView: View, Equatable {
+    let icons: [NSImage]
+    let customSymbol: String?
+    let s: CGFloat
+    let gap: CGFloat
+    let mini: CGFloat
+    let iconTheme: IconAppearanceStyle
+    let resolvedIsPro: Bool
+    let resolvedTintColor: Color
+
+    static func == (lhs: FolderMiniGridView, rhs: FolderMiniGridView) -> Bool {
+        lhs.customSymbol == rhs.customSymbol
+            && lhs.s == rhs.s
+            && lhs.gap == rhs.gap
+            && lhs.mini == rhs.mini
+            && lhs.iconTheme == rhs.iconTheme
+            && lhs.resolvedIsPro == rhs.resolvedIsPro
+            && (lhs.iconTheme != .tinted || lhs.resolvedTintColor == rhs.resolvedTintColor)
+            && lhs.icons.count == rhs.icons.count
+            && zip(lhs.icons, rhs.icons).allSatisfy(===)
+    }
+
+    var body: some View {
+        Group {
+            if let symbol = customSymbol, !symbol.isEmpty {
+                VStack(spacing: s * 0.04) {
+                    Image(systemName: symbol)
+                        .font(.system(size: s * 0.34, weight: .semibold))
+                        .foregroundStyle(iconTheme == .tinted ? resolvedTintColor : .white.opacity(0.92))
+                        .shadow(color: .black.opacity(0.22), radius: 3, y: 1.5)
+
+                    if !icons.isEmpty {
+                        HStack(spacing: s * 0.03) {
+                            ForEach(0..<min(3, icons.count), id: \.self) { idx in
+                                CrystalAppIconImage(
+                                    image: icons[idx],
+                                    size: mini * 0.82,
+                                    style: iconTheme,
+                                    isPro: resolvedIsPro,
+                                    tintColor: iconTheme == .tinted ? resolvedTintColor : nil,
+                                    useLiveGlass: false
+                                )
+                                .equatable()
+                            }
+                        }
+                    }
+                }
+            } else {
+                VStack(spacing: gap) {
+                    ForEach(0..<3, id: \.self) { row in
+                        HStack(spacing: gap) {
+                            ForEach(0..<3, id: \.self) { column in
+                                let index = row * 3 + column
+                                if index < icons.count {
+                                    CrystalAppIconImage(
+                                        image: icons[index],
+                                        size: mini,
+                                        style: iconTheme,
+                                        isPro: resolvedIsPro,
+                                        tintColor: iconTheme == .tinted ? resolvedTintColor : nil,
+                                        useLiveGlass: false
+                                    )
+                                    .equatable()
+                                } else {
+                                    Color.clear.frame(width: mini, height: mini)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .drawingGroup()
+    }
+}
+
 // MARK: - Sélecteur d'Applications pour Ajouter/Retirer des Apps d'un Dossier
 
 private struct PickerAppEntry: Identifiable, Equatable {
     let id: String
     let name: String
     let lowercasedName: String
-    let icon: NSImage
-
-    static func == (lhs: PickerAppEntry, rhs: PickerAppEntry) -> Bool {
-        lhs.id == rhs.id && lhs.name == rhs.name && lhs.icon === rhs.icon
-    }
 }
 
 private struct FolderAppPickerRowView: View, Equatable {
@@ -714,6 +760,7 @@ private struct FolderAppPickerRowView: View, Equatable {
     let iconStyle: IconAppearanceStyle
     let isPro: Bool
     let tintColor: Color
+    let iconsVersion: Int
     let onTap: () -> Void
 
     static func == (lhs: FolderAppPickerRowView, rhs: FolderAppPickerRowView) -> Bool {
@@ -721,6 +768,7 @@ private struct FolderAppPickerRowView: View, Equatable {
             && lhs.inFolder == rhs.inFolder
             && lhs.iconStyle == rhs.iconStyle
             && lhs.isPro == rhs.isPro
+            && lhs.iconsVersion == rhs.iconsVersion
             && (lhs.iconStyle != .tinted || lhs.tintColor == rhs.tintColor)
     }
 
@@ -728,13 +776,14 @@ private struct FolderAppPickerRowView: View, Equatable {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 CrystalAppIconImage(
-                    image: entry.icon,
+                    image: IconCache.shared.miniIcon(for: entry.id),
                     size: 26,
                     style: iconStyle,
                     isPro: isPro,
                     tintColor: iconStyle == .tinted ? tintColor : nil,
                     useLiveGlass: false
                 )
+                .equatable()
                 Text(entry.name)
                     .font(.system(size: 12, weight: inFolder ? .semibold : .regular))
                     .foregroundStyle(.white)
@@ -782,8 +831,7 @@ struct FolderAppPickerSheet: View {
                 PickerAppEntry(
                     id: app.id,
                     name: name,
-                    lowercasedName: name.lowercased(),
-                    icon: IconCache.shared.miniIcon(for: app.id)
+                    lowercasedName: name.lowercased()
                 )
             )
         }
@@ -796,6 +844,7 @@ struct FolderAppPickerSheet: View {
         let iconStyle = IconCache.shared.currentAppearanceStyle
         let isPro = LicenseManager.shared.isPro
         let tintColor = IconCache.shared.activeTintColor
+        let iconsVer = store.iconsVersion
 
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -841,7 +890,8 @@ struct FolderAppPickerSheet: View {
                             inFolder: inFolder,
                             iconStyle: iconStyle,
                             isPro: isPro,
-                            tintColor: tintColor
+                            tintColor: tintColor,
+                            iconsVersion: iconsVer
                         ) {
                             withAnimation(AppleDesignSystem.Springs.snappy) {
                                 store.toggleAppInFolder(entry.id, folderID: folder.id)
@@ -863,8 +913,8 @@ struct FolderAppPickerSheet: View {
                 )
         )
         .onAppear { rebuildSortedApps() }
-        .onChange(of: store.revision) { _, _ in rebuildSortedApps() }
-        .onChange(of: store.iconsVersion) { _, _ in rebuildSortedApps() }
+        .onChange(of: store.catalog.count) { _, _ in rebuildSortedApps() }
+        .onChange(of: store.hidden.count) { _, _ in rebuildSortedApps() }
         .onChange(of: locManager.effectiveLanguageCode) { _, _ in rebuildSortedApps() }
     }
 }

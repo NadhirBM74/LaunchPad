@@ -83,6 +83,28 @@ public extension EnvironmentValues {
     }
 }
 
+private struct ConditionalHoverModifier: ViewModifier {
+    let enabled: Bool
+    let reduceMotion: Bool
+    @Binding var isHovered: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onHover { hovering in
+                if reduceMotion {
+                    isHovered = hovering
+                } else {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        isHovered = hovering
+                    }
+                }
+            }
+        } else {
+            content
+        }
+    }
+}
+
 private struct LiquidGlassFallbackBackground<S: InsettableShape>: View {
     let shape: S
     let tint: Color?
@@ -91,10 +113,58 @@ private struct LiquidGlassFallbackBackground<S: InsettableShape>: View {
     let reduceTransparency: Bool
     let isJiggling: Bool
 
+    var body: some View {
+        if let explicitIntensity {
+            LiquidGlassFallbackContent(
+                shape: shape,
+                tint: tint,
+                prominence: prominence,
+                intensity: explicitIntensity,
+                reduceTransparency: reduceTransparency,
+                isJiggling: isJiggling
+            )
+        } else {
+            LiquidGlassFallbackStoredContent(
+                shape: shape,
+                tint: tint,
+                prominence: prominence,
+                reduceTransparency: reduceTransparency,
+                isJiggling: isJiggling
+            )
+        }
+    }
+}
+
+private struct LiquidGlassFallbackStoredContent<S: InsettableShape>: View {
+    let shape: S
+    let tint: Color?
+    let prominence: LiquidGlassProminence
+    let reduceTransparency: Bool
+    let isJiggling: Bool
     @AppStorage(PrefKey.liquidGlassIntensity) private var storedIntensity: Double = 0.85
 
     var body: some View {
-        let i = max(0.0, min(1.0, explicitIntensity ?? storedIntensity))
+        LiquidGlassFallbackContent(
+            shape: shape,
+            tint: tint,
+            prominence: prominence,
+            intensity: storedIntensity,
+            reduceTransparency: reduceTransparency,
+            isJiggling: isJiggling
+        )
+    }
+}
+
+private struct LiquidGlassFallbackContent<S: InsettableShape>: View {
+    let shape: S
+    let tint: Color?
+    let prominence: LiquidGlassProminence
+    let intensity: Double
+    let reduceTransparency: Bool
+    let isJiggling: Bool
+
+    var body: some View {
+        let i = max(0.0, min(1.0, intensity))
         ZStack {
             if reduceTransparency {
                 shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
@@ -180,16 +250,7 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                         )
                         .allowsHitTesting(false)
                 }
-                .onHover { hovering in
-                    guard interactive else { return }
-                    if reduceMotion {
-                        isHovered = hovering
-                    } else {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            isHovered = hovering
-                        }
-                    }
-                }
+                .modifier(ConditionalHoverModifier(enabled: interactive, reduceMotion: reduceMotion, isHovered: $isHovered))
         } else {
             // Fallback haute fidélité pour macOS antérieur ou rotation animée (jiggle)
             content
@@ -213,16 +274,7 @@ public struct LiquidGlassModifier<S: InsettableShape>: ViewModifier {
                         )
                         .allowsHitTesting(false)
                 }
-                .onHover { hovering in
-                    guard interactive else { return }
-                    if reduceMotion {
-                        isHovered = hovering
-                    } else {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            isHovered = hovering
-                        }
-                    }
-                }
+                .modifier(ConditionalHoverModifier(enabled: interactive, reduceMotion: reduceMotion, isHovered: $isHovered))
         }
     }
 }
@@ -685,7 +737,7 @@ public struct CrystalAppIconImage: View, Equatable {
             let spec = CrystalGlassSpec.resolve(style: style, tintColor: tintColor)
             let rimWidth = max(useLiveGlass ? 0.88 : 0.48, min(1.35, bodySize * 0.0155))
 
-            ZStack {
+            let iconStack = ZStack {
                 if useLiveGlass {
                     CrystalGlassBackdrop(shape: shape, spec: spec, preferRotatedMaterial: isJiggling)
                         .frame(width: bodySize, height: bodySize)
@@ -738,6 +790,18 @@ public struct CrystalAppIconImage: View, Equatable {
                 radius: max(1.0, size * (useLiveGlass ? 0.055 : 0.032)),
                 y: max(0.5, size * (useLiveGlass ? 0.028 : 0.016))
             )
+
+            // En mode édition (jiggle), le matériau statique est déjà actif : aplatir en 1 texture Metal
+            // évite 70-140 passes d'ombres offscreen par seconde à 120 Hz, à rendu visuel identique.
+            if isJiggling && useLiveGlass {
+                let pad = max(8, size * 0.14)
+                iconStack
+                    .padding(pad)
+                    .drawingGroup()
+                    .padding(-pad)
+            } else {
+                iconStack
+            }
         }
     }
 }
@@ -758,7 +822,7 @@ private final class AppIconAppearanceState: ObservableObject {
             object: UserDefaults.standard,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 self?.refresh()
             }
         }

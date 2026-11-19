@@ -30,7 +30,6 @@ struct SettingsPanel: View {
     @ObservedObject var store: LaunchpadStore
     @AppStorage(PrefKey.columns) private var columns = 7
     @AppStorage(PrefKey.rows) private var rows = 5
-    @AppStorage(PrefKey.backgroundOpacity) private var opacity = 0.35
     @AppStorage(PrefKey.backdropOpacity) private var backdropOpacity = 0.40
     @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
@@ -66,8 +65,8 @@ struct SettingsPanel: View {
     @State private var adminPassword = ""
     @State private var adminErrorMessage: String?
     @State private var isPasswordVisible = false
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var accessibilityGranted = AXIsProcessTrusted()
+    @State private var launchAtLogin = false
+    @State private var accessibilityGranted = PermissionManager.shared.isAccessibilityGranted
     @State private var selectedTab = SettingsPanel.initialTab
     @State private var customSources: [String] = Prefs.customSources
     @State private var sortChoice = "custom"
@@ -160,7 +159,8 @@ struct SettingsPanel: View {
                     systemLP: SystemLaunchpadReader.databaseURL != nil,
                     pinch: SystemConflicts.systemFourFingerPinchEnabled,
                     drag: SystemConflicts.systemThreeFingerDragEnabled,
-                    corner: checkCorner && SystemConflicts.systemHotCornerAssigned(dockKey: cornerKey)
+                    corner: checkCorner && SystemConflicts.systemHotCornerAssigned(dockKey: cornerKey),
+                    loginItem: SMAppService.mainApp.status == .enabled
                 )
             }.value
             if hasLaunchOSDB != results.launchOS { hasLaunchOSDB = results.launchOS }
@@ -168,14 +168,16 @@ struct SettingsPanel: View {
             if fourFingerPinchConflict != results.pinch { fourFingerPinchConflict = results.pinch }
             if threeFingerDragConflict != results.drag { threeFingerDragConflict = results.drag }
             if hotCornerConflict != results.corner { hotCornerConflict = results.corner }
+            if launchAtLogin != results.loginItem { launchAtLogin = results.loginItem }
         }
     }
 
     var body: some View {
         settingsInteractionShell
             .onAppear {
+                LicenseManager.shared.loadAppleAccountProfileIfNeeded()
                 PermissionManager.shared.checkStatus()
-                accessibilityGranted = AXIsProcessTrusted()
+                accessibilityGranted = PermissionManager.shared.isAccessibilityGranted
                 refreshSystemChecks()
                 if let target = SettingsPanel.targetTab {
                     selectedTab = target
@@ -185,11 +187,13 @@ struct SettingsPanel: View {
             .onDisappear {
                 iconScalePreviewTask?.cancel()
                 iconScalePreviewTask = nil
+                settingsToastTask?.cancel()
+                settingsToastTask = nil
                 NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
             }
             .onReceive(NotificationCenter.default.publisher(for: .settingsWillShow)) { _ in
                 PermissionManager.shared.checkStatus()
-                accessibilityGranted = AXIsProcessTrusted()
+                accessibilityGranted = PermissionManager.shared.isAccessibilityGranted
                 refreshSystemChecks()
                 if let target = SettingsPanel.targetTab {
                     selectedTab = target
@@ -241,6 +245,7 @@ struct SettingsPanel: View {
             .overlay { settingsBorderOverlay }
             .background(WindowAppearanceSync(isLight: backgroundStyle == .light))
             .foregroundStyle(aura.primaryText)
+            .environment(\.velvetAuraTheme, aura)
             .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
             .preferredColorScheme(backgroundStyle == .light ? .light : .dark)
     }
@@ -2535,7 +2540,7 @@ private struct SettingsSectionTitle: View {
 }
 
 private struct SettingsCardBox<Content: View>: View {
-    @AppStorage(PrefKey.backgroundStyle) private var theme: BackgroundStyle = .liquidGlass
+    @Environment(\.velvetAuraTheme) private var aura
     let content: () -> Content
     init(@ViewBuilder content: @escaping () -> Content) { self.content = content }
     var body: some View {
@@ -2543,10 +2548,12 @@ private struct SettingsCardBox<Content: View>: View {
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                VelvetAuraCardBackground(theme: theme, cornerRadius: 15)
+                VelvetAuraCardBackground(theme: aura.theme, cornerRadius: 15)
+                    .equatable()
             }
             .overlay {
-                VelvetAuraCardOverlay(theme: theme, cornerRadius: 15)
+                VelvetAuraCardOverlay(theme: aura.theme, cornerRadius: 15)
+                    .equatable()
             }
     }
 }
@@ -2625,7 +2632,6 @@ struct ThemeCardButton: View {
                                     .font(.system(size: 20))
                                     .symbolRenderingMode(.monochrome)
                                     .foregroundStyle(cardSymbolColor)
-                                    .drawingGroup()
                                 Text(theme.title)
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(cardLabelColor)
@@ -2828,10 +2834,10 @@ private struct SettingsRow<Control: View>: View {
 }
 
 private struct SettingsSeparator: View {
-    @AppStorage(PrefKey.backgroundStyle) private var theme: BackgroundStyle = .liquidGlass
+    @Environment(\.velvetAuraTheme) private var aura
     var body: some View {
         Rectangle()
-            .fill(VelvetAuraTheme(theme: theme).divider)
+            .fill(aura.divider)
             .frame(height: 1)
     }
 }

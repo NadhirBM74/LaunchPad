@@ -172,7 +172,8 @@ struct GridLayoutEngine {
             return nil
         }
 
-        let startRow = min(rows - rowSpan, max(0, startIndex / columns))
+        let startRow = max(0, startIndex / columns)
+        guard startRow <= rows - rowSpan else { return nil }
         for r in startRow...(rows - rowSpan) {
             for c in 0...(columns - colSpan) {
                 var canFit = true
@@ -252,6 +253,68 @@ struct GridLayoutEngine {
         }
 
         return pages
+    }
+
+    /// Retourne uniquement la page de l'élément à l'index `targetIndex` avec arrêt anticipé dès qu'il est placé.
+    static func pageOfItem(
+        at targetIndex: Int,
+        in items: [LayoutItem],
+        columns: Int,
+        rows: Int
+    ) -> Int? {
+        guard targetIndex >= 0 && targetIndex < items.count else { return nil }
+        let cols = max(1, columns)
+        let rws = max(1, rows)
+        let totalSlots = cols * rws
+        let maxPagesLimit = 200
+
+        var currentPage = 0
+        var pageOccupied = [Bool](repeating: false, count: totalSlots)
+        var pageHasOccupied = false
+        var firstFreeSlot = 0
+        var startedPinnedFolderPage = false
+
+        for idx in 0...targetIndex {
+            let item = items[idx]
+            if case .folder(let folder) = item, folder.pinToLastPage, !startedPinnedFolderPage {
+                startedPinnedFolderPage = true
+                if pageHasOccupied {
+                    currentPage += 1
+                    pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                    pageHasOccupied = false
+                    firstFreeSlot = 0
+                }
+            }
+            let (spanCols, spanRows) = item.span(columns: cols, rows: rws)
+            let safeCols = max(1, min(spanCols, cols))
+            let safeRows = max(1, min(spanRows, rws))
+            var placed = false
+
+            while !placed, currentPage < maxPagesLimit {
+                if let pos = findSlot(colSpan: safeCols, rowSpan: safeRows, in: pageOccupied, columns: cols, rows: rws, startIndex: firstFreeSlot) {
+                    if idx == targetIndex {
+                        return currentPage
+                    }
+                    for r in pos.row..<(pos.row + safeRows) {
+                        let rowOffset = r * cols + pos.col
+                        for dc in 0..<safeCols {
+                            pageOccupied[rowOffset + dc] = true
+                        }
+                    }
+                    pageHasOccupied = true
+                    while firstFreeSlot < totalSlots && pageOccupied[firstFreeSlot] {
+                        firstFreeSlot += 1
+                    }
+                    placed = true
+                } else {
+                    currentPage += 1
+                    pageOccupied.withUnsafeMutableBufferPointer { $0.initialize(repeating: false) }
+                    pageHasOccupied = false
+                    firstFreeSlot = 0
+                }
+            }
+        }
+        return nil
     }
 
     /// Vérifie si une liste d'éléments peut être positionnée sur la grille sans dépasser les limites

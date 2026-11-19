@@ -3,44 +3,76 @@ import Combine
 import SwiftUI
 import os
 
-private struct LanguageSnapshot: Sendable {
+nonisolated private final class LanguageSnapshot: @unchecked Sendable {
     let code: String
     let locale: Locale
     let strings: [String: String]
 
+    nonisolated private init(code: String, locale: Locale, strings: [String: String]) {
+        self.code = code
+        self.locale = locale
+        self.strings = strings
+    }
+
     nonisolated static func make(code: String) -> LanguageSnapshot {
-        LanguageSnapshot(
+        // Pré-fusionne une seule fois les tables de secours (EN → FR → langue active)
+        // afin que chaque appel `loc()` effectue une unique recherche O(1) dans un dictionnaire plat.
+        let primary = Translations.table(for: code)
+        var merged = Translations_EN.strings
+        for (k, v) in Translations_FR.strings { merged[k] = v }
+        if code != "fr" {
+            for (k, v) in primary { merged[k] = v }
+        }
+        return LanguageSnapshot(
             code: code,
             locale: Locale(identifier: code),
-            strings: Translations.table(for: code)
+            strings: merged
         )
     }
 }
 
-/// État de langue thread-safe et sans contention accessible depuis n'importe quel contexte
+/// État de langue thread-safe avec chemin rapide sans verrou sur le thread principal (`@MainActor`).
 nonisolated private final class LanguageState: @unchecked Sendable {
     nonisolated static let shared = LanguageState()
     private let lock: OSAllocatedUnfairLock<LanguageSnapshot>
+    /// Copie miroir lue uniquement sur le thread principal (zéro acquisition de verrou sur 100 % des rendus UI).
+    nonisolated(unsafe) private var mainThreadSnapshot: LanguageSnapshot
 
     nonisolated init() {
         let saved = UserDefaults.standard.string(forKey: PrefKey.appLanguage)
             ?? UserDefaults.standard.string(forKey: "appLanguage")
             ?? "auto"
         let lang = AppLanguage(rawValue: saved) ?? .auto
-        self.lock = OSAllocatedUnfairLock(initialState: LanguageSnapshot.make(code: lang.code))
+        let initial = LanguageSnapshot.make(code: lang.code)
+        self.lock = OSAllocatedUnfairLock(initialState: initial)
+        self.mainThreadSnapshot = initial
     }
 
+    @inline(__always)
     nonisolated func snapshot() -> LanguageSnapshot {
-        lock.withLock { $0 }
+        if Thread.isMainThread {
+            return mainThreadSnapshot
+        }
+        return lock.withLock { $0 }
     }
 
+    @inline(__always)
     nonisolated func get() -> String {
-        lock.withLock { $0.code }
+        snapshot().code
     }
 
     nonisolated func set(_ newCode: String) {
+        let currentCode = lock.withLock { $0.code }
+        guard currentCode != newCode else { return }
         let next = LanguageSnapshot.make(code: newCode)
         lock.withLock { $0 = next }
+        if Thread.isMainThread {
+            mainThreadSnapshot = next
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.mainThreadSnapshot = next
+            }
+        }
     }
 }
 
@@ -99,27 +131,15 @@ final class LocalizationManager: ObservableObject {
     }
 }
 
-/// Helper global de traduction (non isolé pour être thread-safe et utilisable depuis tout contexte)
+/// Helper global de traduction (chemin sans verrou sur le thread principal, 1 seul lookup O(1))
+@inline(__always)
 nonisolated func loc(_ key: String) -> String {
-    let snap = LanguageState.shared.snapshot()
-    if let translation = snap.strings[key] {
-        return translation
-    }
-    if let fallbackFr = Translations_FR.strings[key] {
-        return fallbackFr
-    }
-    if let fallbackEn = Translations_EN.strings[key] {
-        return fallbackEn
-    }
-    return key
+    LanguageState.shared.snapshot().strings[key] ?? key
 }
 
 /// Helper global de traduction avec arguments (non isolé)
 nonisolated func loc(_ key: String, _ args: CVarArg...) -> String {
     let snap = LanguageState.shared.snapshot()
-    let format = snap.strings[key]
-        ?? Translations_FR.strings[key]
-        ?? Translations_EN.strings[key]
-        ?? key
+    let format = snap.strings[key] ?? key
     return String(format: format, locale: snap.locale, arguments: args)
 }
