@@ -74,9 +74,27 @@ final class AdminTestWindowController: NSObject, NSWindowDelegate {
         window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 4)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         if let existing = window.contentViewController as? NSHostingController<AdminTestCenterView> {
+            existing.sizingOptions = []
             existing.rootView = AdminTestCenterView(store: store)
         } else {
-            window.contentViewController = NSHostingController(rootView: AdminTestCenterView(store: store))
+            let hosting = NSHostingController(rootView: AdminTestCenterView(store: store))
+            hosting.sizingOptions = []
+            window.contentViewController = hosting
+        }
+        let targetScreen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        if let area = targetScreen?.visibleFrame {
+            let width = min(920, max(820, area.width - 24))
+            let height = min(680, max(560, area.height - 24))
+            let frame = NSRect(
+                x: (area.midX - width / 2).rounded(),
+                y: (area.midY - height / 2).rounded(),
+                width: width.rounded(),
+                height: height.rounded()
+            )
+            window.setFrame(frame, display: false)
+        } else {
             window.center()
         }
         NSApp.unhide(nil)
@@ -1162,8 +1180,8 @@ private struct AdminUpdatesSectionView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.21)") {
-                            updates.setDebugState(.upToDate(version: "1.2.21"))
+                        Button("À jour (v1.2.22)") {
+                            updates.setDebugState(.upToDate(version: "1.2.22"))
                             AdminManager.shared.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

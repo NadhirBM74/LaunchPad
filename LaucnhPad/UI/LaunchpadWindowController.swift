@@ -31,7 +31,7 @@ final class LaunchpadWindowController: NSObject {
 
     /// Niveau et écran du panneau (pour ouvrir les réglages par-dessus).
     var panelLevel: NSWindow.Level { panel.level }
-    var panelScreen: NSScreen? { panel.screen }
+    var panelScreen: NSScreen? { panel.screen ?? currentScreen }
 
     /// Rend le clavier au Launchpad (après fermeture des réglages par exemple).
     func focusPanel() {
@@ -48,6 +48,7 @@ final class LaunchpadWindowController: NSObject {
     private var lastHidden = Date.distantPast
     private var hideTask: Task<Void, Never>?
     private var appliedPresentationOptions: NSApplication.PresentationOptions = []
+    private weak var currentScreen: NSScreen?
 
     init(store: LaunchpadStore) {
         self.store = store
@@ -120,6 +121,7 @@ final class LaunchpadWindowController: NSObject {
         hideTask?.cancel()
         guard !isVisible else { return }
         let screen = targetScreen()
+        currentScreen = screen
         isVisible = true
         viewModel.setPanelVisible(true)
         NotificationCenter.default.post(name: .launchpadVisibilityDidChange, object: true)
@@ -218,6 +220,7 @@ final class LaunchpadWindowController: NSObject {
     }
 
     private func applyLayout(on screen: NSScreen, display: Bool) {
+        currentScreen = screen
         appliedMode = Prefs.displayMode
         viewModel.updateWindowRect(windowRect(on: screen))
         // Le panneau reste toujours plein écran : le redimensionner fait boucler la mise en page de SwiftUI.

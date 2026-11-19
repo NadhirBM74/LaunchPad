@@ -241,6 +241,16 @@ final class LaunchpadViewModel: ObservableObject {
     @Published var uninstall: UninstallSession?
     @Published var customTileModal: CustomTileModalModel?
     @Published var showWidgetGallery: Bool = false
+
+    func openWidgetGallery() {
+        textInputActive = false
+        if openFolderID != nil {
+            closeFolder()
+        }
+        if !showWidgetGallery {
+            showWidgetGallery = true
+        }
+    }
     @Published var showWeatherCityPicker: Bool = false
     @Published var showTutorial: Bool = false
     @Published var tutorialStepIndex: Int = 0
@@ -841,13 +851,18 @@ final class LaunchpadViewModel: ObservableObject {
                 scrollAccumulator = 0
                 scrollSamples.removeAll()
             case .changed:
-                scrollAccumulator += delta * CGFloat(Prefs.scrollSensitivity)
-                scrollSamples.append((now, delta * CGFloat(Prefs.scrollSensitivity)))
-                scrollSamples.removeAll { now - $0.time > 0.1 }
+                let scaledDelta = delta * CGFloat(Prefs.scrollSensitivity)
+                scrollAccumulator += scaledDelta
+                scrollSamples.append((now, scaledDelta))
+                while let first = scrollSamples.first, now - first.time > 0.1 {
+                    scrollSamples.removeFirst()
+                }
                 pageOffset = baseOffset + rubberBand(scrollAccumulator)
             case .ended, .cancelled:
-                let recent = scrollSamples.filter { now - $0.time <= 0.1 }
-                let velocity = recent.reduce(0) { $0 + $1.delta } / 0.1
+                while let first = scrollSamples.first, now - first.time > 0.1 {
+                    scrollSamples.removeFirst()
+                }
+                let velocity = scrollSamples.reduce(0) { $0 + $1.delta } / 0.1
                 let offset = rubberBand(scrollAccumulator)
                 scrollAccumulator = 0
                 scrollSamples.removeAll()
@@ -884,7 +899,9 @@ final class LaunchpadViewModel: ObservableObject {
                 return true
             }
             if showWidgetGallery {
-                showWidgetGallery = false
+                withAnimation(Prefs.reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                    showWidgetGallery = false
+                }
                 return true
             }
             if CustomIconManager.shared.activePickerAppID != nil {

@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.21",
-  "name": "LaunchPad v1.2.21",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.21",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.21\n\n- ⚡ **Fluidité Générale & Défilement 120 Hz** : L'ouverture des pages, le glissement au trackpad et le tremblement en mode édition sont isolés pour rester parfaitement fluides sur toute la grille d'applications.\n- 🎨 **Rendu d'Icônes & Dossiers Accéléré** : Les shaders Liquid Glass, le détourage des icônes et le cache disque rétina précalculent leurs géométries pour charger et afficher vos icônes bien plus vite.\n- 🧩 **Widgets Intelligents en Veille Automatique** : Les widgets Météo, Horloge, Calendrier, Musique et Moniteur Système mettent en pause leurs actualisations dès que le Launchpad est masqué et préservent l'autonomie.\n- 💿 **Musique & Pochettes Sans Ralentissement** : Le décodage et le redimensionnement des pochettes d'album s'effectuent en arrière-plan avec mise en cache bornée pour des transitions instantanées.\n- 🛡️ **Stabilité & Fiabilité Renforcées** : Suppression d'un blocage lors de la synchronisation météo en arrière-plan, sécurisation des requêtes AppleScript par délai d'expiration et réduction de la consommation mémoire.",
+  "tag_name": "v1.2.22",
+  "name": "LaunchPad v1.2.22",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.22",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.22\n\n- 🎯 **Centrage Exact des Réglages & du Menu Widgets** : La fenêtre des Réglages (y compris après réouverture ou changement d'écran) et la galerie de widgets s'ouvrent désormais toujours parfaitement centrées à l'écran, en mode plein écran comme en mode fenêtre.\n- ⚡ **Fluidité 120 Hz & Ouverture Instantanée** : Suppression du flou dynamique coûteux à l'ouverture des dossiers, réutilisation du panneau des Réglages en mémoire et déplacement des vérifications système hors du thread principal.\n- 🧊 **Lisibilité Liquid Glass de la Galerie Widgets** : Ajout d'un voile givré raffiné derrière la galerie de widgets pour conserver un contraste net tout en préservant l'esthétique Liquid Glass.\n- 🖱️ **Réactivité Trackpad & Interactions Affinées** : Optimisation du suivi de défilement à deux doigts, suppression des survols inutiles derrière les modales et mise en cache multilingue des fiches widgets.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.21.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.21/LaunchPad-v1.2.21.zip"
+      "name": "LaunchPad-v1.2.22.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.22/LaunchPad-v1.2.22.zip"
     },
     {
-      "name": "LaunchPad-v1.2.21.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.21/LaunchPad-v1.2.21.dmg"
+      "name": "LaunchPad-v1.2.22.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.22/LaunchPad-v1.2.22.dmg"
     }
   ]
 }

@@ -250,6 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.launchpad.show()
                 #if DEBUG
                 if arguments.contains("--edit") { self?.launchpad.viewModel.debugSetEditing(true) }
+                if arguments.contains("--widget-gallery") { self?.launchpad.viewModel.openWidgetGallery() }
                 if let index = arguments.firstIndex(of: "--query"), index + 1 < arguments.count {
                     self?.launchpad.viewModel.query = arguments[index + 1]
                 }

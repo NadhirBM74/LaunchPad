@@ -75,7 +75,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private func finalizeClose() {
         guard isClosing, let window else { return }
         window.orderOut(nil)
-        window.contentViewController = nil
         window.alphaValue = 1.0
         isClosing = false
         let wasAbove = isAboveLaunchpad
@@ -90,19 +89,18 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         return false
     }
 
-    /// Affiche les réglages, centrés sur `screen`, avec animation progressive de fondu.
+    /// Affiche les réglages, toujours parfaitement centrés sur `screen`, avec animation progressive de fondu.
     /// - Parameter launchpadLevel: niveau du panneau Launchpad s'il est ouvert : la fenêtre passe juste au-dessus.
     func show(above launchpadLevel: NSWindow.Level? = nil, on screen: NSScreen? = nil) {
+        let initialTargetScreen = resolveTargetScreen(preferred: screen)
+        let initialFrame = centeredFrame(on: initialTargetScreen, centerHorizontallyInFullScreen: launchpadLevel != nil)
+
         if window == nil {
-            let window = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: SettingsPanel.size.width, height: SettingsPanel.size.height),
-                                  styleMask: [.titled, .fullSizeContentView],
+            let window = SettingsWindow(contentRect: initialFrame,
+                                  styleMask: [.borderless],
                                   backing: .buffered, defer: false)
             window.title = loc("about.window_title")
-            window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = true
-            window.standardWindowButton(.closeButton)?.isHidden = true
-            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-            window.standardWindowButton(.zoomButton)?.isHidden = true
+            window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.isOpaque = false
             window.backgroundColor = .clear
@@ -115,11 +113,22 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         guard let window else { return }
         window.title = loc("about.window_title")
         if window.contentViewController == nil {
-            window.contentViewController = NSHostingController(rootView: SettingsPanel(store: store))
+            let hosting = NSHostingController(rootView: SettingsPanel(store: store))
+            // Empêche NSHostingController de modifier la taille/position de la fenêtre lors du premier layout.
+            hosting.sizingOptions = []
+            window.contentViewController = hosting
         }
 
-        isClosing = false
+        // Annule une éventuelle animation de fermeture en cours si l'utilisateur réouvre immédiatement.
+        if isClosing {
+            isClosing = false
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                window.animator().alphaValue = 0.0
+            }
+        }
 
+        let aboveLaunchpad = launchpadLevel != nil
         if let launchpadLevel {
             // Au-dessus du Launchpad, sans le fermer.
             isAboveLaunchpad = true
@@ -133,20 +142,26 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             // on passe temporairement en app normale pour que la fenêtre passe au premier plan.
             NSApp.setActivationPolicy(.regular)
         }
-        let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
-        center(window, on: targetScreen)
+
+        let targetScreen = resolveTargetScreen(preferred: screen)
+        let targetFrame = centeredFrame(on: targetScreen, centerHorizontallyInFullScreen: aboveLaunchpad)
+        window.setFrame(targetFrame, display: false)
 
         // Prépare le fondu d'apparition sans déplacement ni saut
         window.alphaValue = 0.0
+        NotificationCenter.default.post(name: .settingsWillShow, object: nil)
 
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        if window.frame != targetFrame {
+            window.setFrame(targetFrame, display: true)
+        }
 
         // Déclenche l'animation de fondu synchronisée avec le flou d'arrière-plan du Launchpad
         NotificationCenter.default.post(name: .settingsVisibilityDidChange, object: true)
 
-        let duration = Prefs.reduceMotion ? 0.0 : 0.26
+        let duration = Prefs.reduceMotion ? 0.0 : 0.22
         if duration > 0 {
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = duration
@@ -174,12 +189,25 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func center(_ window: NSWindow, on screen: NSScreen?) {
-        guard let screen else { window.center(); return }
-        let area = screen.visibleFrame
-        let size = window.frame.size
-        window.setFrameOrigin(NSPoint(x: (area.midX - size.width / 2).rounded(),
-                                      y: (area.midY - size.height / 2).rounded()))
+    private func resolveTargetScreen(preferred: NSScreen?) -> NSScreen? {
+        if let preferred { return preferred }
+        let pointer = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+    }
+
+    private func centeredFrame(on screen: NSScreen?, centerHorizontallyInFullScreen: Bool) -> NSRect {
+        let fallback = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let visible = screen?.visibleFrame ?? screen?.frame ?? fallback
+        let full = screen?.frame ?? visible
+        let width = min(SettingsPanel.size.width, max(640, visible.width - 24))
+        let height = min(SettingsPanel.size.height, max(480, visible.height - 24))
+        let horizontalAnchor = centerHorizontallyInFullScreen ? full : visible
+        let rawX = horizontalAnchor.minX + (horizontalAnchor.width - width) / 2
+        let clampedX = min(max(rawX, visible.minX), visible.maxX - width)
+        let rawY = visible.minY + (visible.height - height) / 2
+        return NSRect(x: clampedX.rounded(), y: rawY.rounded(), width: width.rounded(), height: height.rounded())
     }
 
     func windowWillClose(_ notification: Notification) {

@@ -72,12 +72,13 @@ private struct CustomIconPickerModalLayer: View {
 
     var body: some View {
         if let customAppID = customIconManager.activePickerAppID {
-            ZStack {
+            ZStack(alignment: .center) {
                 Color.black.opacity(0.48)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         customIconManager.activePickerAppID = nil
                     }
+                    .transition(.opacity)
                 AppCustomIconPickerSheet(
                     appID: customAppID,
                     appName: store.displayName(customAppID),
@@ -86,8 +87,8 @@ private struct CustomIconPickerModalLayer: View {
                         set: { if !$0 { customIconManager.activePickerAppID = nil } }
                     )
                 )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.95)))
             .zIndex(500)
         }
     }
@@ -146,6 +147,43 @@ private struct LaunchpadActiveBody: View {
                     }
                 }
                 .offset(x: rect.minX, y: rect.minY)
+
+                LaunchpadOverlays(vm: vm)
+                    .frame(width: full.width, height: full.height, alignment: .center)
+                    .modifier(PresentationEffect(state: vm.presentation, style: .fade))
+                    .zIndex(440)
+                if vm.showWidgetGallery {
+                    WidgetGalleryModal(vm: vm, store: store, rootSize: full)
+                        .frame(width: full.width, height: full.height, alignment: .center)
+                        .zIndex(450)
+                }
+                if vm.showWeatherCityPicker {
+                    ZStack(alignment: .center) {
+                        Color.black.opacity(0.48)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    vm.showWeatherCityPicker = false
+                                }
+                            }
+                            .transition(.opacity)
+                        WeatherCityPickerSheet(
+                            onTextFocusChanged: { focused in
+                                vm.textInputActive = focused
+                            },
+                            onClose: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    vm.showWeatherCityPicker = false
+                                }
+                            }
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+                    .frame(width: full.width, height: full.height, alignment: .center)
+                    .zIndex(480)
+                }
+                CustomIconPickerModalLayer(store: store)
+                    .frame(width: full.width, height: full.height, alignment: .center)
             }
             .frame(width: full.width, height: full.height, alignment: .topLeading)
         }
@@ -204,13 +242,18 @@ private struct LaunchpadActiveBody: View {
             }
             if let folder = vm.overlayFolder {
                 let anchor = folderAnchor(for: folder.id, in: size)
-                // Voile plein écran découplé du zoom pour éviter tout carré sombre qui grandit à l'ouverture.
-                Color.black.opacity(backgroundStyle == .light ? 0.12 : 0.18)
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.closeFolder() }
-                    .frame(width: size.width, height: size.height)
-                    .transition(.opacity)
-                    .zIndex(249)
+                // Voile givré plein écran découplé du zoom pour éviter un flou dynamique coûteux à 120 Hz.
+                ZStack {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.65)
+                    Color.black.opacity(backgroundStyle == .light ? 0.14 : 0.24)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { vm.closeFolder() }
+                .frame(width: size.width, height: size.height)
+                .transition(.opacity)
+                .zIndex(249)
 
                 FolderOverlayView(vm: vm, store: store, folder: folder, grid: layout.grid, rootSize: size,
                                   anchor: anchor, showLabels: showLabels, showRunning: showRunning, reduceMotion: reduceMotion, tint: activeTintColor)
@@ -226,40 +269,6 @@ private struct LaunchpadActiveBody: View {
                     )
                     .zIndex(250)
             }
-            LaunchpadOverlays(vm: vm)
-                .frame(width: size.width, height: size.height)
-                .modifier(PresentationEffect(state: vm.presentation, style: .fade))
-            if vm.showWidgetGallery {
-                WidgetGalleryModal(vm: vm, store: store, rootSize: size)
-                    .frame(width: size.width, height: size.height)
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
-            }
-            if vm.showWeatherCityPicker {
-                ZStack {
-                    Color.black.opacity(0.48)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                vm.showWeatherCityPicker = false
-                            }
-                        }
-                    WeatherCityPickerSheet(
-                        onTextFocusChanged: { focused in
-                            vm.textInputActive = focused
-                        },
-                        onClose: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                vm.showWeatherCityPicker = false
-                            }
-                        }
-                    )
-                }
-                .frame(width: size.width, height: size.height)
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .zIndex(480)
-            }
-            CustomIconPickerModalLayer(store: store)
-                .frame(width: size.width, height: size.height)
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
 
@@ -325,7 +334,11 @@ private struct LaunchpadActiveBody: View {
     @ViewBuilder
     private var mainMenuItems: some View {
         Button(loc("menu.settings")) { vm.onOpenSettings() }
-        Button(loc("menu.widget_gallery")) { vm.showWidgetGallery = true }
+        Button(loc("menu.widget_gallery")) {
+            withAnimation(reduceMotion ? nil : AppleDesignSystem.Springs.snappy) {
+                vm.openWidgetGallery()
+            }
+        }
         Button(loc("menu.new_folder")) {
             let folderID = store.createCustomFolder(name: loc("folder.default_name"), style: .frostedGlass)
             vm.openFolder(folderID)
@@ -346,7 +359,9 @@ private struct LaunchpadActiveBody: View {
             // Mode édition : Bouton "+" façon iPhone en haut à gauche
             if (vm.editing || vm.optionHeld) && !vm.isSearching {
                 Button {
-                    vm.showWidgetGallery = true
+                    withAnimation(reduceMotion ? nil : AppleDesignSystem.Springs.snappy) {
+                        vm.openWidgetGallery()
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "plus")
@@ -432,8 +447,8 @@ private struct LaunchpadActiveBody: View {
             )
                 .offset(x: layout.gridOrigin.x, y: layout.gridOrigin.y)
                 .scaleEffect(vm.overlayFolder != nil ? 0.93 : 1.0)
-                .blur(radius: vm.overlayFolder != nil ? 12 : 0)
-                .opacity(vm.overlayFolder != nil ? 0.35 : 1.0)
+                .opacity(vm.overlayFolder != nil ? 0.32 : 1.0)
+                .allowsHitTesting(vm.overlayFolder == nil && !vm.showWidgetGallery && !vm.showWeatherCityPicker && !vm.isPresentingModal)
                 .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: vm.overlayFolder != nil)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: iconScale)
             if vm.displayItems.isEmpty {
@@ -485,7 +500,11 @@ private struct LaunchpadActiveBody: View {
                 .transition(.opacity)
             }
             SearchMenuButton(foreground: .white.opacity(0.85),
-                             onAddWidget: { vm.showWidgetGallery = true },
+                             onAddWidget: {
+                                 withAnimation(reduceMotion ? nil : AppleDesignSystem.Springs.snappy) {
+                                     vm.openWidgetGallery()
+                                 }
+                             },
                              onNewFolder: {
                                  let folderID = store.createCustomFolder(name: loc("folder.default_name"), style: .frostedGlass)
                                  vm.openFolder(folderID)
@@ -1007,7 +1026,10 @@ struct AppTileView: View, Equatable {
             .frame(width: iconSize, height: iconSize)
             // Zone cliquable = forme visible de l'icône uniquement (pas les marges transparentes ni la case).
             .contentShape(iconShape.inset(by: iconSize * Self.visibleInset))
-            .onHover { hovering = $0 }
+            .onHover { isHover in
+                let next = (!jiggle && !isPlaceholder) ? isHover : false
+                if hovering != next { hovering = next }
+            }
             .overlay(alignment: .topLeading) {
                 if showDelete {
                     // Collée au coin arrondi visible de l'icône (pas au cadre transparent).
@@ -1903,7 +1925,18 @@ struct WidgetGalleryModal: View {
     @State private var selectedSize: WidgetSize = .medium
     @State private var selectedMusicAppearance: WidgetAppearanceMode = WidgetManager.shared.widgets.first(where: { $0.kind == .vinylPlayer })?.musicAppearance ?? .light
     @State private var isCollectionsExpanded: Bool = true
-    @State private var allCards: [GalleryCardItem] = Self.buildAllCards()
+    @State private var allCards: [GalleryCardItem] = Self.cachedCards(for: LocalizationManager.shared.effectiveLanguageCode)
+
+    private static var cachedCardsByLang: (lang: String, cards: [GalleryCardItem])?
+
+    private static func cachedCards(for languageCode: String) -> [GalleryCardItem] {
+        if let cached = cachedCardsByLang, cached.lang == languageCode {
+            return cached.cards
+        }
+        let built = buildAllCards()
+        cachedCardsByLang = (languageCode, built)
+        return built
+    }
 
     private static func buildAllCards() -> [GalleryCardItem] {
         var list: [GalleryCardItem] = []
@@ -1985,21 +2018,30 @@ struct WidgetGalleryModal: View {
     }
 
     var body: some View {
-        ZStack {
-            // Arrière-plan sombre avec flou
-            Color.black.opacity(0.58)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        vm.showWidgetGallery = false
-                    }
+        let modalWidth = min(920, max(540, rootSize.width - 36))
+        let modalHeight = min(630, max(440, rootSize.height - 44))
+
+        ZStack(alignment: .center) {
+            // Arrière-plan givré et assombri (fondu doux indépendant du zoom de la carte)
+            ZStack {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.60)
+                Color.black.opacity(0.45)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                    vm.showWidgetGallery = false
                 }
+            }
+            .transition(.opacity)
 
             HStack(spacing: 0) {
                 // 1. Barre latérale gauche (fidèle à la Photo de référence 1)
                 gallerySidebar
                     .frame(width: 222)
-                    .background(Color.black.opacity(0.28))
+                    .background(Color.black.opacity(0.32))
 
                 // 2. Panneau principal à droite (En-tête + Recherche + Grille 4 colonnes + Barre d'ajout)
                 VStack(spacing: 0) {
@@ -2056,17 +2098,24 @@ struct WidgetGalleryModal: View {
                         .background(Color.black.opacity(0.22))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white.opacity(0.05))
+                .background(Color(red: 0.08, green: 0.09, blue: 0.13).opacity(0.55))
             }
-            .frame(width: min(920, rootSize.width - 36), height: min(630, rootSize.height - 44))
+            .frame(width: modalWidth, height: modalHeight)
+            .background(Color(red: 0.06, green: 0.07, blue: 0.11).opacity(0.72))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
             .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
+            .position(x: rootSize.width / 2, y: rootSize.height / 2)
+            .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
+        .frame(width: rootSize.width, height: rootSize.height, alignment: .center)
         .onAppear {
+            if !searchText.isEmpty { searchText = "" }
+            allCards = Self.cachedCards(for: locManager.effectiveLanguageCode)
             WeatherService.shared.refreshIfNeeded(requestLocationPermission: true)
         }
-        .onChange(of: LocalizationManager.shared.effectiveLanguageCode) { _, _ in
-            allCards = Self.buildAllCards()
+        .onChange(of: locManager.effectiveLanguageCode) { _, code in
+            allCards = Self.cachedCards(for: code)
         }
     }
 
@@ -2618,10 +2667,8 @@ private struct WidgetGalleryCardButton: View, Equatable {
                             .equatable()
                             .scaleEffect(thumbScale)
                             .frame(width: previewW * thumbScale, height: previewH * thumbScale)
-                            .shadow(color: .black.opacity(0.32), radius: 10, x: 0, y: 5)
+                            .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
                             .allowsHitTesting(false)
-                            .animation(.spring(response: 0.38, dampingFraction: 0.76), value: effectiveConfig.size)
-                            .animation(.easeInOut(duration: 0.22), value: effectiveConfig.musicAppearance)
                     }
                     .frame(height: boxSize * 0.86)
                     .frame(maxWidth: .infinity)

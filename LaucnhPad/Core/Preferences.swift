@@ -155,7 +155,7 @@ enum PinchMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum HotCorner: String, CaseIterable, Identifiable {
+nonisolated enum HotCorner: String, CaseIterable, Identifiable {
     case off, topLeft, topRight, bottomLeft, bottomRight
     var id: String { rawValue }
     var title: String { loc("corner.\(rawValue)") }
@@ -438,7 +438,7 @@ enum Prefs {
 }
 
 /// Lecture des réglages système susceptibles d'entrer en conflit (comme le fait LaunchOS).
-enum SystemConflicts {
+nonisolated enum SystemConflicts {
     /// Le geste système « pincer avec 4 doigts » (Launchpad / Apps) est-il actif ?
     static var systemFourFingerPinchEnabled: Bool {
         for domain in ["com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad"] {
@@ -459,11 +459,16 @@ enum SystemConflicts {
         return false
     }
 
+    /// Un coin actif système est-il déjà affecté à cette clé Dock ?
+    static func systemHotCornerAssigned(dockKey: String?) -> Bool {
+        guard let dockKey,
+              let value = CFPreferencesCopyAppValue(dockKey as CFString, "com.apple.dock" as CFString) as? Int else { return false }
+        return value > 1
+    }
+
     /// Un coin actif système est-il déjà affecté à ce coin ?
     static func systemHotCornerAssigned(_ corner: HotCorner) -> Bool {
-        guard let key = corner.dockKey,
-              let value = CFPreferencesCopyAppValue(key as CFString, "com.apple.dock" as CFString) as? Int else { return false }
-        return value > 1
+        systemHotCornerAssigned(dockKey: corner.dockKey)
     }
 }
 
@@ -471,6 +476,7 @@ enum SystemConflicts {
 extension Notification.Name {
     public static let launchpadVisibilityDidChange = Notification.Name("LaunchpadVisibilityDidChange")
     public static let settingsVisibilityDidChange = Notification.Name("SettingsVisibilityDidChange")
+    public static let settingsWillShow = Notification.Name("SettingsWillShow")
     public static let iconScalePreviewDidChange = Notification.Name("IconScalePreviewDidChange")
     public static let openSettingsTab = Notification.Name("OpenSettingsTab")
     public static let openTutorial = Notification.Name("OpenTutorial")

@@ -150,11 +150,24 @@ struct SettingsPanel: View {
     }
 
     private func refreshSystemChecks() {
-        hasLaunchOSDB = LaunchOSReader.databaseURL != nil
-        hasSystemLPDB = SystemLaunchpadReader.databaseURL != nil
-        fourFingerPinchConflict = SystemConflicts.systemFourFingerPinchEnabled
-        threeFingerDragConflict = SystemConflicts.systemThreeFingerDragEnabled
-        hotCornerConflict = (hotCorner != .off && SystemConflicts.systemHotCornerAssigned(hotCorner))
+        let cornerKey = hotCorner.dockKey
+        let checkCorner = hotCorner != .off
+        Task { @MainActor in
+            let results = await Task.detached(priority: .userInitiated) {
+                (
+                    launchOS: LaunchOSReader.databaseURL != nil,
+                    systemLP: SystemLaunchpadReader.databaseURL != nil,
+                    pinch: SystemConflicts.systemFourFingerPinchEnabled,
+                    drag: SystemConflicts.systemThreeFingerDragEnabled,
+                    corner: checkCorner && SystemConflicts.systemHotCornerAssigned(dockKey: cornerKey)
+                )
+            }.value
+            if hasLaunchOSDB != results.launchOS { hasLaunchOSDB = results.launchOS }
+            if hasSystemLPDB != results.systemLP { hasSystemLPDB = results.systemLP }
+            if fourFingerPinchConflict != results.pinch { fourFingerPinchConflict = results.pinch }
+            if threeFingerDragConflict != results.drag { threeFingerDragConflict = results.drag }
+            if hotCornerConflict != results.corner { hotCornerConflict = results.corner }
+        }
     }
 
     var body: some View {
@@ -172,6 +185,18 @@ struct SettingsPanel: View {
                 iconScalePreviewTask?.cancel()
                 iconScalePreviewTask = nil
                 NotificationCenter.default.post(name: .iconScalePreviewDidChange, object: false)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .settingsWillShow)) { _ in
+                PermissionManager.shared.checkStatus()
+                accessibilityGranted = AXIsProcessTrusted()
+                refreshSystemChecks()
+                if let target = SettingsPanel.targetTab {
+                    selectedTab = target
+                    SettingsPanel.targetTab = nil
+                } else {
+                    let initial = SettingsPanel.initialTab
+                    if selectedTab != initial { selectedTab = initial }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { note in
                 if let tab = note.object as? SettingsTab {
