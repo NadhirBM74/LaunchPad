@@ -8,6 +8,7 @@ nonisolated enum PrefKey: Sendable {
     static let columns = "LaunchpadGridColumns"
     static let rows = "LaunchpadGridRows"
     static let backgroundOpacity = "LaunchpadBackgroundOpacity"
+    static let backgroundTone = "LaunchpadBackgroundTone"
     static let backgroundStyle = "LaunchpadBackgroundStyle"
     static let iconScale = "LaunchpadIconScale"
     static let liquidGlassIntensity = "LaunchpadLiquidGlassIntensity"
@@ -74,7 +75,7 @@ nonisolated enum PrefKey: Sendable {
 
     /// Clés exportées dans les sauvegardes.
     static let backupKeys: [String] = [
-        columns, rows, backgroundOpacity, backgroundStyle, iconScale, showLabels, reduceMotion,
+        columns, rows, backgroundOpacity, backgroundTone, backgroundStyle, iconScale, showLabels, reduceMotion,
         scrollSensitivity, settingsOpacity, pinchMode, hotCorner, interceptF4, hotKeyEnabled,
         hotKeyCode, hotKeyModifiers, hotKeyDisplay, screenTarget, returnToFirstPage,
         showMenuBarIcon, showDockIcon, showHiddenInSearch, showRunningIndicator, customSources,
@@ -279,6 +280,7 @@ enum Prefs {
             PrefKey.columns: 7,
             PrefKey.rows: 5,
             PrefKey.backgroundOpacity: 0.15,
+            PrefKey.backgroundTone: 0.0,
             PrefKey.liquidGlassIntensity: 0.85,
             PrefKey.backgroundStyle: AppTheme.liquidGlass.rawValue,
             PrefKey.isProUnlocked: false,
@@ -361,6 +363,13 @@ enum Prefs {
     static var screenTarget: ScreenTarget { ScreenTarget(rawValue: defaults.string(forKey: PrefKey.screenTarget) ?? "") ?? .cursor }
     static var backgroundStyle: BackgroundStyle {
         BackgroundStyle(rawValue: defaults.string(forKey: PrefKey.backgroundStyle) ?? "") ?? .liquidGlass
+    }
+    static var backgroundTone: Double {
+        get {
+            if defaults.object(forKey: PrefKey.backgroundTone) == nil { return 0.0 }
+            return max(-1.0, min(1.0, defaults.double(forKey: PrefKey.backgroundTone)))
+        }
+        set { defaults.set(max(-1.0, min(1.0, newValue)), forKey: PrefKey.backgroundTone) }
     }
     static var liquidGlassIntensity: Double {
         get {

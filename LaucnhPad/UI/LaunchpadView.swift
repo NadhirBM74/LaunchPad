@@ -105,6 +105,7 @@ private struct LaunchpadActiveBody: View {
     @AppStorage(PrefKey.showLabels) private var showLabels = true
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
+    @AppStorage(PrefKey.backgroundTone) private var backgroundTone = 0.0
     @AppStorage(PrefKey.showRunningIndicator) private var showRunning = true
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
@@ -198,7 +199,13 @@ private struct LaunchpadActiveBody: View {
                                 rows: min(max(rows, 2), 9), iconScale: iconScale, showLabels: showLabels,
                                 hasFavorites: hasFavorites, hasAccessibilityBanner: hasAccessibilityBanner)
         let inner = ZStack(alignment: .topLeading) {
-            LaunchpadBackground(wallpaper: wallpaper, style: backgroundStyle, dimming: backgroundStyle.fixedDimming, liquidGlassIntensity: liquidGlassIntensity)
+            LaunchpadBackground(
+                wallpaper: wallpaper,
+                style: backgroundStyle,
+                dimming: backgroundStyle.fixedDimming,
+                liquidGlassIntensity: liquidGlassIntensity,
+                backgroundTone: backgroundTone
+            )
                 .equatable()
                 .frame(width: size.width, height: size.height)
                 .modifier(PresentationEffect(state: vm.presentation, style: .fade))

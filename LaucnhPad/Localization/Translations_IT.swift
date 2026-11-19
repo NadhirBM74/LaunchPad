@@ -1215,5 +1215,11 @@ nonisolated enum Translations_IT: Sendable {
         "dock.drag_hint": "Rilascia nel Dock",
         "dock.release_to_add": "Rilascia per aggiungere al Dock",
         "dock.already_present": "Già nel Dock",
+        "interface.background_tone": "Luminosità dello sfondo",
+        "interface.background_tone_subtitle": "Rendi lo sfondo più scuro o più chiaro",
+        "interface.background_tone_darker": "Più scuro",
+        "interface.background_tone_neutral": "Neutro",
+        "interface.background_tone_lighter": "Più chiaro",
+        "interface.background_tone_reset": "Ripristina luminosità",
     ]
 }

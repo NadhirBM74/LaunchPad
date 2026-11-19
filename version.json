@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.22",
-  "name": "LaunchPad v1.2.22",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.22",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.22\n\n- 🎯 **Centrage Exact des Réglages & du Menu Widgets** : La fenêtre des Réglages (y compris après réouverture ou changement d'écran) et la galerie de widgets s'ouvrent désormais toujours parfaitement centrées à l'écran, en mode plein écran comme en mode fenêtre.\n- ⚡ **Fluidité 120 Hz & Ouverture Instantanée** : Suppression du flou dynamique coûteux à l'ouverture des dossiers, réutilisation du panneau des Réglages en mémoire et déplacement des vérifications système hors du thread principal.\n- 🧊 **Lisibilité Liquid Glass de la Galerie Widgets** : Ajout d'un voile givré raffiné derrière la galerie de widgets pour conserver un contraste net tout en préservant l'esthétique Liquid Glass.\n- 🖱️ **Réactivité Trackpad & Interactions Affinées** : Optimisation du suivi de défilement à deux doigts, suppression des survols inutiles derrière les modales et mise en cache multilingue des fiches widgets.",
+  "tag_name": "v1.2.23",
+  "name": "LaunchPad v1.2.23",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.23",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.23\n\n- 🌓 **Luminosité de l’Arrière-Plan Ajustable** : Nouveau curseur bidirectionnel dans *Réglages → Personnalisation* permettant d’assombrir ou d’éclaircir uniformément le fond arrière du Launchpad selon vos préférences et votre fond d’écran.\n- 🎨 **Compatible avec Tous les Thèmes** : Fonctionne de manière fluide et homogène avec *Liquid Glass*, *Sombre* et *Clair* tout en conservant la netteté des icônes, dossiers et widgets.\n- 🔄 **Raccourcis & Réinitialisation Instantanée** : Icônes lune et soleil cliquables pour ajuster par paliers, affichage précis en pourcentage et bouton de retour au mode *Neutre* en un clic.\n- 🌍 **Traduction Complète en 6 Langues** : Libellés et infobulles intégrés en français, anglais, espagnol, allemand, italien et portugais.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.22.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.22/LaunchPad-v1.2.22.zip"
+      "name": "LaunchPad-v1.2.23.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.23/LaunchPad-v1.2.23.zip"
     },
     {
-      "name": "LaunchPad-v1.2.22.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.22/LaunchPad-v1.2.22.dmg"
+      "name": "LaunchPad-v1.2.23.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.23/LaunchPad-v1.2.23.dmg"
     }
   ]
 }

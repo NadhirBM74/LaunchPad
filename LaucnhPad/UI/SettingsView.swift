@@ -175,7 +175,30 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     #if DEBUG
     func snapshot(to url: URL) {
-        guard let view = window?.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        guard let view = window?.contentView else { return }
+        if ProcessInfo.processInfo.arguments.contains("--scroll-settings-down") {
+            func findMainScrollView(in root: NSView) -> NSScrollView? {
+                if let sv = root as? NSScrollView,
+                   let doc = sv.documentView,
+                   doc.bounds.height > sv.contentView.bounds.height + 50,
+                   sv.bounds.width > 350 {
+                    return sv
+                }
+                for child in root.subviews {
+                    if let found = findMainScrollView(in: child) { return found }
+                }
+                return nil
+            }
+            if let sv = findMainScrollView(in: view), let doc = sv.documentView {
+                let clip = sv.contentView
+                let maxY = max(0, doc.bounds.height - clip.bounds.height)
+                let targetY = doc.isFlipped ? min(maxY, 360) : max(0, maxY - 360)
+                clip.scroll(to: NSPoint(x: 0, y: targetY))
+                sv.reflectScrolledClipView(clip)
+                view.layoutSubtreeIfNeeded()
+            }
+        }
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
