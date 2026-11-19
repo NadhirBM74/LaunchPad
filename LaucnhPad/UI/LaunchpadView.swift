@@ -105,7 +105,7 @@ private struct LaunchpadActiveBody: View {
     @AppStorage(PrefKey.showLabels) private var showLabels = true
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
-    @AppStorage(PrefKey.backgroundTone) private var backgroundTone = 0.0
+    @AppStorage(PrefKey.backdropOpacity) private var backdropOpacity = 0.40
     @AppStorage(PrefKey.showRunningIndicator) private var showRunning = true
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
@@ -204,7 +204,7 @@ private struct LaunchpadActiveBody: View {
                 style: backgroundStyle,
                 dimming: backgroundStyle.fixedDimming,
                 liquidGlassIntensity: liquidGlassIntensity,
-                backgroundTone: backgroundTone
+                backdropOpacity: backdropOpacity
             )
                 .equatable()
                 .frame(width: size.width, height: size.height)

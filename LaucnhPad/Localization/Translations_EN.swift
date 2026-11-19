@@ -1213,11 +1213,10 @@ nonisolated enum Translations_EN: Sendable {
         "dock.drag_hint": "Drop in Dock",
         "dock.release_to_add": "Release to add to Dock",
         "dock.already_present": "Already in Dock",
-        "interface.background_tone": "Background Brightness",
-        "interface.background_tone_subtitle": "Make the Launchpad backdrop darker or lighter",
-        "interface.background_tone_darker": "Darker",
-        "interface.background_tone_neutral": "Neutral",
-        "interface.background_tone_lighter": "Lighter",
-        "interface.background_tone_reset": "Reset brightness",
+        "interface.backdrop_opacity": "Background Opacity",
+        "interface.backdrop_opacity_subtitle": "Adjust how transparent or opaque the Launchpad backdrop is",
+        "interface.backdrop_opacity_transparent": "Transparent",
+        "interface.backdrop_opacity_opaque": "Opaque",
+        "interface.backdrop_opacity_reset": "Reset to default (40%)",
     ]
 }

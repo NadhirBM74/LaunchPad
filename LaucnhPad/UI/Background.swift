@@ -97,33 +97,31 @@ struct VisualEffectBackground: NSViewRepresentable {
 
 struct LiquidGlassBackground: View, Equatable {
     var intensity: Double = 0.85
-    var tone: Double = 0.0
+    var backdropOpacity: Double = 0.40
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     static func == (lhs: LiquidGlassBackground, rhs: LiquidGlassBackground) -> Bool {
-        lhs.intensity == rhs.intensity && lhs.tone == rhs.tone
+        lhs.intensity == rhs.intensity && lhs.backdropOpacity == rhs.backdropOpacity
     }
 
     var body: some View {
         let i = max(0.05, min(1.0, intensity))
-        let t = max(-1.0, min(1.0, tone))
-        let baseBlackOpacity = t > 0
-            ? (reduceTransparency ? max(0.16, 0.80 * (1.0 - 0.80 * t)) : 0.28 * (1.0 - 0.85 * t))
-            : (reduceTransparency ? 0.80 : 0.28)
+        let clamped = max(0.0, min(1.0, backdropOpacity))
+        let baseScale = clamped < 0.40 ? (clamped / 0.40) : 1.0
         ZStack {
-            // 1. Flou d'arrière-plan en temps réel : l'opacité contrôle directement la transparence
+            // 1. Flou d'arrière-plan en temps réel : diminue vers 0 quand l'opacité baisse
             VisualEffectBackground(material: .fullScreenUI)
-                .opacity(reduceTransparency ? 1.0 : (0.25 + 0.75 * i))
+                .opacity((reduceTransparency ? 1.0 : (0.25 + 0.75 * i)) * baseScale)
 
             // 2. Base semi-translucide constante sans voile blanc en haut
-            Color.black.opacity(baseBlackOpacity)
+            Color.black.opacity((reduceTransparency ? 0.80 : 0.28) * baseScale)
 
             // 3. Nuance optique Liquid Glass discrète (sans reflet blanc supérieur)
             LinearGradient(
                 colors: [
                     Color.clear,
-                    Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045),
-                    Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04),
+                    Color(red: 0.55, green: 0.45, blue: 0.95).opacity(0.045 * baseScale),
+                    Color(red: 0.25, green: 0.65, blue: 1.0).opacity(0.04 * baseScale),
                     Color.clear
                 ],
                 startPoint: .topLeading,
@@ -139,20 +137,20 @@ struct LaunchpadBackground: View, Equatable {
     let style: BackgroundStyle
     let dimming: Double
     var liquidGlassIntensity: Double = 0.85
-    var backgroundTone: Double = 0.0
+    var backdropOpacity: Double = 0.40
 
     static func == (lhs: LaunchpadBackground, rhs: LaunchpadBackground) -> Bool {
         lhs.style == rhs.style
             && lhs.dimming == rhs.dimming
             && lhs.liquidGlassIntensity == rhs.liquidGlassIntensity
-            && lhs.backgroundTone == rhs.backgroundTone
+            && lhs.backdropOpacity == rhs.backdropOpacity
     }
 
     var body: some View {
-        let t = max(-1.0, min(1.0, backgroundTone))
-        let effectiveDimming = t > 0 ? dimming * max(0.0, 1.0 - t) : dimming
-        let darkBaseOpacity = t > 0 ? 0.65 * (1.0 - 0.85 * t) : 0.65
-        let lightBaseOpacity = t > 0 ? min(0.76, 0.32 + 0.44 * t) : 0.32
+        let clamped = max(0.0, min(1.0, backdropOpacity))
+        let baseScale = clamped < 0.40 ? (clamped / 0.40) : 1.0
+        let extraDark = clamped > 0.40 ? ((clamped - 0.40) / 0.60) : 0.0
+        let scaledDimming = dimming * baseScale
 
         Color.clear
             .overlay {
@@ -160,28 +158,28 @@ struct LaunchpadBackground: View, Equatable {
                 case .dark:
                     ZStack {
                         VisualEffectBackground(material: .fullScreenUI)
-                        Color.black.opacity(darkBaseOpacity)
+                            .opacity(baseScale)
+                        Color.black.opacity(0.65 * baseScale)
                     }
                 case .light:
                     ZStack {
                         VisualEffectBackground(material: .underWindowBackground)
-                        Color.white.opacity(lightBaseOpacity)
+                            .opacity(baseScale)
+                        Color.white.opacity(0.32 * baseScale)
                     }
                 case .liquidGlass:
-                    LiquidGlassBackground(intensity: liquidGlassIntensity, tone: t)
+                    LiquidGlassBackground(intensity: liquidGlassIntensity, backdropOpacity: clamped)
                 }
             }
             .overlay {
-                if effectiveDimming > 0 {
-                    Color.black.opacity(effectiveDimming)
+                if scaledDimming > 0.001 {
+                    Color.black.opacity(scaledDimming)
                 }
             }
             .overlay {
-                // Voile uniforme : assombrit (tone < 0) ou éclaircit (tone > 0) sans bande blanche en haut
-                if t < -0.001 {
-                    Color.black.opacity((-t) * (style == .light ? 0.72 : 0.64))
-                } else if t > 0.001 && style != .light {
-                    Color.white.opacity(t * 0.42)
+                // Au-dessus de la valeur par défaut (40 %), augmente uniquement l'opacité sombre sans aucun voile blanc
+                if extraDark > 0.001 {
+                    Color.black.opacity(extraDark)
                 }
             }
             .ignoresSafeArea()

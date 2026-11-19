@@ -31,7 +31,7 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.columns) private var columns = 7
     @AppStorage(PrefKey.rows) private var rows = 5
     @AppStorage(PrefKey.backgroundOpacity) private var opacity = 0.35
-    @AppStorage(PrefKey.backgroundTone) private var backgroundTone = 0.0
+    @AppStorage(PrefKey.backdropOpacity) private var backdropOpacity = 0.40
     @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @AppStorage(PrefKey.iconScale) private var iconScale = 1.0
@@ -645,14 +645,13 @@ struct SettingsPanel: View {
 
             SettingsSeparator()
 
-            BackgroundToneSliderRow(
-                title: loc("interface.background_tone"),
-                subtitle: loc("interface.background_tone_subtitle"),
-                darkerLabel: loc("interface.background_tone_darker"),
-                neutralLabel: loc("interface.background_tone_neutral"),
-                lighterLabel: loc("interface.background_tone_lighter"),
-                resetLabel: loc("interface.background_tone_reset"),
-                value: $backgroundTone
+            BackdropOpacitySliderRow(
+                title: loc("interface.backdrop_opacity"),
+                subtitle: loc("interface.backdrop_opacity_subtitle"),
+                transparentLabel: loc("interface.backdrop_opacity_transparent"),
+                opaqueLabel: loc("interface.backdrop_opacity_opaque"),
+                resetLabel: loc("interface.backdrop_opacity_reset"),
+                value: $backdropOpacity
             )
 
             if licenseManager.isPro && backgroundStyle == .liquidGlass {
@@ -3017,23 +3016,22 @@ private struct SettingsSliderRow: View {
     }
 }
 
-private struct BackgroundToneSliderRow: View {
+private struct BackdropOpacitySliderRow: View {
+    static let defaultValue: Double = 0.40
+
     let title: String
     let subtitle: String
-    let darkerLabel: String
-    let neutralLabel: String
-    let lighterLabel: String
+    let transparentLabel: String
+    let opaqueLabel: String
     let resetLabel: String
     @Binding var value: Double
 
     private var isModified: Bool {
-        abs(value) >= 0.01
+        abs(value - Self.defaultValue) >= 0.01
     }
 
-    private var formattedTone: String {
-        let percent = Int(round(value * 100))
-        if percent == 0 { return neutralLabel }
-        return percent > 0 ? "+\(percent) %" : "\(percent) %"
+    private var formattedOpacity: String {
+        "\(Int(round(max(0.0, min(1.0, value)) * 100))) %"
     }
 
     var body: some View {
@@ -3052,31 +3050,26 @@ private struct BackgroundToneSliderRow: View {
             HStack(alignment: .top, spacing: 7) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.14)) {
-                        value = max(-1.0, ((value - 0.2) * 20).rounded() / 20)
+                        value = max(0.0, ((value - 0.1) * 20).rounded() / 20)
                     }
                 } label: {
-                    Image(systemName: "moon.fill")
+                    Image(systemName: "circle.dashed")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(value < -0.02 ? AnyShapeStyle(SettingsStyle.accent) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(.secondary)
                         .frame(height: 20)
                 }
                 .buttonStyle(.plain)
-                .help(darkerLabel)
+                .help(transparentLabel)
 
                 VStack(spacing: 5) {
-                    Slider(value: $value, in: -1.0...1.0, step: 0.05)
+                    Slider(value: $value, in: 0.0...1.0, step: 0.05)
                         .tint(SettingsStyle.accent)
                         .frame(width: 154)
-                        .onChange(of: value) { _, newValue in
-                            if abs(newValue) < 0.025 && newValue != 0.0 {
-                                value = 0.0
-                            }
-                        }
 
                     HStack {
-                        Text(darkerLabel)
+                        Text(transparentLabel)
                         Spacer()
-                        Text(lighterLabel)
+                        Text(opaqueLabel)
                     }
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(.secondary.opacity(0.85))
@@ -3085,28 +3078,28 @@ private struct BackgroundToneSliderRow: View {
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.14)) {
-                        value = min(1.0, ((value + 0.2) * 20).rounded() / 20)
+                        value = min(1.0, ((value + 0.1) * 20).rounded() / 20)
                     }
                 } label: {
-                    Image(systemName: "sun.max.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(value > 0.02 ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
                         .frame(height: 20)
                 }
                 .buttonStyle(.plain)
-                .help(lighterLabel)
+                .help(opaqueLabel)
 
-                Text(formattedTone)
+                Text(formattedOpacity)
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .foregroundStyle(isModified ? .primary : .secondary)
-                    .frame(width: 58, height: 20, alignment: .trailing)
+                    .frame(width: 48, height: 20, alignment: .trailing)
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.16)) {
-                        value = 0.0
+                        value = Self.defaultValue
                     }
                 } label: {
                     Image(systemName: "arrow.counterclockwise")

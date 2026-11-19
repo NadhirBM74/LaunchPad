@@ -1215,11 +1215,10 @@ nonisolated enum Translations_ES: Sendable {
         "dock.drag_hint": "Soltar en el Dock",
         "dock.release_to_add": "Soltar para añadir al Dock",
         "dock.already_present": "Ya está en el Dock",
-        "interface.background_tone": "Brillo del fondo",
-        "interface.background_tone_subtitle": "Haz que el fondo sea más oscuro o más claro",
-        "interface.background_tone_darker": "Más oscuro",
-        "interface.background_tone_neutral": "Neutro",
-        "interface.background_tone_lighter": "Más claro",
-        "interface.background_tone_reset": "Restablecer el brillo",
+        "interface.backdrop_opacity": "Opacidad del fondo",
+        "interface.backdrop_opacity_subtitle": "Ajusta la transparencia u opacidad del fondo del Launchpad",
+        "interface.backdrop_opacity_transparent": "Transparente",
+        "interface.backdrop_opacity_opaque": "Opaco",
+        "interface.backdrop_opacity_reset": "Restablecer predeterminado (40 %)",
     ]
 }

@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.23",
-  "name": "LaunchPad v1.2.23",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.23",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.23\n\n- 🌓 **Luminosité de l’Arrière-Plan Ajustable** : Nouveau curseur bidirectionnel dans *Réglages → Personnalisation* permettant d’assombrir ou d’éclaircir uniformément le fond arrière du Launchpad selon vos préférences et votre fond d’écran.\n- 🎨 **Compatible avec Tous les Thèmes** : Fonctionne de manière fluide et homogène avec *Liquid Glass*, *Sombre* et *Clair* tout en conservant la netteté des icônes, dossiers et widgets.\n- 🔄 **Raccourcis & Réinitialisation Instantanée** : Icônes lune et soleil cliquables pour ajuster par paliers, affichage précis en pourcentage et bouton de retour au mode *Neutre* en un clic.\n- 🌍 **Traduction Complète en 6 Langues** : Libellés et infobulles intégrés en français, anglais, espagnol, allemand, italien et portugais.",
+  "tag_name": "v1.2.24",
+  "name": "LaunchPad v1.2.24",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.24",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.24\n\n- 🎚️ **Opacité de l’Arrière-Plan Ajustable (0 % à 100 %)** : Remplacement du réglage de luminosité par un véritable curseur d’opacité dans *Réglages → Personnalisation* pour rendre le fond plus transparent ou plus opaque à volonté, sans aucun voile blanc.\n- 🎨 **Compatible avec Tous les Thèmes** : Fonctionne sur *Liquid Glass*, *Sombre* et *Clair* tout en conservant le rendu d’origine exact à sa valeur par défaut (*40 %*).\n- 🔄 **Contrôle Précis & Réinitialisation en Un Clic** : Paliers fins de 5 %, boutons latéraux rapides *Transparent* / *Opaque* et bouton de retour au réglage par défaut.\n- 🌍 **Traduction Complète en 6 Langues** : Intitulés et descriptions mis à jour en français, anglais, espagnol, allemand, italien et portugais.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.23.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.23/LaunchPad-v1.2.23.zip"
+      "name": "LaunchPad-v1.2.24.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.24/LaunchPad-v1.2.24.zip"
     },
     {
-      "name": "LaunchPad-v1.2.23.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.23/LaunchPad-v1.2.23.dmg"
+      "name": "LaunchPad-v1.2.24.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.24/LaunchPad-v1.2.24.dmg"
     }
   ]
 }
