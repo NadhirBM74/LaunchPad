@@ -112,6 +112,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         guard let window else { return }
         window.title = loc("about.window_title")
+        let targetAppearanceName: NSAppearance.Name = Prefs.backgroundStyle == .light ? .aqua : .darkAqua
+        if window.appearance?.name != targetAppearanceName {
+            window.appearance = NSAppearance(named: targetAppearanceName)
+        }
         if window.contentViewController == nil {
             let hosting = NSHostingController(rootView: SettingsPanel(store: store))
             // Empêche NSHostingController de modifier la taille/position de la fenêtre lors du premier layout.

@@ -1926,7 +1926,13 @@ struct WidgetGalleryModal: View {
     }
 
     @ObservedObject private var licenseManager = LicenseManager.shared
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
     @State private var selectedCategory: GalleryCategory = .all
+
+    private var aura: VelvetAuraTheme {
+        VelvetAuraTheme(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+    }
     @State private var searchText: String = ""
     @State private var selectedCardID: String = "weather-darkPremium"
     @State private var selectedSize: WidgetSize = .medium
@@ -2025,16 +2031,16 @@ struct WidgetGalleryModal: View {
     }
 
     var body: some View {
-        let modalWidth = min(920, max(540, rootSize.width - 36))
-        let modalHeight = min(630, max(440, rootSize.height - 44))
+        let modalWidth = min(900, max(540, rootSize.width - 36))
+        let modalHeight = min(640, max(440, rootSize.height - 44))
 
         ZStack(alignment: .center) {
             // Arrière-plan givré et assombri (fondu doux indépendant du zoom de la carte)
             ZStack {
                 Rectangle()
                     .fill(.ultraThinMaterial)
-                    .opacity(0.60)
-                Color.black.opacity(0.45)
+                    .opacity(backgroundStyle == .light ? 0.50 : 0.62)
+                Color.black.opacity(backgroundStyle == .light ? 0.28 : 0.48)
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -2045,39 +2051,48 @@ struct WidgetGalleryModal: View {
             .transition(.opacity)
 
             HStack(spacing: 0) {
-                // 1. Barre latérale gauche (fidèle à la Photo de référence 1)
+                // 1. Barre latérale gauche unifiée Aura Nocturne Velvet (4C — identique aux Réglages)
                 gallerySidebar
-                    .frame(width: 222)
-                    .background(Color.black.opacity(0.32))
+                    .frame(width: 228)
+                    .background(aura.sidebarBackground)
 
-                // 2. Panneau principal à droite (En-tête + Recherche + Grille 4 colonnes + Barre d'ajout)
+                Rectangle()
+                    .fill(aura.divider)
+                    .frame(width: 1)
+
+                // 2. Panneau principal à droite (En-tête + Recherche + Grille + Aperçu + Barre d'ajout)
                 VStack(spacing: 0) {
                     rightHeader
                         .padding(.horizontal, 24)
-                        .padding(.top, 20)
-                        .padding(.bottom, 12)
+                        .padding(.top, 22)
+                        .padding(.bottom, 14)
+
+                    Rectangle()
+                        .fill(aura.divider)
+                        .frame(height: 1)
 
                     gallerySearchBar
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 12)
 
-                    // Grille visuelle de cartes (inspirée de la grille Albums/Playlists de la Photo 1)
+                    // Grille visuelle de cartes unifiée
                     ScrollView(.vertical, showsIndicators: false) {
                         if filteredCards.isEmpty {
                             VStack(spacing: 8) {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 28))
-                                    .foregroundStyle(.white.opacity(0.45))
+                                    .foregroundStyle(aura.secondaryText)
                                 Text(loc("widget.gallery.no_results", searchText))
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.85))
+                                    .foregroundStyle(aura.primaryText.opacity(0.88))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 60)
                         } else {
                             LazyVGrid(
                                 columns: [GridItem(.adaptive(minimum: 152, maximum: 185), spacing: 14)],
-                                spacing: 18
+                                spacing: 16
                             ) {
                                 ForEach(filteredCards) { card in
                                     galleryGridCard(card)
@@ -2085,33 +2100,49 @@ struct WidgetGalleryModal: View {
                             }
                             .padding(.horizontal, 24)
                             .padding(.top, 4)
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 18)
                         }
                     }
 
-                    Divider().background(Color.white.opacity(0.12))
+                    Rectangle()
+                        .fill(aura.divider)
+                        .frame(height: 1)
 
                     // Prévisualisation animée style Apple selon la taille sélectionnée
                     liveSizePreviewBanner
                         .padding(.horizontal, 24)
                         .padding(.top, 10)
-                        .padding(.bottom, 4)
-                        .background(Color.black.opacity(0.18))
+                        .padding(.bottom, 6)
+                        .background(aura.previewBannerBackground)
+
+                    Rectangle()
+                        .fill(aura.divider)
+                        .frame(height: 1)
 
                     // Barre d'action en bas : Taille + Bouton Ajouter
                     bottomActionBar
                         .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Color.black.opacity(0.22))
+                        .padding(.vertical, 11)
+                        .background(aura.footerBackground)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(red: 0.08, green: 0.09, blue: 0.13).opacity(0.55))
+                .background(aura.contentTint)
             }
             .frame(width: modalWidth, height: modalHeight)
-            .background(Color(red: 0.06, green: 0.07, blue: 0.11).opacity(0.72))
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
-            .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
+            .background(
+                VelvetAuraWindowBackground(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: aura.windowCornerRadius, style: .continuous))
+            .overlay {
+                VelvetAuraWindowOverlay(theme: backgroundStyle, cornerRadius: aura.windowCornerRadius)
+            }
+            .foregroundStyle(aura.primaryText)
+            .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
+            .shadow(
+                color: backgroundStyle == .light ? Color(red: 0.30, green: 0.11, blue: 0.58).opacity(0.18) : Color.black.opacity(0.58),
+                radius: 36,
+                y: 16
+            )
             .position(x: rootSize.width / 2, y: rootSize.height / 2)
             .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
@@ -2131,29 +2162,29 @@ struct WidgetGalleryModal: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(loc("widget.add_widget_short"))
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(aura.primaryText)
                     Text(loc("widget.gallery.all_styles"))
                         .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(aura.secondaryText)
                 }
                 Spacer()
                 if !licenseManager.isPro {
                     Text("PRO")
                         .font(.system(size: 9.5, weight: .black))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2.5)
-                        .background(Color.yellow.opacity(0.9))
-                        .foregroundStyle(.black)
-                        .clipShape(Capsule())
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(aura.accentSoft, in: Capsule())
+                        .overlay(Capsule().strokeBorder(aura.accent.opacity(0.35), lineWidth: 0.8))
+                        .foregroundStyle(aura.accent)
                 }
             }
             .padding(.horizontal, 18)
-            .padding(.top, 20)
+            .padding(.top, 22)
             .padding(.bottom, 16)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     sidebarCategoryRow(.all)
 
                     Button {
@@ -2162,16 +2193,17 @@ struct WidgetGalleryModal: View {
                         }
                     } label: {
                         HStack {
-                            Text(loc("widget.gallery.categories"))
-                                .font(.system(size: 13.5, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.9))
+                            Text(loc("widget.gallery.categories").uppercased())
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.6)
+                                .foregroundStyle(aura.secondaryText)
                             Spacer()
                             Image(systemName: isCollectionsExpanded ? "chevron.down" : "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.55))
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(aura.secondaryText)
                         }
                         .padding(.horizontal, 12)
-                        .padding(.top, 14)
+                        .padding(.top, 16)
                         .padding(.bottom, 6)
                         .contentShape(Rectangle())
                     }
@@ -2199,22 +2231,22 @@ struct WidgetGalleryModal: View {
                 }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 11) {
                 Image(systemName: cat.icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.68))
+                    .foregroundStyle(isSelected ? (aura.isLight ? aura.accent : .white) : aura.secondaryText)
                     .frame(width: 20, height: 20)
                 Text(cat.title)
                     .font(.system(size: 13.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                    .foregroundStyle(isSelected ? aura.navActiveText : aura.primaryText.opacity(0.88))
                     .lineLimit(1)
-                Spacer()
+                Spacer(minLength: 4)
             }
-            .padding(.horizontal, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
             .padding(.vertical, 8.5)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.18) : Color.clear)
+                VelvetAuraSidebarRowBackground(theme: backgroundStyle, isSelected: isSelected)
             )
             .contentShape(Rectangle())
         }
@@ -2226,25 +2258,36 @@ struct WidgetGalleryModal: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectedCategory.title)
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(aura.primaryText)
                 Text(filteredCards.count > 1 ? loc("widget.gallery.model_plural", filteredCards.count) : loc("widget.gallery.model_single", filteredCards.count))
                     .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.58))
+                    .foregroundStyle(aura.secondaryText)
             }
             Spacer()
-            Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    vm.showWidgetGallery = false
+            HStack(spacing: 8) {
+                Text("ESC")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(aura.primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5.5)
+                    .background(aura.pillFill, in: Capsule())
+                    .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 1))
+
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        vm.showWidgetGallery = false
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(aura.secondaryText)
+                        .frame(width: 28, height: 28)
+                        .background(aura.pillFill, in: Circle())
+                        .overlay(Circle().strokeBorder(aura.pillBorder, lineWidth: 1))
                 }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .frame(width: 30, height: 30)
-                    .background(Color.white.opacity(0.12), in: Circle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(loc("widget.gallery.close_a11y"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(loc("widget.gallery.close_a11y"))
         }
     }
 
@@ -2252,30 +2295,30 @@ struct WidgetGalleryModal: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(aura.secondaryText)
             TextField(loc("widget.gallery.search_placeholder"), text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
-                .foregroundStyle(.white)
+                .foregroundStyle(aura.primaryText)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(aura.secondaryText)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 8.5)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(aura.searchFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(aura.pillBorder, lineWidth: 1)
                 )
         )
     }
@@ -2302,6 +2345,7 @@ struct WidgetGalleryModal: View {
         return WidgetGalleryCardButton(
             card: card,
             effectiveConfig: effectiveConfig,
+            theme: backgroundStyle,
             isSelected: isSelected,
             isActiveOnBoard: isActiveOnBoard
         ) {
@@ -2368,14 +2412,14 @@ struct WidgetGalleryModal: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(loc("widget.gallery.live_preview", friendlySizeLabel(chosenSize)))
                     .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(Color.cyan)
+                    .foregroundStyle(aura.accent)
                 Text(card.title)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(aura.primaryText)
                     .lineLimit(1)
                 Text(loc("widget.gallery.format", Int(pw), Int(ph), card.subtitle))
                     .font(.system(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(aura.secondaryText)
 
                 if existingInCategory != nil {
                     HStack(spacing: 5) {
@@ -2392,7 +2436,7 @@ struct WidgetGalleryModal: View {
                     HStack(spacing: 6) {
                         Text(loc("widget.gallery.theme_label"))
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.70))
+                            .foregroundStyle(aura.secondaryText)
                         ForEach(WidgetAppearanceMode.allCases) { mode in
                             let chosen = selectedMusicAppearance == mode
                             Button {
@@ -2406,10 +2450,17 @@ struct WidgetGalleryModal: View {
                                     Text(mode.title)
                                         .font(.system(size: 11, weight: chosen ? .bold : .medium))
                                 }
-                                .foregroundStyle(chosen ? .black : .white.opacity(0.88))
+                                .foregroundStyle(chosen ? .white : aura.primaryText.opacity(0.88))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(chosen ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(chosen ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill))
+                                )
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .strokeBorder(chosen ? Color.white.opacity(0.24) : aura.pillBorder, lineWidth: 0.8)
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -2421,7 +2472,7 @@ struct WidgetGalleryModal: View {
                     HStack(spacing: 6) {
                         Text(loc("weather.gallery.location_label"))
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.70))
+                            .foregroundStyle(aura.secondaryText)
 
                         Button {
                             weatherService.useCurrentLocation(requestPermission: true)
@@ -2433,10 +2484,17 @@ struct WidgetGalleryModal: View {
                                 Text(loc("weather.gallery.auto_btn"))
                                     .font(.system(size: 11, weight: isAuto ? .bold : .medium))
                             }
-                            .foregroundStyle(isAuto ? .black : .white.opacity(0.88))
+                            .foregroundStyle(isAuto ? .white : aura.primaryText.opacity(0.88))
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
-                            .background(isAuto ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(isAuto ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill))
+                            )
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .strokeBorder(isAuto ? Color.white.opacity(0.24) : aura.pillBorder, lineWidth: 0.8)
+                            )
                         }
                         .buttonStyle(.plain)
 
@@ -2453,10 +2511,17 @@ struct WidgetGalleryModal: View {
                                     .font(.system(size: 11, weight: isManual ? .bold : .medium))
                                     .lineLimit(1)
                             }
-                            .foregroundStyle(isManual ? .black : .white.opacity(0.88))
+                            .foregroundStyle(isManual ? .white : aura.primaryText.opacity(0.88))
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
-                            .background(isManual ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(isManual ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill))
+                            )
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .strokeBorder(isManual ? Color.white.opacity(0.24) : aura.pillBorder, lineWidth: 0.8)
+                            )
                         }
                         .buttonStyle(.plain)
 
@@ -2467,10 +2532,17 @@ struct WidgetGalleryModal: View {
                             } label: {
                                 Text("°\(u)")
                                     .font(.system(size: 11, weight: chosen ? .bold : .medium))
-                                    .foregroundStyle(chosen ? .black : .white.opacity(0.88))
+                                    .foregroundStyle(chosen ? .white : aura.primaryText.opacity(0.88))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(chosen ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(chosen ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill))
+                                    )
+                                    .overlay(
+                                        Capsule(style: .continuous)
+                                            .strokeBorder(chosen ? Color.white.opacity(0.24) : aura.pillBorder, lineWidth: 0.8)
+                                    )
                             }
                             .buttonStyle(.plain)
                         }
@@ -2492,11 +2564,11 @@ struct WidgetGalleryModal: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.title)
                     .font(.system(size: 13.5, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(aura.primaryText)
                     .lineLimit(1)
                 Text(card.subtitle)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(aura.secondaryText)
                     .lineLimit(1)
             }
             .frame(minWidth: 80, alignment: .leading)
@@ -2505,7 +2577,7 @@ struct WidgetGalleryModal: View {
             Spacer(minLength: 6)
 
             if card.config.kind.allowedSizes.count > 1 {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     ForEach(card.config.kind.allowedSizes) { size in
                         let isChosen = selectedSize == size
                         Button {
@@ -2520,15 +2592,21 @@ struct WidgetGalleryModal: View {
                                     .font(.system(size: 12, weight: isChosen ? .bold : .medium))
                                     .lineLimit(1)
                             }
-                            .foregroundStyle(isChosen ? .black : .white.opacity(0.88))
+                            .foregroundStyle(isChosen ? .white : aura.secondaryText)
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 6.5)
-                            .background(isChosen ? Color.white : Color.white.opacity(0.12), in: Capsule())
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(isChosen ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(Color.clear))
+                            )
                             .fixedSize(horizontal: true, vertical: true)
                         }
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(3)
+                .background(aura.pillFill, in: Capsule())
+                .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 1))
                 .fixedSize(horizontal: true, vertical: true)
                 .layoutPriority(1)
             }
@@ -2546,16 +2624,9 @@ struct WidgetGalleryModal: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(
-                    LinearGradient(
-                        colors: [Color(red: 0.10, green: 0.52, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.98)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    in: Capsule()
-                )
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                .shadow(color: Color.blue.opacity(0.32), radius: 8, y: 3)
+                .background(aura.accentGradient, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
+                .shadow(color: aura.accent.opacity(0.36), radius: 10, y: 3)
                 .fixedSize(horizontal: true, vertical: true)
             }
             .buttonStyle(.plain)
@@ -2645,6 +2716,7 @@ struct WidgetGalleryModal: View {
 private struct WidgetGalleryCardButton: View, Equatable {
     let card: WidgetGalleryModal.GalleryCardItem
     let effectiveConfig: CustomWidgetConfig
+    let theme: BackgroundStyle
     let isSelected: Bool
     let isActiveOnBoard: Bool
     let languageCode: String = LocalizationManager.shared.effectiveLanguageCode
@@ -2655,12 +2727,14 @@ private struct WidgetGalleryCardButton: View, Equatable {
     static func == (lhs: WidgetGalleryCardButton, rhs: WidgetGalleryCardButton) -> Bool {
         lhs.card == rhs.card &&
         lhs.effectiveConfig == rhs.effectiveConfig &&
+        lhs.theme == rhs.theme &&
         lhs.isSelected == rhs.isSelected &&
         lhs.isActiveOnBoard == rhs.isActiveOnBoard &&
         lhs.languageCode == rhs.languageCode
     }
 
     var body: some View {
+        let aura = VelvetAuraTheme(theme: theme)
         let previewW = effectiveConfig.size.width
         let previewH = effectiveConfig.size.height
         let boxSize: CGFloat = 148
@@ -2674,7 +2748,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
                             .equatable()
                             .scaleEffect(thumbScale)
                             .frame(width: previewW * thumbScale, height: previewH * thumbScale)
-                            .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
+                            .shadow(color: .black.opacity(theme == .light ? 0.16 : 0.30), radius: 8, x: 0, y: 4)
                             .allowsHitTesting(false)
                     }
                     .frame(height: boxSize * 0.86)
@@ -2686,7 +2760,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(Color.green.opacity(0.85), in: Capsule())
+                            .background(Color.green.opacity(0.88), in: Capsule())
                             .padding(4)
                     }
                 }
@@ -2694,22 +2768,20 @@ private struct WidgetGalleryCardButton: View, Equatable {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(aura.primaryText)
                         .lineLimit(1)
                     Text(card.subtitle)
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.60))
+                        .foregroundStyle(aura.secondaryText)
                         .lineLimit(1)
                 }
             }
             .padding(10)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.18) : (isHovered ? Color.white.opacity(0.08) : Color.clear))
+                VelvetAuraCardBackground(theme: theme, cornerRadius: 15, isSelected: isSelected, isHovered: isHovered)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(isSelected ? Color.white.opacity(0.30) : Color.clear, lineWidth: 1)
+                VelvetAuraCardOverlay(theme: theme, cornerRadius: 15, isSelected: isSelected)
             )
             .contentShape(Rectangle())
         }

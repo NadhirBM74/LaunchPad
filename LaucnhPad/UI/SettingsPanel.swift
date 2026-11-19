@@ -6,10 +6,10 @@ import ServiceManagement
 // MARK: - Réglages (mise en page inspirée de la fenêtre de réglages de LaunchOS)
 
 enum SettingsStyle {
-    static let accent = Color(red: 0.70, green: 0.36, blue: 0.80)
+    static let accent = Color(red: 0.816, green: 0.447, blue: 0.949) // #d072f2 — Aura Nocturne Velvet (4C)
     static let cardFill = Color.primary.opacity(0.055)
-    static let cardStroke = Color.primary.opacity(0.06)
-    static let separator = Color.primary.opacity(0.09)
+    static let cardStroke = Color.primary.opacity(0.08)
+    static let separator = Color.primary.opacity(0.085)
 }
 
 struct SettingsPanel: View {
@@ -229,36 +229,38 @@ struct SettingsPanel: View {
             }
     }
 
+    private var aura: VelvetAuraTheme {
+        VelvetAuraTheme(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+    }
+
     private var settingsDecoratedShell: some View {
         settingsShell
             .frame(width: Self.size.width, height: Self.size.height)
             .background(settingsBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: aura.windowCornerRadius, style: .continuous))
             .overlay { settingsBorderOverlay }
+            .background(WindowAppearanceSync(isLight: backgroundStyle == .light))
+            .foregroundStyle(aura.primaryText)
             .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
+            .preferredColorScheme(backgroundStyle == .light ? .light : .dark)
     }
 
     @ViewBuilder
     private var settingsBorderOverlay: some View {
-        if backgroundStyle == .liquidGlass {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(
-                    LiquidGlassStyle.specularBorder(intensity: liquidGlassIntensity),
-                    lineWidth: 1.2
-                )
-        } else {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1.0)
-        }
+        VelvetAuraWindowOverlay(theme: backgroundStyle, cornerRadius: aura.windowCornerRadius)
     }
 
     private var settingsShell: some View {
         ZStack(alignment: .bottom) {
             HStack(spacing: 0) {
-                // Barre latérale gauche inspirée de l'interface Apple (Photo de référence 1)
+                // Barre latérale gauche unifiée Aura Nocturne Velvet (4C)
                 appleSidebar
                     .frame(width: 228)
-                    .background(Color.black.opacity(backgroundStyle == .light ? 0.05 : 0.22))
+                    .background(aura.sidebarBackground)
+
+                Rectangle()
+                    .fill(aura.divider)
+                    .frame(width: 1)
 
                 // Panneau de contenu principal à droite
                 VStack(spacing: 0) {
@@ -267,7 +269,9 @@ struct SettingsPanel: View {
                         .padding(.top, 22)
                         .padding(.bottom, 14)
 
-                    Divider().background(SettingsStyle.separator)
+                    Rectangle()
+                        .fill(aura.divider)
+                        .frame(height: 1)
 
                     ScrollView(showsIndicators: false) {
                         LazyVStack(alignment: .leading, spacing: 14) {
@@ -287,7 +291,7 @@ struct SettingsPanel: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white.opacity(backgroundStyle == .light ? 0.22 : 0.045))
+                .background(aura.contentTint)
             }
 
             if let settingsToast {
@@ -322,32 +326,7 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var settingsBackground: some View {
-        let i = max(0.0, min(1.0, liquidGlassIntensity))
-        ZStack {
-            switch backgroundStyle {
-            case .dark:
-                VisualEffectBackground(material: .fullScreenUI)
-                Color.black.opacity(0.72)
-            case .light:
-                VisualEffectBackground(material: .underWindowBackground)
-                Color.white.opacity(0.62)
-            case .liquidGlass:
-                VisualEffectBackground(material: .fullScreenUI)
-                    .opacity(0.30 + 0.70 * i)
-                Color.black.opacity(0.26)
-                LinearGradient(
-                    colors: [
-                        Color.clear,
-                        Color.purple.opacity(0.06),
-                        Color.blue.opacity(0.05),
-                        Color.clear
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-        }
-        .ignoresSafeArea()
+        VelvetAuraWindowBackground(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
     }
 
     // MARK: Onglets (icône au-dessus du titre, onglet actif en violet)
@@ -365,23 +344,23 @@ struct SettingsPanel: View {
                         .scaledToFill()
                         .frame(width: 34, height: 34)
                         .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.14), lineWidth: 1))
+                        .overlay(Circle().strokeBorder(aura.accent.opacity(0.40), lineWidth: 1.2))
                 } else {
                     Image(systemName: "person.crop.circle.fill")
                         .font(.system(size: 30))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(aura.secondaryText)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(loc("settings.title"))
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(aura.primaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.68)
                     HStack(spacing: 4) {
                         Text(licenseManager.appleAccountFirstName.isEmpty ? "LaunchPad" : licenseManager.appleAccountFirstName)
                             .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(aura.secondaryText)
                             .lineLimit(1)
                         if licenseManager.isPro {
                             AnimatedVerifiedSealBadge(
@@ -397,9 +376,10 @@ struct SettingsPanel: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(aura.secondaryText)
                         .frame(width: 28, height: 28)
-                        .background(Color.primary.opacity(0.08), in: Circle())
+                        .background(aura.pillFill, in: Circle())
+                        .overlay(Circle().strokeBorder(aura.pillBorder, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .help(loc("about.tooltip"))
@@ -409,25 +389,26 @@ struct SettingsPanel: View {
             .padding(.bottom, 16)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(SettingsTab.primaryTabs) { tab in
                         sidebarRow(for: tab)
                     }
 
-                    // Groupe secondaire dépliable (comme "Playlists v")
+                    // Groupe secondaire dépliable harmonisé
                     Button {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             isPlusSectionExpanded.toggle()
                         }
                     } label: {
                         HStack {
-                            Text(loc("settings.plus_section"))
-                                .font(.system(size: 13.5, weight: .bold))
-                                .foregroundStyle(.primary.opacity(0.9))
+                            Text(loc("settings.plus_section").uppercased())
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.6)
+                                .foregroundStyle(aura.secondaryText)
                             Spacer()
                             Image(systemName: isPlusSectionExpanded ? "chevron.down" : "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(aura.secondaryText)
                         }
                         .padding(.horizontal, 12)
                         .padding(.top, 16)
@@ -458,21 +439,25 @@ struct SettingsPanel: View {
             HStack(spacing: 11) {
                 Image(systemName: tab.symbol)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(selected ? .white : (tab == .license && licenseManager.isPro ? Color.yellow : Color.secondary))
+                    .foregroundStyle(
+                        selected
+                            ? (aura.isLight ? aura.accent : .white)
+                            : (tab == .license && licenseManager.isPro ? Color.yellow : aura.secondaryText)
+                    )
                     .frame(width: 20, height: 20)
 
                 Text(tab.title)
                     .font(.system(size: 13.5, weight: selected ? .semibold : .medium))
-                    .foregroundStyle(selected ? .white : .primary.opacity(0.88))
+                    .foregroundStyle(selected ? aura.navActiveText : aura.primaryText.opacity(0.88))
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
             }
-            .padding(.horizontal, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
             .padding(.vertical, 8.5)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(selected ? Color.primary.opacity(backgroundStyle == .light ? 0.14 : 0.16) : Color.clear)
+                VelvetAuraSidebarRowBackground(theme: backgroundStyle, isSelected: selected)
             )
             .contentShape(Rectangle())
         }
@@ -485,23 +470,24 @@ struct SettingsPanel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectedTab.title)
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(aura.primaryText)
                 Text(selectedTab.subtitle)
                     .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(aura.secondaryText)
             }
             Spacer()
             HStack(spacing: 6) {
                 Text("ESC")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2.5)
-                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .foregroundStyle(aura.primaryText)
                 Text(loc("settings.esc_hint"))
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(aura.secondaryText)
             }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5.5)
+            .background(aura.pillFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 1))
             .accessibilityLabel(loc("settings.esc_a11y"))
         }
     }
@@ -826,17 +812,18 @@ struct SettingsPanel: View {
                                     .font(.system(size: 20))
                             }
                         }
-                        .foregroundStyle(isSelected ? .white : .primary.opacity(0.88))
+                        .foregroundStyle(isSelected ? .white : aura.primaryText.opacity(0.88))
                         .padding(.horizontal, lang == .auto ? 12 : 14)
                         .padding(.vertical, 6)
                         .background(
-                            Capsule(style: .continuous)
-                                .fill(isSelected ? SettingsStyle.accent : Color.primary.opacity(0.06))
+                            Capsule()
+                                .fill(isSelected ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill))
                         )
                         .overlay(
-                            Capsule(style: .continuous)
-                                .strokeBorder(isSelected ? Color.white.opacity(0.24) : Color.primary.opacity(0.08), lineWidth: 0.8)
+                            Capsule()
+                                .strokeBorder(isSelected ? Color.white.opacity(0.26) : aura.pillBorder, lineWidth: 0.9)
                         )
+                        .shadow(color: isSelected ? aura.accent.opacity(0.32) : .clear, radius: 6, y: 2)
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -2552,66 +2539,15 @@ private struct SettingsCardBox<Content: View>: View {
     let content: () -> Content
     init(@ViewBuilder content: @escaping () -> Content) { self.content = content }
     var body: some View {
-        Group {
-            if theme == .liquidGlass {
-                VStack(alignment: .leading, spacing: 0, content: content)
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .liquidGlassCard(cornerRadius: 15, interactive: false)
-            } else {
-                VStack(alignment: .leading, spacing: 0, content: content)
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background {
-                        cardBackground
-                            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    }
-                    .overlay {
-                        cardStroke
-                    }
+        VStack(alignment: .leading, spacing: 0, content: content)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                VelvetAuraCardBackground(theme: theme, cornerRadius: 15)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var cardBackground: some View {
-        switch theme {
-        case .dark:
-            Color.white.opacity(0.045)
-        case .light:
-            Color.white.opacity(0.72)
-        case .liquidGlass:
-            ZStack {
-                Color.white.opacity(0.05)
-                LinearGradient(
-                    colors: [Color.white.opacity(0.10), Color.white.opacity(0.02), Color.clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+            .overlay {
+                VelvetAuraCardOverlay(theme: theme, cornerRadius: 15)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var cardStroke: some View {
-        switch theme {
-        case .dark:
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-        case .light:
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
-        case .liquidGlass:
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.08), Color.white.opacity(0.03), Color.white.opacity(0.14)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        }
     }
 }
 
@@ -2892,7 +2828,12 @@ private struct SettingsRow<Control: View>: View {
 }
 
 private struct SettingsSeparator: View {
-    var body: some View { Rectangle().fill(SettingsStyle.separator).frame(height: 1) }
+    @AppStorage(PrefKey.backgroundStyle) private var theme: BackgroundStyle = .liquidGlass
+    var body: some View {
+        Rectangle()
+            .fill(VelvetAuraTheme(theme: theme).divider)
+            .frame(height: 1)
+    }
 }
 
 private struct SettingsSwitch: View {

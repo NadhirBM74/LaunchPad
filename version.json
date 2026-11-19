@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.24",
-  "name": "LaunchPad v1.2.24",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.24",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.24\n\n- 🎚️ **Opacité de l’Arrière-Plan Ajustable (0 % à 100 %)** : Remplacement du réglage de luminosité par un véritable curseur d’opacité dans *Réglages → Personnalisation* pour rendre le fond plus transparent ou plus opaque à volonté, sans aucun voile blanc.\n- 🎨 **Compatible avec Tous les Thèmes** : Fonctionne sur *Liquid Glass*, *Sombre* et *Clair* tout en conservant le rendu d’origine exact à sa valeur par défaut (*40 %*).\n- 🔄 **Contrôle Précis & Réinitialisation en Un Clic** : Paliers fins de 5 %, boutons latéraux rapides *Transparent* / *Opaque* et bouton de retour au réglage par défaut.\n- 🌍 **Traduction Complète en 6 Langues** : Intitulés et descriptions mis à jour en français, anglais, espagnol, allemand, italien et portugais.",
+  "tag_name": "v1.2.25",
+  "name": "LaunchPad v1.2.25",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.25",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.25\n\n- ✨ **Refonte Unifiée « Aura Nocturne Velvet » (Réglages & Menu Widgets)** : Les fenêtres des Réglages et de la galerie de widgets partagent désormais exactement le même design modernisé, tout en conservant votre format familier (barre latérale gauche et panneau droit).\n- 🎨 **Réactivité Complète aux 3 Thèmes** : Adaptation harmonieuse et automatique en temps réel selon le thème choisi (*Liquid Glass*, *Sombre* ou *Clair*), y compris dans le Menu Widgets qui réagit désormais parfaitement au mode clair comme au mode sombre.\n- 💜 **Finitions Velours & Signatures Lumineuses** : Filet lumineux subtil au sommet des fenêtres, aura ambiante douce, cartes fondues sans contours rigides et barre verticale lumineuse sur l’onglet actif.\n- 🧩 **Cohérence Visuelle & Contraste Optimisé** : Synchronisation automatique de l’apparence AppKit de la fenêtre des Réglages pour un contraste impeccable quelle que soit l’apparence système de macOS, et pastille *ESC* harmonisée dans les deux menus.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.24.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.24/LaunchPad-v1.2.24.zip"
+      "name": "LaunchPad-v1.2.25.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.25/LaunchPad-v1.2.25.zip"
     },
     {
-      "name": "LaunchPad-v1.2.24.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.24/LaunchPad-v1.2.24.dmg"
+      "name": "LaunchPad-v1.2.25.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.25/LaunchPad-v1.2.25.dmg"
     }
   ]
 }
