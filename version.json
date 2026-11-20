@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.31",
-  "name": "LaunchPad v1.2.31",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.31",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.31\n\n- 🎯 **Transparence Liquid Glass 100 % Dédiée aux Icônes** : Le réglage de transparence Liquid Glass (0 % à 100 %) agit désormais exclusivement sur les icônes sans flouter ni altérer l'arrière-plan du Launchpad ou des fenêtres.\n- 🖼️ **Arrière-plan Indépendant & Constant** : L'opacité et le flou du fond d'écran restent pilotés uniquement par le réglage d'opacité de l'arrière-plan, garantissant un fond net même avec des icônes 100 % transparentes.",
+  "tag_name": "v1.2.32",
+  "name": "LaunchPad v1.2.32",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.32",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.32\n\n- 💎 **Vrai Rendu Liquid Glass sur les Icônes à 100 %** : Les icônes conservent désormais 100 % de leur réfraction optique Liquid Glass, leur reflet de surface et leur biseau spéculaire même à 100 % de transparence, au lieu d'un fond vide.\n- 🎚️ **Dosage Progressif de la Translucidité (0 % → 100 %)** : Le curseur module la densité interne du verre (plus dense vers 0 %, cristal réfractif pur vers 100 %) tout en préservant l'effet Liquid Glass sur chaque tuile.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.31.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.31/LaunchPad-v1.2.31.zip"
+      "name": "LaunchPad-v1.2.32.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.32/LaunchPad-v1.2.32.zip"
     },
     {
-      "name": "LaunchPad-v1.2.31.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.31/LaunchPad-v1.2.31.dmg"
+      "name": "LaunchPad-v1.2.32.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.32/LaunchPad-v1.2.32.dmg"
     }
   ]
 }

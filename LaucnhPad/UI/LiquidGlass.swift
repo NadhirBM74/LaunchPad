@@ -443,15 +443,18 @@ public struct CrystalGlassSpec {
         isPureLightPreset: Bool = false,
         glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
     ) -> CrystalGlassSpec {
-        // 100 % (1.0) = transparence maximale ; 0 % (0.0) = opacité maximale (moins transparent)
+        // 100 % (1.0) = Liquid Glass le plus transparent ; 0 % (0.0) = Liquid Glass le plus opaque (éclat vitré toujours actif)
         let t = max(0.0, min(1.0, glassIntensity))
         let opacityFactor = 1.0 - t
-        let scale = 0.08 + 1.38 * opacityFactor
-        let rimScale = 0.42 + 0.68 * opacityFactor
-        let materialScale = max(0.06, min(1.0, 0.06 + 0.94 * opacityFactor))
+        let sheenScale = 1.0 + 0.25 * opacityFactor
+        let rimScale = 1.0 + 0.10 * opacityFactor
+        let tintScale = 0.38 + 1.05 * opacityFactor
+        let materialScale = max(0.35, min(1.0, 0.35 + 0.65 * opacityFactor))
 
         @inline(__always)
-        func s(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * scale)) }
+        func s(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * tintScale)) }
+        @inline(__always)
+        func sh(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * sheenScale)) }
         @inline(__always)
         func r(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * rimScale)) }
 
@@ -459,9 +462,9 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: Color.white.opacity(s(0.24)),
                 surfaceSheenColors: [
-                    Color.white.opacity(s(0.22)),
-                    Color.white.opacity(s(0.06)),
-                    Color.white.opacity(s(0.12))
+                    Color.white.opacity(sh(0.22)),
+                    Color.white.opacity(sh(0.06)),
+                    Color.white.opacity(sh(0.12))
                 ],
                 specularRimColors: [
                     Color.white.opacity(r(0.88)),
@@ -480,15 +483,15 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: isFolder ? customFolderColor?.opacity(s(0.20)) : nil,
                 surfaceSheenColors: [
-                    Color.white.opacity(s(0.11)),
-                    Color.white.opacity(s(0.03)),
-                    Color.white.opacity(s(0.07))
+                    Color.white.opacity(sh(0.24)),
+                    Color.white.opacity(sh(0.05)),
+                    Color.white.opacity(sh(0.14))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(r(0.78)),
-                    Color.white.opacity(r(0.18)),
-                    Color.white.opacity(r(0.14)),
-                    Color.white.opacity(r(0.42))
+                    Color.white.opacity(r(0.88)),
+                    Color.white.opacity(r(0.28)),
+                    Color.white.opacity(r(0.16)),
+                    Color.white.opacity(r(0.54))
                 ],
                 fallbackTintOpacity: customFolderColor != nil && isFolder ? s(0.18) : s(0.12),
                 fallbackMaterialOpacity: min(1.0, 0.75 * materialScale),
@@ -499,14 +502,15 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: Color(red: 0.04, green: 0.05, blue: 0.10).opacity(s(0.55)),
                 surfaceSheenColors: [
-                    Color(red: 0.08, green: 0.09, blue: 0.15).opacity(s(0.46)),
-                    Color(red: 0.03, green: 0.04, blue: 0.08).opacity(s(0.58))
+                    Color.white.opacity(sh(0.16)),
+                    Color(red: 0.08, green: 0.09, blue: 0.15).opacity(s(0.32)),
+                    Color(red: 0.03, green: 0.04, blue: 0.08).opacity(s(0.45))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(r(0.52)),
-                    Color.white.opacity(r(0.14)),
-                    Color.white.opacity(r(0.08)),
-                    Color.white.opacity(r(0.30))
+                    Color.white.opacity(r(0.70)),
+                    Color.white.opacity(r(0.20)),
+                    Color.white.opacity(r(0.12)),
+                    Color.white.opacity(r(0.40))
                 ],
                 fallbackTintOpacity: s(0.52),
                 fallbackMaterialOpacity: min(1.0, 0.78 * materialScale),
@@ -517,9 +521,9 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: Color.white.opacity(s(0.22)),
                 surfaceSheenColors: [
-                    Color.white.opacity(s(0.26)),
-                    Color(red: 0.88, green: 0.92, blue: 1.0).opacity(s(0.14)),
-                    Color.white.opacity(s(0.20))
+                    Color.white.opacity(sh(0.26)),
+                    Color(red: 0.88, green: 0.92, blue: 1.0).opacity(sh(0.14)),
+                    Color.white.opacity(sh(0.20))
                 ],
                 specularRimColors: [
                     Color.white.opacity(r(0.86)),
@@ -536,14 +540,15 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: Color(red: 0.05, green: 0.06, blue: 0.10).opacity(s(isFolder ? 0.62 : 0.68)),
                 surfaceSheenColors: [
-                    Color(red: 0.08, green: 0.09, blue: 0.13).opacity(s(isFolder ? 0.56 : 0.62)),
-                    Color(red: 0.03, green: 0.035, blue: 0.06).opacity(s(isFolder ? 0.68 : 0.76))
+                    Color.white.opacity(sh(0.14)),
+                    Color(red: 0.08, green: 0.09, blue: 0.13).opacity(s(isFolder ? 0.36 : 0.42)),
+                    Color(red: 0.03, green: 0.035, blue: 0.06).opacity(s(isFolder ? 0.52 : 0.58))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(r(0.48)),
-                    Color.white.opacity(r(0.13)),
-                    Color.white.opacity(r(0.08)),
-                    Color.white.opacity(r(0.28))
+                    Color.white.opacity(r(0.64)),
+                    Color.white.opacity(r(0.18)),
+                    Color.white.opacity(r(0.10)),
+                    Color.white.opacity(r(0.36))
                 ],
                 fallbackTintOpacity: s(0.62),
                 fallbackMaterialOpacity: min(1.0, 0.82 * materialScale),
@@ -554,9 +559,9 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: Color.white.opacity(s(isFolder ? 0.36 : 0.42)),
                 surfaceSheenColors: [
-                    Color.white.opacity(s(isFolder ? 0.46 : 0.54)),
+                    Color.white.opacity(sh(0.32)),
                     Color(red: 0.93, green: 0.95, blue: 1.0).opacity(s(isFolder ? 0.32 : 0.38)),
-                    Color.white.opacity(s(isFolder ? 0.40 : 0.48))
+                    Color.white.opacity(sh(0.24))
                 ],
                 specularRimColors: [
                     Color.white.opacity(r(0.92)),
@@ -575,7 +580,7 @@ public struct CrystalGlassSpec {
                 tint: accent.opacity(s(isFolder ? 0.34 : 0.38)),
                 surfaceSheenColors: [
                     accent.opacity(s(0.22)),
-                    Color.white.opacity(s(0.06)),
+                    Color.white.opacity(sh(0.14)),
                     accent.opacity(s(0.15))
                 ],
                 specularRimColors: [
@@ -593,14 +598,15 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: Color(white: 0.16).opacity(s(0.36)),
                 surfaceSheenColors: [
-                    Color(white: 0.24).opacity(s(0.38)),
-                    Color(white: 0.12).opacity(s(0.48))
+                    Color.white.opacity(sh(0.18)),
+                    Color(white: 0.24).opacity(s(0.32)),
+                    Color(white: 0.12).opacity(s(0.42))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(r(0.74)),
-                    Color.white.opacity(r(0.20)),
-                    Color.white.opacity(r(0.12)),
-                    Color.white.opacity(r(0.40))
+                    Color.white.opacity(r(0.76)),
+                    Color.white.opacity(r(0.22)),
+                    Color.white.opacity(r(0.14)),
+                    Color.white.opacity(r(0.42))
                 ],
                 fallbackTintOpacity: s(0.42),
                 fallbackMaterialOpacity: min(1.0, 0.80 * materialScale),
@@ -611,15 +617,15 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: isFolder ? customFolderColor?.opacity(s(0.18)) : nil,
                 surfaceSheenColors: [
-                    Color.white.opacity(s(0.10)),
-                    Color.white.opacity(s(0.02)),
-                    Color.white.opacity(s(0.05))
+                    Color.white.opacity(sh(0.22)),
+                    Color.white.opacity(sh(0.05)),
+                    Color.white.opacity(sh(0.12))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(r(0.78)),
-                    Color.white.opacity(r(0.20)),
-                    Color.white.opacity(r(0.12)),
-                    Color.white.opacity(r(0.42))
+                    Color.white.opacity(r(0.84)),
+                    Color.white.opacity(r(0.24)),
+                    Color.white.opacity(r(0.14)),
+                    Color.white.opacity(r(0.48))
                 ],
                 fallbackTintOpacity: s(0.15),
                 fallbackMaterialOpacity: min(1.0, 0.65 * materialScale),
@@ -665,25 +671,24 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
         ZStack {
             if #available(macOS 26.0, *), !reduceTransparency, !preferRotatedMaterial {
                 let glass: Glass = {
-                    var g: Glass = interactive ? .clear.interactive() : .clear
+                    var g: Glass = interactive ? .regular.interactive() : .regular
                     if let tint = spec.tint {
                         g = g.tint(tint)
                     }
                     return g
                 }()
-                if opacityFactor > 0.08 {
+                if opacityFactor > 0.02 {
                     shape
-                        .fill(.ultraThinMaterial)
-                        .opacity(0.68 * opacityFactor)
+                        .fill(.regularMaterial)
+                        .opacity(0.78 * opacityFactor)
+                    if let tint = spec.tint {
+                        shape.fill(tint.opacity(0.55 * opacityFactor))
+                    } else {
+                        shape.fill(Color.white.opacity(0.35 * opacityFactor))
+                    }
                 }
                 Color.clear
                     .glassEffect(glass, in: shape)
-                    .opacity(0.12 + 0.88 * opacityFactor)
-                if let tint = spec.tint {
-                    shape.fill(tint.opacity(0.50 * opacityFactor))
-                } else if opacityFactor > 0.08 {
-                    shape.fill(Color.white.opacity(0.14 * opacityFactor))
-                }
             } else {
                 shape
                     .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.86) : Color.clear)
@@ -693,10 +698,10 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
                         .opacity(spec.fallbackMaterialOpacity)
                 } else if !reduceTransparency {
                     shape
-                        .fill(Color.white.opacity(0.08 * (0.1 + 0.9 * opacityFactor)))
+                        .fill(Color.white.opacity(0.10 + 0.14 * opacityFactor))
                 }
                 if let tint = spec.tint {
-                    shape.fill(tint.opacity(preferRotatedMaterial ? 0.55 * opacityFactor : spec.fallbackTintOpacity))
+                    shape.fill(tint.opacity(preferRotatedMaterial ? (0.28 + 0.45 * opacityFactor) : spec.fallbackTintOpacity))
                 } else if !reduceTransparency && opacityFactor > 0.05 {
                     shape.fill(Color.white.opacity(0.22 * opacityFactor))
                 }
@@ -709,6 +714,17 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
+                )
+
+            shape
+                .inset(by: 0.9)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: spec.specularRimColors.map { $0.opacity(0.38) },
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.75
                 )
         }
         .allowsHitTesting(false)
@@ -795,9 +811,9 @@ public struct CrystalAppIconImage: View, Equatable {
                     let miniOpacityFactor = 1.0 - max(0.0, min(1.0, spec.glassIntensity))
                     ZStack {
                         if let tint = spec.tint {
-                            shape.fill(tint.opacity(0.12 + 0.65 * miniOpacityFactor))
+                            shape.fill(tint.opacity(0.28 + 0.55 * miniOpacityFactor))
                         } else {
-                            shape.fill(Color.white.opacity(0.04 + 0.24 * miniOpacityFactor))
+                            shape.fill(Color.white.opacity(0.14 + 0.24 * miniOpacityFactor))
                         }
                         shape.fill(
                             LinearGradient(
