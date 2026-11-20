@@ -291,10 +291,13 @@ struct SettingsPanel: View {
                             case .about: aboutTab
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
                         .padding(.top, 16)
                         .padding(.bottom, 52)
                     }
+                    .hideMacOSScrollEdgeEffect()
+                    .clipped()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(aura.contentTint)
@@ -640,7 +643,7 @@ struct SettingsPanel: View {
                     loc("interface.liquid_glass_intensity"),
                     subtitle: loc("interface.liquid_glass_intensity_subtitle"),
                     value: $liquidGlassIntensity,
-                    range: 0.05...1.0,
+                    range: 0.0...1.0,
                     step: 0.05,
                     isPercentage: true
                 )
@@ -701,8 +704,10 @@ struct SettingsPanel: View {
 
                 IconScalePreviewBox(iconScale: $iconScale, reduceMotion: reduceMotion)
             }
-            .padding(.vertical, 6)
-            SettingsSeparator()
+            .padding(.vertical, 10)
+        }
+
+        SettingsCardBox {
             SettingsRow(loc("custom.grid_dims_title"), subtitle: loc("custom.grid_dims_sub")) {
                 HStack(spacing: 10) {
                     SettingsNumberField(value: $columns, range: 4...10)
@@ -3530,10 +3535,6 @@ struct IconScalePreviewBox: View {
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.primary.opacity(0.035))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(SettingsStyle.cardStroke, lineWidth: 1)
-                    )
             )
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: iconScale)
         }

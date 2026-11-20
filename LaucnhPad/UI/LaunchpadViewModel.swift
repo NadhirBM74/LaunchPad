@@ -187,7 +187,7 @@ final class LaunchpadViewModel: ObservableObject {
     ) -> TileModel {
         let lang = LocalizationManager.shared.effectiveLanguageCode
         let runRev = showRunning ? store.runningRevision : -1
-        let glass = max(0.05, min(1.0, glassIntensity ?? CrystalGlassSpec.currentGlassIntensity))
+        let glass = max(0.0, min(1.0, glassIntensity ?? CrystalGlassSpec.currentGlassIntensity))
         let state = (rev: store.revision, icons: store.iconsVersion, running: runRev, showRun: showRunning, lang: lang, tint: tint, glass: glass)
         if let prev = cachedTileState {
             let coreChanged = prev.rev != state.rev || prev.icons != state.icons ||

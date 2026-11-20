@@ -450,7 +450,8 @@ struct VelvetAuraWindowBackground: View, Equatable {
 
     var body: some View {
         let aura = VelvetAuraTheme(theme: theme, liquidGlassIntensity: liquidGlassIntensity)
-        let i = max(0.05, min(1.0, liquidGlassIntensity))
+        let transparency = max(0.0, min(1.0, liquidGlassIntensity))
+        let opacityFactor = 1.0 - transparency
 
         ZStack(alignment: .top) {
             switch theme {
@@ -476,28 +477,40 @@ struct VelvetAuraWindowBackground: View, Equatable {
                 )
             case .liquidGlass:
                 VisualEffectBackground(material: .fullScreenUI)
-                    .opacity(0.32 + 0.68 * i)
+                    .opacity(0.45 + 0.55 * opacityFactor)
                 LinearGradient(
                     colors: [
-                        Color(red: 0.078, green: 0.063, blue: 0.125).opacity(0.82), // rgba(20,16,32,0.82)
-                        Color(red: 0.043, green: 0.039, blue: 0.071).opacity(0.90)  // rgba(11,10,18,0.90)
+                        Color(red: 0.078, green: 0.063, blue: 0.125).opacity(0.62 + 0.30 * opacityFactor),
+                        Color(red: 0.043, green: 0.039, blue: 0.071).opacity(0.70 + 0.24 * opacityFactor)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             }
 
-            // Lueur ambiante diffuse au sommet du panneau (signature 4C)
+            // Lueur ambiante continue sans cadre de hauteur fixe (évite toute ligne horizontale de coupure)
             RadialGradient(
-                colors: [aura.headerAuraColor, Color.clear],
-                center: UnitPoint(x: 0.56, y: -0.10),
-                startRadius: 10,
-                endRadius: 290
+                colors: [aura.headerAuraColor, aura.headerAuraColor.opacity(0.32), Color.clear],
+                center: UnitPoint(x: 0.56, y: -0.06),
+                startRadius: 8,
+                endRadius: 340
             )
-            .frame(height: 190)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
+    }
+}
+
+extension View {
+    /// Supprime la poche d'effet de bord de défilement automatique sous macOS 26+ (évite les démarcations sous en-tête).
+    @ViewBuilder
+    func hideMacOSScrollEdgeEffect() -> some View {
+        if #available(macOS 26.0, *) {
+            self.scrollEdgeEffectHidden(true, for: .all)
+        } else {
+            self
+        }
     }
 }
 

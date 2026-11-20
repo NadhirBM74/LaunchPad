@@ -907,9 +907,10 @@ private struct SearchCapsuleGlassModifier: ViewModifier {
         let spec = CrystalGlassSpec.resolve(
             style: resolvedStyle,
             tintColor: resolvedTint,
-            glassIntensity: visualStyle == .pureMinimal ? max(0.08, intensity * 0.65) : intensity
+            glassIntensity: visualStyle == .pureMinimal ? max(0.15, intensity) : intensity
         )
 
+        let opacityFactor = 1.0 - max(0.0, min(1.0, intensity))
         content
             .background {
                 ZStack {
@@ -917,7 +918,7 @@ private struct SearchCapsuleGlassModifier: ViewModifier {
                     if visualStyle == .doubleGlass {
                         Capsule()
                             .inset(by: 2.5)
-                            .fill(Color.white.opacity(0.055 * max(0.2, intensity)))
+                            .fill(Color.white.opacity(0.055 * (0.2 + 0.8 * opacityFactor)))
                             .overlay(
                                 Capsule()
                                     .inset(by: 2.5)
@@ -1054,7 +1055,7 @@ struct TileModel: Equatable {
     static func make(_ item: LayoutItem, store: LaunchpadStore, showRunning: Bool, glassIntensity: Double? = nil) -> TileModel {
         let style = IconCache.shared.currentAppearanceStyle
         let isPro = LicenseManager.shared.isPro
-        let glass = max(0.05, min(1.0, glassIntensity ?? CrystalGlassSpec.currentGlassIntensity))
+        let glass = max(0.0, min(1.0, glassIntensity ?? CrystalGlassSpec.currentGlassIntensity))
         switch item {
         case .app(let id):
             let running = showRunning && (store.catalog[id].map(store.isRunning) ?? false)
@@ -2275,6 +2276,8 @@ struct WidgetGalleryModal: View {
                             .padding(.bottom, 18)
                         }
                     }
+                    .hideMacOSScrollEdgeEffect()
+                    .clipped()
 
                     Rectangle()
                         .fill(aura.divider)
