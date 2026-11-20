@@ -25,7 +25,7 @@ struct TutorialCardView: View {
     @ObservedObject private var locManager = LocalizationManager.shared
     @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
-    @AppStorage(PrefKey.tutorialVisualStyle) private var tutorialStyle: TutorialVisualStyle = .studioAura
+    @AppStorage(PrefKey.tutorialVisualStyle) private var tutorialStyle: TutorialVisualStyle = .cinemaPanoramique
     @State private var currentStepIndex: Int
 
     init(vm: LaunchpadViewModel? = nil, initialStepIndex: Int = 0, onDismiss: (() -> Void)? = nil) {
@@ -495,32 +495,6 @@ struct TutorialCardView: View {
                 .foregroundStyle(aura.secondaryText)
 
             Spacer(minLength: 8)
-
-            // Sélecteur des 4 modèles de Tutoriel
-            HStack(spacing: 2) {
-                ForEach(TutorialVisualStyle.allCases) { variant in
-                    let active = tutorialStyle == variant
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            tutorialStyle = variant
-                        }
-                    } label: {
-                        Text(variant.shortTitle)
-                            .font(.system(size: 9.5, weight: active ? .bold : .medium))
-                            .foregroundStyle(active ? aura.primaryText : aura.secondaryText)
-                            .padding(.horizontal, 6.5)
-                            .padding(.vertical, 3.5)
-                            .background(
-                                active ? AnyShapeStyle(aura.navActiveFill) : AnyShapeStyle(Color.clear),
-                                in: Capsule()
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(2)
-            .background(aura.pillFill, in: Capsule())
-            .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 0.8))
 
             VelvetAuraEscapePill()
         }

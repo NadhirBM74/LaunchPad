@@ -1166,8 +1166,8 @@ private struct AdminUpdatesSectionView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.27)") {
-                            updates.setDebugState(.upToDate(version: "1.2.27"))
+                        Button("À jour (v1.2.28)") {
+                            updates.setDebugState(.upToDate(version: "1.2.28"))
                             AdminManager.shared.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

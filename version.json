@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.27",
-  "name": "LaunchPad v1.2.27",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.27",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.27\n\n- 💧 **Liquid Glass & Barre de Recherche Cristal** : Le curseur de transparence Liquid Glass pilote désormais en direct l'intensité du verre de toutes les icônes, et la barre de recherche adopte le même rendu cristal (avec 4 styles au choix dans les Réglages).\n- 🎨 **Design Unifié Aura Nocturne Velvet** : Les fenêtres de personnalisation d'icône et de désinstallation complète adoptent désormais l'identité veloutée et réactive aux thèmes des Réglages et des Widgets, accompagnées d'un nouveau comparatif Licence visuel et d'un tutoriel interactif entièrement refait.\n- ⚡ **Défilement Molette 120 FPS & Ouverture 3 Doigts / F4** : Élimination des saccades à la molette dans les Réglages et les Widgets, blocage strict du changement de page derrière les menus, geste 3 doigts isolé des raccourcis macOS et prise en charge directe de la touche F4 sans Fn.\n- ⌨️ **Navigation Épurée Par Échap** : Suppression des boutons de fermeture superflus dans tous les menus pour une fermeture homogène via la touche Échap avec indicateur visuel intégré.",
+  "tag_name": "v1.2.28",
+  "name": "LaunchPad v1.2.28",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.28",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.28\n\n- 🔍 **Barre de Recherche Liquid Glass Ultra-Clair** : Adoption définitive de la pilule Ultra-Clair épurée avec pastille loupe en verre cristallin assortie à vos icônes et réactive à l'intensité Liquid Glass.\n- 🎓 **Tutoriel Cinéma Panoramique Plein Cadre** : Mise en page panoramique immersive avec navigation par pilules d'étapes, présentation complète des fonctionnalités actuelles et fermeture par Échap.\n- 👑 **Comparatif Licence Dual-Column Gratuit vs Pro** : Tableau visuel clair en deux colonnes opposant les fonctions Standard et Pro dans Réglages › Licence.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.27.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.27/LaunchPad-v1.2.27.zip"
+      "name": "LaunchPad-v1.2.28.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.28/LaunchPad-v1.2.28.zip"
     },
     {
-      "name": "LaunchPad-v1.2.27.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.27/LaunchPad-v1.2.27.dmg"
+      "name": "LaunchPad-v1.2.28.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.28/LaunchPad-v1.2.28.dmg"
     }
   ]
 }

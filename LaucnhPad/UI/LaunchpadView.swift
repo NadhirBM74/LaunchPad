@@ -109,7 +109,7 @@ private struct LaunchpadActiveBody: View {
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
     @AppStorage(PrefKey.iconStyle) private var iconStyleRaw = "original"
-    @AppStorage(PrefKey.searchBarStyle) private var searchBarStyle: SearchBarVisualStyle = .crystalIcon
+    @AppStorage(PrefKey.searchBarStyle) private var searchBarStyle: SearchBarVisualStyle = .pureMinimal
     @AppStorage(PrefKey.reduceMotion) private var reduceMotionPreference = false
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
@@ -496,9 +496,10 @@ private struct LaunchpadActiveBody: View {
             if searchBarStyle == .pureMinimal {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.94))
-                    .frame(width: 22, height: 22)
+                    .foregroundStyle(.white.opacity(0.95))
+                    .frame(width: 24, height: 24)
                     .background(Color.white.opacity(0.14), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 0.7))
             } else {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 13.5, weight: .semibold))

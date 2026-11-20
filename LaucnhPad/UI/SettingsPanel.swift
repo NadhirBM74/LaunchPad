@@ -57,8 +57,7 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
-    @AppStorage(PrefKey.searchBarStyle) private var searchBarStyle: SearchBarVisualStyle = .crystalIcon
-    @AppStorage(PrefKey.licenseComparisonStyle) private var licenseComparisonStyle: LicenseComparisonStyle = .bentoGrid
+    @AppStorage(PrefKey.licenseComparisonStyle) private var licenseComparisonStyle: LicenseComparisonStyle = .dualColumns
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var customTileManager = CustomTileManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
@@ -646,52 +645,6 @@ struct SettingsPanel: View {
                     isPercentage: true
                 )
             }
-
-            SettingsSeparator()
-
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Barre de recherche Liquid Glass")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Style de verre coordonné avec vos icônes d'applications.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack(spacing: 8) {
-                    ForEach(SearchBarVisualStyle.allCases) { variant in
-                        let selected = (searchBarStyle == variant)
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                searchBarStyle = variant
-                            }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(selected ? aura.accent : Color.white.opacity(0.28))
-                                    .frame(width: 7, height: 7)
-                                Text(variant.shortTitle)
-                                    .font(.system(size: 11.5, weight: selected ? .bold : .medium))
-                                    .lineLimit(1)
-                            }
-                            .foregroundStyle(selected ? aura.primaryText : aura.secondaryText)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                selected ? AnyShapeStyle(aura.navActiveFill) : AnyShapeStyle(aura.pillFill),
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(selected ? aura.accent : aura.pillBorder, lineWidth: selected ? 1.3 : 1.0)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .padding(.vertical, 12)
         }
 
         SettingsSectionTitle(loc("custom.grid_section"))
@@ -4198,31 +4151,6 @@ private struct LicenseFeaturesComparisonCard: View {
                 }
 
                 Spacer()
-
-                HStack(spacing: 3) {
-                    ForEach(LicenseComparisonStyle.allCases) { variant in
-                        let chosen = (style == variant)
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                style = variant
-                            }
-                        } label: {
-                            Text(variant.shortTitle)
-                                .font(.system(size: 10, weight: chosen ? .bold : .medium))
-                                .foregroundStyle(chosen ? aura.primaryText : aura.secondaryText)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 4)
-                                .background(
-                                    chosen ? AnyShapeStyle(aura.navActiveFill) : AnyShapeStyle(Color.clear),
-                                    in: Capsule()
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(2)
-                .background(aura.pillFill, in: Capsule())
-                .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 0.8))
             }
 
             switch style {

@@ -339,6 +339,12 @@ enum Prefs {
             defaults.set("original", forKey: PrefKey.iconStyle)
             defaults.set(false, forKey: PrefKey.tintedIcons)
         }
+        if !defaults.bool(forKey: "LaunchpadAppliedDesignChoicesV1228") {
+            defaults.set(true, forKey: "LaunchpadAppliedDesignChoicesV1228")
+            defaults.set(SearchBarVisualStyle.pureMinimal.rawValue, forKey: PrefKey.searchBarStyle)
+            defaults.set(TutorialVisualStyle.cinemaPanoramique.rawValue, forKey: PrefKey.tutorialVisualStyle)
+            defaults.set(LicenseComparisonStyle.dualColumns.rawValue, forKey: PrefKey.licenseComparisonStyle)
+        }
     }
 
     static func registerDefaults() {
@@ -393,9 +399,9 @@ enum Prefs {
             PrefKey.widgetQuickNoteText: "",
             PrefKey.weatherLocationMode: "auto",
             PrefKey.weatherUnit: Locale.current.measurementSystem == .metric ? "C" : "F",
-            PrefKey.searchBarStyle: SearchBarVisualStyle.crystalIcon.rawValue,
-            PrefKey.tutorialVisualStyle: TutorialVisualStyle.studioAura.rawValue,
-            PrefKey.licenseComparisonStyle: LicenseComparisonStyle.bentoGrid.rawValue,
+            PrefKey.searchBarStyle: SearchBarVisualStyle.pureMinimal.rawValue,
+            PrefKey.tutorialVisualStyle: TutorialVisualStyle.cinemaPanoramique.rawValue,
+            PrefKey.licenseComparisonStyle: LicenseComparisonStyle.dualColumns.rawValue,
         ])
     }
 
