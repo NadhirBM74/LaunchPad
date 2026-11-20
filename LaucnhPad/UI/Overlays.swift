@@ -46,25 +46,25 @@ private struct LaunchpadOverlaysContent: View, Equatable {
     var body: some View {
         ZStack {
             if let dialog {
-                dimmer { vm.dialog = nil }
-                ConfirmCard(dialog: dialog, onCancel: { vm.dialog = nil }, onConfirm: {
+                dimmer()
+                ConfirmCard(dialog: dialog, onConfirm: {
                     vm.dialog = nil
                     dialog.action()
                 })
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
             if let request = rename {
-                dimmer { vm.rename = nil; vm.textInputActive = false; vm.focusSearch() }
+                dimmer()
                 RenameCard(request: request, vm: vm)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
             if let session = uninstall {
-                dimmer { if !session.working { vm.uninstall = nil; vm.focusSearch() } }
-                UninstallCard(session: session, onCancel: { vm.uninstall = nil; vm.focusSearch() }, onConfirm: { vm.confirmUninstall() })
+                dimmer()
+                UninstallCard(session: session, onConfirm: { vm.confirmUninstall() })
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
             if let modal = customTileModal {
-                dimmer { vm.customTileModal = nil; vm.focusSearch() }
+                dimmer()
                 AddCustomTileCard(modal: modal, vm: vm)
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
@@ -73,12 +73,7 @@ private struct LaunchpadOverlaysContent: View, Equatable {
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
             if showPermissionBanner {
-                dimmer {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        permissionManager.showPermissionCard = false
-                    }
-                    vm.focusSearch()
-                }
+                dimmer()
                 AccessibilityPermissionCard()
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
@@ -107,82 +102,116 @@ private struct LaunchpadOverlaysContent: View, Equatable {
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showPermissionBanner)
     }
 
-    private func dimmer(_ action: @escaping () -> Void) -> some View {
-        Color.black.opacity(0.35)
+    private func dimmer() -> some View {
+        Color.black.opacity(0.45)
             .contentShape(Rectangle())
-            .onTapGesture(perform: action)
             .ignoresSafeArea()
-    }
-}
-
-private struct CardBackground: ViewModifier {
-    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
-
-    func body(content: Content) -> some View {
-        content
-            .padding(22)
-            .background {
-                if backgroundStyle == .liquidGlass {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .liquidGlassCard(cornerRadius: 22, interactive: false, borderLineWidth: 1.2)
-                } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(white: 0.14).opacity(0.96))
-                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.12)))
-                }
-            }
-            .shadow(color: .black.opacity(0.45), radius: 32, y: 14)
-            .shadow(color: .black.opacity(0.20), radius: 6, y: 2)
     }
 }
 
 struct ConfirmCard: View {
     let dialog: DialogModel
-    let onCancel: () -> Void
     let onConfirm: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(dialog.title).font(.headline).foregroundStyle(.white)
-            Text(dialog.message).font(.callout).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button(loc("dialog.cancel"), action: onCancel).keyboardShortcut(.cancelAction)
-                Button(dialog.confirmTitle, role: dialog.destructive ? .destructive : nil, action: onConfirm)
-                    .keyboardShortcut(.defaultAction)
-                    .tint(dialog.destructive ? .red : .accentColor)
+        VelvetAuraModalContainer(cornerRadius: 20) { aura in
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 10) {
+                    Text(dialog.title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(aura.primaryText)
+                    Spacer(minLength: 8)
+                    VelvetAuraEscapePill()
+                }
+                Text(dialog.message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(aura.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !dialog.confirmTitle.isEmpty {
+                    HStack {
+                        Spacer()
+                        Button(action: onConfirm) {
+                            Text(dialog.confirmTitle)
+                                .font(.system(size: 12.5, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 7)
+                                .background(
+                                    dialog.destructive ? AnyShapeStyle(Color.red) : AnyShapeStyle(aura.accentGradient),
+                                    in: Capsule()
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.defaultAction)
+                    }
+                }
             }
+            .padding(22)
+            .frame(width: 410)
         }
-        .frame(width: 380)
-        .modifier(CardBackground())
     }
 }
 
 struct RenameCard: View {
     let request: RenameRequest
     let vm: LaunchpadViewModel
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
     @State private var text = ""
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(request.isFolder ? loc("menu.rename_folder") : loc("dialog.rename")).font(.headline).foregroundStyle(.white)
-            TextField(loc("overlay.name"), text: $text)
-                .textFieldStyle(.roundedBorder)
-                .focused($focused)
-                .onSubmit { vm.commitRename(text) }
-            if !request.isFolder {
-                Text(loc("overlay.rename_tip"))
-                    .font(.caption).foregroundStyle(.white.opacity(0.6))
+        VelvetAuraModalContainer(cornerRadius: 20) { aura in
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 10) {
+                    Text(request.isFolder ? loc("menu.rename_folder") : loc("dialog.rename"))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(aura.primaryText)
+                    Spacer(minLength: 8)
+                    VelvetAuraEscapePill()
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField(loc("overlay.name"), text: $text)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(aura.primaryText)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 1))
+                        .focused($focused)
+                        .onSubmit { vm.commitRename(text) }
+
+                    if !request.isFolder {
+                        Text(loc("overlay.rename_tip"))
+                            .font(.caption)
+                            .foregroundStyle(aura.secondaryText)
+                    }
+                }
+                .padding(12)
+                .background(VelvetAuraCardBackground(theme: backgroundStyle, cornerRadius: 14))
+                .overlay(VelvetAuraCardOverlay(theme: backgroundStyle, cornerRadius: 14))
+
+                HStack {
+                    Spacer()
+                    Button {
+                        vm.commitRename(text)
+                    } label: {
+                        Text(loc("dialog.save"))
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .background(aura.accentGradient, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                }
             }
-            HStack {
-                Spacer()
-                Button(loc("dialog.cancel")) { vm.rename = nil; vm.textInputActive = false; vm.focusSearch() }
-                Button(loc("dialog.save")) { vm.commitRename(text) }.keyboardShortcut(.defaultAction)
-            }
+            .padding(22)
+            .frame(width: 410)
         }
-        .frame(width: 380)
-        .modifier(CardBackground())
         .onAppear {
             text = request.text
             vm.textInputActive = true
@@ -193,8 +222,8 @@ struct RenameCard: View {
 
 struct UninstallCard: View {
     @ObservedObject var session: UninstallSession
-    let onCancel: () -> Void
     let onConfirm: () -> Void
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
 
     private static let formatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
@@ -203,72 +232,127 @@ struct UninstallCard: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                LiveAppIconView(image: IconCache.shared.icon(for: session.app.id), size: 52)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text(loc("overlay.uninstall_confirm", session.app.name)).font(.headline).foregroundStyle(.white)
-                        if !LicenseManager.shared.isPro {
-                            ProBadge()
+        VelvetAuraModalContainer(cornerRadius: 22) { aura in
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    LiveAppIconView(image: IconCache.shared.icon(for: session.app.id), size: 52)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 7) {
+                            Text(loc("overlay.uninstall_confirm", session.app.name))
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(aura.primaryText)
+                                .lineLimit(1)
+                            if !LicenseManager.shared.isPro {
+                                ProBadge()
+                            }
                         }
+                        Text(loc("overlay.uninstall_trash_tip"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(aura.secondaryText)
                     }
-                    Text(loc("overlay.uninstall_trash_tip")).font(.caption).foregroundStyle(.white.opacity(0.65))
+                    Spacer(minLength: 8)
+                    VelvetAuraEscapePill()
                 }
-            }
-            if session.scanning {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(loc("overlay.uninstall_searching")).foregroundStyle(.white.opacity(0.75))
-                }
-                .frame(maxWidth: .infinity, minHeight: 80)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(session.files) { file in
-                            Toggle(isOn: Binding(
-                                get: { session.selected.contains(file.id) },
-                                set: { isOn in
-                                    if isOn { session.selected.insert(file.id) } else { session.selected.remove(file.id) }
-                                }
-                            )) {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    HStack {
-                                        Text(file.kind).foregroundStyle(.white)
-                                        Spacer()
-                                        Text(Self.formatter.string(fromByteCount: file.size)).foregroundStyle(.white.opacity(0.6)).monospacedDigit()
+
+                Rectangle()
+                    .fill(aura.divider)
+                    .frame(height: 1)
+
+                Group {
+                    if session.scanning {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(loc("overlay.uninstall_searching"))
+                                .foregroundStyle(aura.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 90)
+                    } else {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(session.files) { file in
+                                    Toggle(isOn: Binding(
+                                        get: { session.selected.contains(file.id) },
+                                        set: { isOn in
+                                            if isOn { session.selected.insert(file.id) } else { session.selected.remove(file.id) }
+                                        }
+                                    )) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack {
+                                                Text(file.kind)
+                                                    .font(.system(size: 12.5, weight: .semibold))
+                                                    .foregroundStyle(aura.primaryText)
+                                                Spacer()
+                                                Text(Self.formatter.string(fromByteCount: file.size))
+                                                    .font(.system(size: 11.5, weight: .medium))
+                                                    .foregroundStyle(aura.secondaryText)
+                                                    .monospacedDigit()
+                                            }
+                                            Text((file.url.path as NSString).abbreviatingWithTildeInPath)
+                                                .font(.caption2)
+                                                .foregroundStyle(aura.secondaryText.opacity(0.8))
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                        }
                                     }
-                                    Text((file.url.path as NSString).abbreviatingWithTildeInPath)
-                                        .font(.caption2).foregroundStyle(.white.opacity(0.5))
-                                        .lineLimit(1).truncationMode(.middle)
+                                    .toggleStyle(.checkbox)
+                                    .tint(aura.accent)
+                                    .disabled(file.isBundle)
                                 }
                             }
-                            .toggleStyle(.checkbox)
-                            .disabled(file.isBundle)
                         }
+                        .frame(maxHeight: 240)
                     }
                 }
-                .frame(maxHeight: 240)
+                .padding(14)
+                .background(VelvetAuraCardBackground(theme: backgroundStyle, cornerRadius: 15))
+                .overlay(VelvetAuraCardOverlay(theme: backgroundStyle, cornerRadius: 15))
+
                 if session.isRunning {
-                    Label(session.app.name, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption).foregroundStyle(.yellow)
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text(session.app.name)
+                            .font(.caption)
+                            .foregroundStyle(aura.primaryText)
+                    }
+                }
+
+                HStack {
+                    Text(loc("overlay.total", Self.formatter.string(fromByteCount: session.selectedSize)))
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(aura.secondaryText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(aura.pillFill, in: Capsule())
+                        .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 0.8))
+
+                    Spacer()
+
+                    Button(action: onConfirm) {
+                        HStack(spacing: 6) {
+                            if session.working {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "trash.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text(loc("overlay.uninstall_trash_button"))
+                                    .font(.system(size: 12.5, weight: .bold))
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.red, in: Capsule())
+                        .shadow(color: Color.red.opacity(0.35), radius: 8, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(session.scanning || session.working || session.selected.isEmpty)
                 }
             }
-            HStack {
-                Text(loc("overlay.total", Self.formatter.string(fromByteCount: session.selectedSize)))
-                    .font(.caption).foregroundStyle(.white.opacity(0.6))
-                Spacer()
-                Button(loc("dialog.cancel"), action: onCancel).disabled(session.working)
-                Button(role: .destructive, action: onConfirm) {
-                    if session.working { ProgressView().controlSize(.small) } else { Text(loc("overlay.uninstall_trash_button")) }
-                }
-                .tint(.red)
-                .keyboardShortcut(.defaultAction)
-                .disabled(session.scanning || session.working || session.selected.isEmpty)
-            }
+            .padding(22)
+            .frame(width: 520)
         }
-        .frame(width: 460)
-        .modifier(CardBackground())
     }
 }
 
@@ -319,244 +403,231 @@ struct AddCustomTileCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(loc("overlay.custom_tile_add_title")).font(.headline).foregroundStyle(.white)
-                Spacer()
-                if !LicenseManager.shared.isPro {
-                    ProBadge()
-                }
-            }
-
-            Picker("", selection: $kind) {
-                Text(loc("overlay.web_bookmark")).tag(CustomTile.Kind.web)
-                Text(loc("overlay.apple_shortcut")).tag(CustomTile.Kind.shortcut)
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: kind) { _, newKind in
-                if newKind == .web {
-                    if !Self.webSymbols.contains(symbol) { symbol = "globe" }
-                    if colorHex == "#5E5CE6" { colorHex = "#0A84FF" }
-                } else {
-                    if !Self.shortcutSymbols.contains(symbol) { symbol = "bolt.fill" }
-                    if colorHex == "#0A84FF" { colorHex = "#5E5CE6" }
-                }
-            }
-
-            // Aperçu interactif (cache mis à jour uniquement lorsque le symbole ou la couleur change)
-            HStack(spacing: 16) {
-                Image(nsImage: previewImage)
-                    .resizable()
-                    .frame(width: 58, height: 58)
-                    .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-                    .onChange(of: symbol) { _, newSym in
-                        previewImage = CustomTileRenderer.renderImage(symbol: newSym, colorHex: colorHex, size: 128)
+        VelvetAuraModalContainer(cornerRadius: 22) { aura in
+            VStack(alignment: .leading, spacing: 15) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text(loc("overlay.custom_tile_add_title"))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(aura.primaryText)
+                    if !LicenseManager.shared.isPro {
+                        ProBadge()
                     }
-                    .onChange(of: colorHex) { _, newHex in
-                        previewImage = CustomTileRenderer.renderImage(symbol: symbol, colorHex: newHex, size: 128)
-                    }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title.isEmpty ? (kind == .web ? loc("overlay.web_bookmark") : loc("overlay.apple_shortcut")) : title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(target.isEmpty ? (kind == .web ? "https://..." : loc("custom_tile.exact_name")) : target)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    VelvetAuraEscapePill()
                 }
-            }
-            .padding(10)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(loc("overlay.name")).font(.caption).foregroundStyle(.white.opacity(0.7))
-                TextField(kind == .web ? loc("custom_tile.web_example") : loc("custom_tile.shortcut_example"), text: $title)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .title)
-            }
+                Picker("", selection: $kind) {
+                    Text(loc("overlay.web_bookmark")).tag(CustomTile.Kind.web)
+                    Text(loc("overlay.apple_shortcut")).tag(CustomTile.Kind.shortcut)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: kind) { _, newKind in
+                    if newKind == .web {
+                        if !Self.webSymbols.contains(symbol) { symbol = "globe" }
+                        if colorHex == "#5E5CE6" { colorHex = "#0A84FF" }
+                    } else {
+                        if !Self.shortcutSymbols.contains(symbol) { symbol = "bolt.fill" }
+                        if colorHex == "#0A84FF" { colorHex = "#5E5CE6" }
+                    }
+                }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(kind == .web ? loc("custom_tile.url_site") : loc("custom_tile.exact_name")).font(.caption).foregroundStyle(.white.opacity(0.7))
-                TextField(kind == .web ? "https://chatgpt.com" : loc("custom_tile.shortcut_name_placeholder"), text: $target)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .target)
-            }
-
-            // Choix du symbole
-            VStack(alignment: .leading, spacing: 6) {
-                Text(loc("overlay.icon")).font(.caption).foregroundStyle(.white.opacity(0.7))
-                HStack(spacing: 8) {
-                    ForEach(symbolsList, id: \.self) { sym in
-                        Button {
-                            symbol = sym
-                        } label: {
-                            Image(systemName: sym)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(symbol == sym ? .white : .white.opacity(0.6))
-                                .frame(width: 28, height: 28)
-                                .background(
-                                    Circle()
-                                        .fill(symbol == sym ? Color.white.opacity(0.28) : Color.white.opacity(0.08))
-                                 )
-                                .overlay(
-                                    Circle()
-                                        .stroke(symbol == sym ? Color.white : Color.clear, lineWidth: 1.5)
-                                )
+                // Aperçu interactif
+                HStack(spacing: 16) {
+                    Image(nsImage: previewImage)
+                        .resizable()
+                        .frame(width: 58, height: 58)
+                        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                        .onChange(of: symbol) { _, newSym in
+                            previewImage = CustomTileRenderer.renderImage(symbol: newSym, colorHex: colorHex, size: 128)
                         }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            // Choix de la couleur
-            VStack(alignment: .leading, spacing: 6) {
-                Text(loc("overlay.color")).font(.caption).foregroundStyle(.white.opacity(0.7))
-                HStack(spacing: 8) {
-                    ForEach(Self.colorSwatches, id: \.hex) { swatch in
-                        Button {
-                            colorHex = swatch.hex
-                        } label: {
-                            Circle()
-                                .fill(swatch.color)
-                                .frame(width: 22, height: 22)
-                                .overlay(
-                                    Circle()
-                                        .stroke(colorHex == swatch.hex ? Color.white : Color.clear, lineWidth: 2)
-                                )
-                                .scaleEffect(colorHex == swatch.hex ? 1.15 : 1.0)
+                        .onChange(of: colorHex) { _, newHex in
+                            previewImage = CustomTileRenderer.renderImage(symbol: symbol, colorHex: newHex, size: 128)
                         }
-                        .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title.isEmpty ? (kind == .web ? loc("overlay.web_bookmark") : loc("overlay.apple_shortcut")) : title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(aura.primaryText)
+                        Text(target.isEmpty ? (kind == .web ? "https://..." : loc("custom_tile.exact_name")) : target)
+                            .font(.system(size: 12))
+                            .foregroundStyle(aura.secondaryText)
+                            .lineLimit(1)
                     }
                 }
-            }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(aura.pillBorder, lineWidth: 0.8))
 
-            HStack {
-                Spacer()
-                Button(loc("dialog.cancel")) {
-                    vm.customTileModal = nil
-                    vm.focusSearch()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc("overlay.name")).font(.caption).foregroundStyle(aura.secondaryText)
+                    TextField(kind == .web ? loc("custom_tile.web_example") : loc("custom_tile.shortcut_example"), text: $title)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundStyle(aura.primaryText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.9))
+                        .focused($focusedField, equals: .title)
                 }
-                .keyboardShortcut(.cancelAction)
 
-                Button(loc("overlay.add")) {
-                    let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let trimmedTarget = target.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmedTitle.isEmpty, !trimmedTarget.isEmpty else { return }
-                    vm.addCustomTile(title: trimmedTitle, target: trimmedTarget, kind: kind, symbol: symbol, colorHex: colorHex)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(kind == .web ? loc("custom_tile.url_site") : loc("custom_tile.exact_name"))
+                        .font(.caption)
+                        .foregroundStyle(aura.secondaryText)
+                    TextField(kind == .web ? "https://chatgpt.com" : loc("custom_tile.shortcut_name_placeholder"), text: $target)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundStyle(aura.primaryText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.9))
+                        .focused($focusedField, equals: .target)
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                // Choix du symbole
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc("overlay.icon")).font(.caption).foregroundStyle(aura.secondaryText)
+                    HStack(spacing: 8) {
+                        ForEach(symbolsList, id: \.self) { sym in
+                            Button {
+                                symbol = sym
+                            } label: {
+                                Image(systemName: sym)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(symbol == sym ? .white : aura.secondaryText)
+                                    .frame(width: 28, height: 28)
+                                    .background(
+                                        Circle()
+                                            .fill(symbol == sym ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill))
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(symbol == sym ? aura.accent : aura.pillBorder, lineWidth: symbol == sym ? 1.5 : 0.8)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                // Choix de la couleur
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc("overlay.color")).font(.caption).foregroundStyle(aura.secondaryText)
+                    HStack(spacing: 8) {
+                        ForEach(Self.colorSwatches, id: \.hex) { swatch in
+                            Button {
+                                colorHex = swatch.hex
+                            } label: {
+                                Circle()
+                                    .fill(swatch.color)
+                                    .frame(width: 22, height: 22)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(colorHex == swatch.hex ? aura.primaryText : Color.clear, lineWidth: 2)
+                                    )
+                                    .scaleEffect(colorHex == swatch.hex ? 1.15 : 1.0)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                HStack {
+                    Spacer()
+                    Button {
+                        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let trimmedTarget = target.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmedTitle.isEmpty, !trimmedTarget.isEmpty else { return }
+                        vm.addCustomTile(title: trimmedTitle, target: trimmedTarget, kind: kind, symbol: symbol, colorHex: colorHex)
+                    } label: {
+                        Text(loc("overlay.add"))
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 8)
+                            .background(aura.accentGradient, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
+            .padding(22)
+            .frame(width: 470)
         }
-        .frame(width: 440)
-        .modifier(CardBackground())
         .onAppear { focusedField = .title }
     }
 }
 
-// MARK: - Carte d'autorisation d'Accessibilité (Liquid Glass)
+// MARK: - Carte d'autorisation d'Accessibilité (Aura Nocturne Velvet 4C)
 
 struct AccessibilityPermissionCard: View {
     @ObservedObject private var permissionManager = PermissionManager.shared
 
     var body: some View {
-        VStack(spacing: 18) {
-            // Icône avec halo lumineux
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.orange.opacity(0.35), Color.orange.opacity(0.12)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 58, height: 58)
-                    .overlay(
-                        Circle().strokeBorder(Color.orange.opacity(0.45), lineWidth: 1)
-                    )
-                    .shadow(color: Color.orange.opacity(0.3), radius: 10, y: 3)
-
-                Image(systemName: "hand.raised.app.fill")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(Color.orange)
-            }
-
-            VStack(spacing: 6) {
-                Text(loc("permission.accessibility.title"))
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-
-                Text(loc("permission.accessibility.subtitle"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // Liste des fonctionnalités nécessitant l'autorisation
-            VStack(alignment: .leading, spacing: 10) {
-                featureRow(
-                    icon: "hand.draw.fill",
-                    title: loc("permission.feature.pinch"),
-                    desc: loc("permission.feature.pinch_desc")
-                )
-                featureRow(
-                    icon: "keyboard.fill",
-                    title: loc("permission.feature.f4"),
-                    desc: loc("permission.feature.f4_desc")
-                )
-                featureRow(
-                    icon: "cursorarrow.rays",
-                    title: loc("permission.feature.hotcorner"),
-                    desc: loc("permission.feature.hotcorner_desc")
-                )
-                featureRow(
-                    icon: "playpause.fill",
-                    title: loc("permission.feature.media"),
-                    desc: loc("permission.feature.media_desc")
-                )
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-                    )
-            )
-
-            // État en temps réel et boutons d'action
-            if permissionManager.isAccessibilityGranted {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text(loc("permission.granted_auto"))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.green)
+        VelvetAuraModalContainer(cornerRadius: 22) { aura in
+            VStack(spacing: 16) {
+                HStack {
+                    Spacer()
+                    VelvetAuraEscapePill()
                 }
-                .transition(.opacity)
-            } else {
-                HStack(spacing: 12) {
-                    Button {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            permissionManager.showPermissionCard = false
-                        }
-                    } label: {
-                        Text(loc("common.later"))
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
 
+                // Icône avec halo lumineux
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.orange.opacity(0.35), Color.orange.opacity(0.12)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                        .overlay(Circle().strokeBorder(Color.orange.opacity(0.45), lineWidth: 1))
+                        .shadow(color: Color.orange.opacity(0.28), radius: 10, y: 3)
+
+                    Image(systemName: "hand.raised.app.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                }
+
+                VStack(spacing: 6) {
+                    Text(loc("permission.accessibility.title"))
+                        .font(.system(size: 17.5, weight: .bold))
+                        .foregroundStyle(aura.primaryText)
+                        .multilineTextAlignment(.center)
+
+                    Text(loc("permission.accessibility.subtitle"))
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(aura.secondaryText)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Liste des fonctionnalités nécessitant l'autorisation
+                VStack(alignment: .leading, spacing: 10) {
+                    featureRow(icon: "hand.draw.fill", title: loc("permission.feature.pinch"), desc: loc("permission.feature.pinch_desc"), aura: aura)
+                    featureRow(icon: "keyboard.fill", title: loc("permission.feature.f4"), desc: loc("permission.feature.f4_desc"), aura: aura)
+                    featureRow(icon: "cursorarrow.rays", title: loc("permission.feature.hotcorner"), desc: loc("permission.feature.hotcorner_desc"), aura: aura)
+                    featureRow(icon: "playpause.fill", title: loc("permission.feature.media"), desc: loc("permission.feature.media_desc"), aura: aura)
+                }
+                .padding(14)
+                .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 1))
+
+                if permissionManager.isAccessibilityGranted {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(loc("permission.granted_auto"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.green)
+                    }
+                    .transition(.opacity)
+                } else {
                     Button {
                         permissionManager.requestAccessibility()
                     } label: {
@@ -564,26 +635,23 @@ struct AccessibilityPermissionCard: View {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 12))
                             Text(loc("general.accessibility_button"))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 13, weight: .bold))
                         }
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 18)
-                        .padding(.vertical, 8)
-                        .background(Color.white)
-                        .clipShape(Capsule())
-                        .shadow(color: .white.opacity(0.3), radius: 6, y: 2)
+                        .padding(.vertical, 9)
+                        .background(aura.accentGradient, in: Capsule())
+                        .shadow(color: aura.accent.opacity(0.35), radius: 8, y: 3)
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(22)
+            .frame(width: 460)
         }
-        .frame(width: 440)
-        .padding(24)
-        .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
-        .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
     }
 
-    private func featureRow(icon: String, title: String, desc: String) -> some View {
+    private func featureRow(icon: String, title: String, desc: String, aura: VelvetAuraTheme) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
@@ -593,10 +661,10 @@ struct AccessibilityPermissionCard: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(aura.primaryText)
                 Text(desc)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.60))
+                    .foregroundStyle(aura.secondaryText)
             }
             Spacer()
         }

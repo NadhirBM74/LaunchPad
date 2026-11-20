@@ -12,9 +12,10 @@ struct TutorialStep: Identifiable {
     let icon: String
     let iconColor: Color
     let instruction: String
+    let highlights: [(icon: String, title: String, detail: String)]
 }
 
-// MARK: - Vue Principale du Tutoriel Interactif
+// MARK: - Vue Principale du Tutoriel Interactif (Design Aura Nocturne Velvet 4C — 4 Versions)
 
 struct TutorialCardView: View {
     var vm: LaunchpadViewModel? = nil
@@ -22,6 +23,9 @@ struct TutorialCardView: View {
     var onDismiss: (() -> Void)? = nil
 
     @ObservedObject private var locManager = LocalizationManager.shared
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
+    @AppStorage(PrefKey.tutorialVisualStyle) private var tutorialStyle: TutorialVisualStyle = .studioAura
     @State private var currentStepIndex: Int
 
     init(vm: LaunchpadViewModel? = nil, initialStepIndex: Int = 0, onDismiss: (() -> Void)? = nil) {
@@ -36,341 +40,127 @@ struct TutorialCardView: View {
             TutorialStep(
                 id: 0,
                 badge: loc("tuto.step1.badge"),
-                tabTitle: loc("tuto.step1.tab"),
+                tabTitle: "Ouverture & F4",
                 title: loc("tuto.step1.title"),
-                subtitle: loc("tuto.step1.sub"),
+                subtitle: "Ouvrez LaunchPad en 120 FPS par pincement 3 doigts (sans conflit macOS) ou touche F4 directe.",
                 icon: "hand.draw.fill",
-                iconColor: Color(red: 0.22, green: 0.64, blue: 1.0),
-                instruction: loc("tuto.step1.inst")
+                iconColor: Color(red: 0.28, green: 0.72, blue: 1.0),
+                instruction: loc("tuto.step1.inst"),
+                highlights: [
+                    ("hand.pinch.fill", "Pincement 3 doigts", "Fluide et isolé des gestes macOS"),
+                    ("keyboard", "Touche F4 directe", "Ouvre LaunchPad au lieu de Spotlight"),
+                    ("escape", "Touche Échap", "Ferme menus et grilles instantanément")
+                ]
             ),
             TutorialStep(
                 id: 1,
-                badge: loc("tuto.step2.badge"),
-                tabTitle: loc("tuto.step2.tab"),
-                title: loc("tuto.step2.title"),
-                subtitle: loc("tuto.step2.sub"),
-                icon: "magnifyingglass",
-                iconColor: Color(red: 0.85, green: 0.40, blue: 1.0),
-                instruction: loc("tuto.step2.inst")
+                badge: "CRISTAL & RECHERCHE",
+                tabTitle: "Liquid Glass",
+                title: "Icônes Cristal, Barre de recherche & Dock",
+                subtitle: "Réglez le % de Liquid Glass des icônes, filtrez en verre cristal et épinglez vos favoris.",
+                icon: "drop.halffull",
+                iconColor: Color(red: 0.72, green: 0.45, blue: 1.0),
+                instruction: "Tapez pour rechercher ou glissez des apps dans la barre de favoris",
+                highlights: [
+                    ("drop.halffull", "% Liquid Glass", "Contrôle direct dans les icônes"),
+                    ("magnifyingglass", "Barre Cristal", "Assortie aux icônes & 4 variantes"),
+                    ("dock.rectangle", "Dock Favoris", "Glissez pour épingler au Dock macOS")
+                ]
             ),
             TutorialStep(
                 id: 2,
                 badge: loc("tuto.step3.badge"),
-                tabTitle: loc("tuto.step3.tab"),
+                tabTitle: "Grille 120 Hz",
                 title: loc("tuto.step3.title"),
-                subtitle: loc("tuto.step3.sub"),
-                icon: "arrow.up.and.down.and.arrow.left.and.right",
-                iconColor: Color(red: 0.38, green: 0.85, blue: 0.55),
-                instruction: loc("tuto.step3.inst")
+                subtitle: "Défilement horizontal 120 FPS, mode édition jiggle et organisation multi-pages intelligente.",
+                icon: "square.grid.3x3.fill",
+                iconColor: Color(red: 0.34, green: 0.88, blue: 0.58),
+                instruction: loc("tuto.step3.inst"),
+                highlights: [
+                    ("hand.tap.fill", "Clic long / Option", "Active l'édition et les badges"),
+                    ("arrow.left.arrow.right", "Swipes 120 Hz", "Transitions printanières fluides"),
+                    ("arrow.up.arrow.down", "Tri intelligent", "Réorganisez en un clic")
+                ]
             ),
             TutorialStep(
                 id: 3,
                 badge: loc("tuto.step4.badge"),
-                tabTitle: loc("tuto.step4.tab"),
+                tabTitle: "Dossiers & Touch ID",
                 title: loc("tuto.step4.title"),
-                subtitle: loc("tuto.step4.sub"),
-                icon: "folder.badge.plus",
-                iconColor: Color(red: 1.0, green: 0.60, blue: 0.20),
-                instruction: loc("tuto.step4.inst")
+                subtitle: "9 styles de dossiers (Cristal, Soie, Marbre, Onyx), ajout rapide et verrouillage Touch ID.",
+                icon: "folder.fill.badge.gearshape",
+                iconColor: Color(red: 1.0, green: 0.62, blue: 0.22),
+                instruction: loc("tuto.step4.inst"),
+                highlights: [
+                    ("paintbrush.fill", "9 styles visuels", "Cristal, Soie, Marbre, Argent, Onyx"),
+                    ("touchid", "Sécurité Touch ID", "Protégez vos dossiers privés"),
+                    ("plus.circle.fill", "Gestion rapide", "Ajoutez ou retirez en 1 tap")
+                ]
             ),
             TutorialStep(
                 id: 4,
                 badge: loc("tuto.step5.badge"),
-                tabTitle: loc("tuto.step5.tab"),
+                tabTitle: "Widgets Live",
                 title: loc("tuto.step5.title"),
-                subtitle: loc("tuto.step5.sub"),
-                icon: "opticaldisc.fill",
-                iconColor: Color(red: 1.0, green: 0.80, blue: 0.15),
-                instruction: loc("tuto.step5.inst")
+                subtitle: "Galerie de widgets temps réel : Platine Vinyle, Météo animée, Horloges, Calendrier et Système.",
+                icon: "square.stack.3d.up.fill",
+                iconColor: Color(red: 0.98, green: 0.45, blue: 0.68),
+                instruction: loc("tuto.step5.inst"),
+                highlights: [
+                    ("opticaldisc.fill", "Vinyle & Musique", "Synchronisé Apple Music & Spotify"),
+                    ("cloud.sun.fill", "Météo Live", "Géolocalisation ou ville manuelle"),
+                    ("calendar", "Calendrier & Horloge", "EventKit, CPU/RAM & Note rapide")
+                ]
             ),
             TutorialStep(
                 id: 5,
                 badge: loc("tuto.step6.badge"),
-                tabTitle: loc("tuto.step6.tab"),
+                tabTitle: "Pro & Licence",
                 title: loc("tuto.step6.title"),
                 subtitle: loc("tuto.step6.sub"),
                 icon: "crown.fill",
-                iconColor: Color(red: 1.0, green: 0.75, blue: 0.15),
-                instruction: loc("tuto.step6.inst")
+                iconColor: Color(red: 1.0, green: 0.78, blue: 0.18),
+                instruction: loc("tuto.step6.inst"),
+                highlights: [
+                    ("trash.fill", "Désinstalleur Pro", "Supprime caches et fichiers résiduels"),
+                    ("externaldrive.badge.checkmark", "Sauvegarde JSON", "Exportez vos réglages et dispositions"),
+                    ("crown.fill", "Essai 7j & Pro", "Débloquez tout sans abonnement")
+                ]
             )
         ]
     }
 
+    private var frameDimensions: CGSize {
+        switch tutorialStyle {
+        case .studioAura: return CGSize(width: 820, height: 550)
+        case .cinemaPanoramique: return CGSize(width: 780, height: 540)
+        case .bentoShowcase: return CGSize(width: 800, height: 560)
+        case .spotlightMinimal: return CGSize(width: 680, height: 510)
+        }
+    }
+
     var body: some View {
+        let _ = locManager.effectiveLanguageCode
         let allSteps = steps
         let currentStep = allSteps[currentStepIndex]
+        let dims = frameDimensions
 
-        VStack(spacing: 0) {
-            // Barre supérieure : Badge étape, Titre & Bouton Fermer
-            HStack(alignment: .center) {
-                HStack(spacing: 8) {
-                    HStack(spacing: 5) {
-                        Image(systemName: currentStep.icon)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(currentStep.iconColor)
-                        Text(currentStep.badge)
-                            .font(.system(size: 10.5, weight: .bold))
-                            .foregroundStyle(currentStep.iconColor)
-                            .tracking(1.0)
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3.5)
-                    .background(currentStep.iconColor.opacity(0.16))
-                    .clipShape(Capsule())
-
-                    Text(loc("tuto.step_progress", currentStepIndex + 1, allSteps.count))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-
-                Spacer()
-
-                Button {
-                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color(red: 0.35, green: 0.40, blue: 0.95).opacity(0.28))
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color(red: 0.45, green: 0.50, blue: 1.0).opacity(0.45), lineWidth: 1)
-                            )
-                        Image("DiscordLogo")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 15, height: 12)
-                    }
-                }
-                .buttonStyle(.plain)
-                .help(loc("tuto.join_discord"))
-
-                Button {
-                    dismiss()
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(loc("tuto.skip"))
-                            .font(.system(size: 12, weight: .medium))
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                    .foregroundStyle(.white.opacity(0.75))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.10))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-
-            // Titre et Sous-titre
-            VStack(spacing: 4) {
-                Text(currentStep.title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-
-                Text(currentStep.subtitle)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .frame(maxWidth: 520)
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
-
-            // SCÈNE ANIMÉE CENTRALE (Démonstration Visuelle Réaliste)
-            ZStack {
-                // Cadre de l'écran simulateur
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.black.opacity(0.35))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-
-                // Halo d'ambiance sans passe de flou coûteuse
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                currentStep.iconColor.opacity(0.24),
-                                currentStep.iconColor.opacity(0.08),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 160
-                        )
-                    )
-                    .frame(width: 320, height: 320)
-                    .allowsHitTesting(false)
-
-                // Animation dédiée selon l'étape
-                Group {
-                    switch currentStepIndex {
-                    case 0:
-                        AnimStep0OpenClose(accentColor: currentStep.iconColor)
-                    case 1:
-                        AnimStep1SearchLaunch(accentColor: currentStep.iconColor)
-                    case 2:
-                        AnimStep2DragAndPage(accentColor: currentStep.iconColor)
-                    case 3:
-                        AnimStep3CreateFolder(accentColor: currentStep.iconColor)
-                    case 4:
-                        AnimStep4WidgetsVinyl(accentColor: currentStep.iconColor)
-                    case 5:
-                        AnimStep5ProTrial(accentColor: currentStep.iconColor)
-                    default:
-                        EmptyView()
-                    }
-                }
-                .padding(14)
-            }
-            .frame(height: 235)
-            .padding(.horizontal, 22)
-
-            // Bannière d'instruction claire
-            HStack(spacing: 8) {
-                Image(systemName: "info.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(currentStep.iconColor)
-                Text(currentStep.instruction)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(currentStep.iconColor.opacity(0.14))
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(currentStep.iconColor.opacity(0.3), lineWidth: 1))
-            .padding(.top, 10)
-
-            Divider()
-                .background(Color.white.opacity(0.12))
-                .padding(.horizontal, 22)
-                .padding(.top, 14)
-
-            // Pied de carte : Navigation Suivant / Précédent & Indicateur de progression
-            HStack {
-                if currentStepIndex > 0 {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            currentStepIndex -= 1
-                            vm?.tutorialStepIndex = currentStepIndex
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 11, weight: .bold))
-                            Text(loc("tuto.prev"))
-                                .font(.system(size: 12.5, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Spacer().frame(width: 80)
-                }
-
-                Spacer()
-
-                // Indicateur de points d'étapes (Apple style discret)
-                HStack(spacing: 6) {
-                    ForEach(0..<allSteps.count, id: \.self) { idx in
-                        Capsule()
-                            .fill(idx == currentStepIndex ? currentStep.iconColor : Color.white.opacity(0.25))
-                            .frame(width: idx == currentStepIndex ? 18 : 6, height: 6)
-                            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentStepIndex)
-                    }
-                }
-
-                Spacer()
-
-                if currentStepIndex < allSteps.count - 1 {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            currentStepIndex += 1
-                            vm?.tutorialStepIndex = currentStepIndex
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(loc("tuto.next"))
-                                .font(.system(size: 13, weight: .bold))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .bold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 9)
-                        .background(
-                            LinearGradient(
-                                colors: [currentStep.iconColor, currentStep.iconColor.opacity(0.85)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: currentStep.iconColor.opacity(0.4), radius: 8, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    let isTrial = LicenseManager.shared.isTrialActive
-                    let isLifetime = LicenseManager.shared.isProLifetime
-
-                    Button {
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 6) {
-                            if isLifetime || isTrial {
-                                AnimatedVerifiedSealBadge(isTrial: isTrial && !isLifetime, size: 15)
-                            } else {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                            }
-                            Text(
-                                isLifetime
-                                    ? loc("tuto.start_pro")
-                                    : (isTrial ? loc("tuto.start_trial") : loc("tuto.start_free"))
-                            )
-                            .font(.system(size: 13, weight: .bold))
-                        }
-                        .foregroundStyle(isLifetime || isTrial ? .white : .black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 9)
-                        .background(
-                            Group {
-                                if isLifetime {
-                                    LinearGradient(colors: [Color.purple, Color.blue], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                } else if isTrial {
-                                    LinearGradient(colors: [Color.orange, Color(red: 1.0, green: 0.6, blue: 0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                } else {
-                                    LinearGradient(colors: [Color.white, Color(white: 0.9)], startPoint: .top, endPoint: .bottom)
-                                }
-                            }
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: (isTrial ? Color.orange : (isLifetime ? Color.purple : Color.white)).opacity(0.35), radius: 10, y: 3)
-                    }
-                    .buttonStyle(.plain)
+        VelvetAuraModalContainer(cornerRadius: 22) { aura in
+            Group {
+                switch tutorialStyle {
+                case .studioAura:
+                    studioAuraLayout(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                case .cinemaPanoramique:
+                    cinemaPanoramiqueLayout(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                case .bentoShowcase:
+                    bentoShowcaseLayout(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                case .spotlightMinimal:
+                    spotlightMinimalLayout(allSteps: allSteps, currentStep: currentStep, aura: aura)
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 14)
+            .frame(width: dims.width, height: dims.height)
         }
-        .frame(width: 660, height: 505)
-        .liquidGlassCard(cornerRadius: 24, interactive: false, borderLineWidth: 1.2)
-        .shadow(color: LiquidGlassStyle.shadowColor, radius: 36, y: 16)
+        .onExitCommand { dismiss() }
     }
 
     private func dismiss() {
@@ -381,6 +171,522 @@ struct TutorialCardView: View {
             }
         }
         onDismiss?()
+    }
+
+    // MARK: - V1 : Studio Interactif Aura 4C (Sidebar Étapes à gauche + Scène à droite)
+
+    private func studioAuraLayout(allSteps: [TutorialStep], currentStep: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        HStack(spacing: 0) {
+            // Sidebar Aura 4C
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 9) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(aura.accentGradient)
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 13.5, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Guide LaunchPad")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(aura.primaryText)
+                        Text("Tour complet")
+                            .font(.system(size: 11))
+                            .foregroundStyle(aura.secondaryText)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+
+                VStack(spacing: 4) {
+                    ForEach(allSteps) { step in
+                        let selected = step.id == currentStepIndex
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                currentStepIndex = step.id
+                                vm?.tutorialStepIndex = step.id
+                            }
+                        } label: {
+                            HStack(spacing: 9) {
+                                Image(systemName: step.icon)
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                    .foregroundStyle(selected ? step.iconColor : aura.secondaryText)
+                                    .frame(width: 18)
+                                Text("\(step.id + 1). \(step.tabTitle)")
+                                    .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
+                                    .foregroundStyle(selected ? aura.navActiveText : aura.primaryText.opacity(0.84))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8.5)
+                            .background(VelvetAuraSidebarRowBackground(theme: backgroundStyle, isSelected: selected))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 10)
+
+                Spacer()
+
+                // Bouton Discord discret en pied de sidebar
+                Button {
+                    if let url = URL(string: "https://discord.gg/VG9rgMjBMf") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image("DiscordLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 15, height: 12)
+                        Text(loc("tuto.join_discord"))
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(aura.primaryText)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.8))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 16)
+            }
+            .frame(width: 214)
+            .background(aura.sidebarBackground)
+
+            Rectangle().fill(aura.divider).frame(width: 1)
+
+            // Contenu principal à droite
+            VStack(spacing: 0) {
+                tutorialTopHeader(currentStep: currentStep, allSteps: allSteps, aura: aura)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
+
+                Rectangle().fill(aura.divider).frame(height: 1)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(currentStep.title)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(aura.primaryText)
+                        Text(currentStep.subtitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(aura.secondaryText)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    stepAnimatedScene(step: currentStep, height: 248, aura: aura)
+
+                    stepHighlightStrip(step: currentStep, aura: aura)
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 14)
+
+                Spacer(minLength: 0)
+
+                Rectangle().fill(aura.divider).frame(height: 1)
+
+                tutorialFooter(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 12)
+                    .background(aura.footerBackground)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(aura.contentTint)
+        }
+    }
+
+    // MARK: - V2 : Cinéma Panoramique Plein Cadre
+
+    private func cinemaPanoramiqueLayout(allSteps: [TutorialStep], currentStep: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        VStack(spacing: 0) {
+            tutorialTopHeader(currentStep: currentStep, allSteps: allSteps, aura: aura)
+                .padding(.horizontal, 22)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+
+            // Ruban de navigation panoramique
+            HStack(spacing: 6) {
+                ForEach(allSteps) { step in
+                    let active = step.id == currentStepIndex
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                            currentStepIndex = step.id
+                            vm?.tutorialStepIndex = step.id
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: step.icon)
+                                .font(.system(size: 10.5, weight: .bold))
+                            Text(step.tabTitle)
+                                .font(.system(size: 11, weight: active ? .bold : .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(active ? .white : aura.secondaryText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5.5)
+                        .frame(maxWidth: .infinity)
+                        .background(active ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill), in: Capsule())
+                        .overlay(Capsule().strokeBorder(active ? Color.white.opacity(0.25) : aura.pillBorder, lineWidth: 0.8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 12)
+
+            Rectangle().fill(aura.divider).frame(height: 1)
+
+            VStack(spacing: 10) {
+                Text(currentStep.title)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(aura.primaryText)
+                Text(currentStep.subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(aura.secondaryText)
+                    .multilineTextAlignment(.center)
+
+                stepAnimatedScene(step: currentStep, height: 270, aura: aura)
+                instructionPill(currentStep: currentStep, aura: aura)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+
+            Spacer(minLength: 0)
+            Rectangle().fill(aura.divider).frame(height: 1)
+            tutorialFooter(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 12)
+                .background(aura.footerBackground)
+        }
+    }
+
+    // MARK: - V3 : Bento Grid Démonstrateur
+
+    private func bentoShowcaseLayout(allSteps: [TutorialStep], currentStep: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        VStack(spacing: 0) {
+            tutorialTopHeader(currentStep: currentStep, allSteps: allSteps, aura: aura)
+                .padding(.horizontal, 22)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+            Rectangle().fill(aura.divider).frame(height: 1)
+
+            VStack(spacing: 12) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(currentStep.title)
+                            .font(.system(size: 18.5, weight: .bold))
+                            .foregroundStyle(aura.primaryText)
+                        Text(currentStep.subtitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(aura.secondaryText)
+                    }
+                    Spacer()
+                }
+
+                stepAnimatedScene(step: currentStep, height: 244, aura: aura)
+
+                HStack(spacing: 10) {
+                    ForEach(0..<currentStep.highlights.count, id: \.self) { idx in
+                        let h = currentStep.highlights[idx]
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 6) {
+                                Image(systemName: h.icon)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(currentStep.iconColor)
+                                Text(h.title)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(aura.primaryText)
+                                    .lineLimit(1)
+                            }
+                            Text(h.detail)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(aura.secondaryText)
+                                .lineLimit(2)
+                        }
+                        .padding(11)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(VelvetAuraCardBackground(theme: backgroundStyle, cornerRadius: 13))
+                        .overlay(VelvetAuraCardOverlay(theme: backgroundStyle, cornerRadius: 13))
+                    }
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 14)
+
+            Spacer(minLength: 0)
+            Rectangle().fill(aura.divider).frame(height: 1)
+            tutorialFooter(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 12)
+                .background(aura.footerBackground)
+        }
+    }
+
+    // MARK: - V4 : Carrousel Spotlight Minimal
+
+    private func spotlightMinimalLayout(allSteps: [TutorialStep], currentStep: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        VStack(spacing: 0) {
+            tutorialTopHeader(currentStep: currentStep, allSteps: allSteps, aura: aura)
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+
+            VStack(spacing: 4) {
+                Text(currentStep.title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(aura.primaryText)
+                    .multilineTextAlignment(.center)
+                Text(currentStep.subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(aura.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: 540)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+
+            stepAnimatedScene(step: currentStep, height: 245, aura: aura)
+                .padding(.horizontal, 22)
+
+            instructionPill(currentStep: currentStep, aura: aura)
+                .padding(.top, 10)
+
+            Spacer(minLength: 0)
+            Rectangle().fill(aura.divider).frame(height: 1)
+            tutorialFooter(allSteps: allSteps, currentStep: currentStep, aura: aura)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 12)
+                .background(aura.footerBackground)
+        }
+    }
+
+    // MARK: - Sous-composants factorisés
+
+    private func tutorialTopHeader(currentStep: TutorialStep, allSteps: [TutorialStep], aura: VelvetAuraTheme) -> some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                Image(systemName: currentStep.icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(currentStep.iconColor)
+                Text(currentStep.badge)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(currentStep.iconColor)
+                    .tracking(0.9)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(currentStep.iconColor.opacity(0.16), in: Capsule())
+
+            Text(loc("tuto.step_progress", currentStepIndex + 1, allSteps.count))
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(aura.secondaryText)
+
+            Spacer(minLength: 8)
+
+            // Sélecteur des 4 modèles de Tutoriel
+            HStack(spacing: 2) {
+                ForEach(TutorialVisualStyle.allCases) { variant in
+                    let active = tutorialStyle == variant
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            tutorialStyle = variant
+                        }
+                    } label: {
+                        Text(variant.shortTitle)
+                            .font(.system(size: 9.5, weight: active ? .bold : .medium))
+                            .foregroundStyle(active ? aura.primaryText : aura.secondaryText)
+                            .padding(.horizontal, 6.5)
+                            .padding(.vertical, 3.5)
+                            .background(
+                                active ? AnyShapeStyle(aura.navActiveFill) : AnyShapeStyle(Color.clear),
+                                in: Capsule()
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(2)
+            .background(aura.pillFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 0.8))
+
+            VelvetAuraEscapePill()
+        }
+    }
+
+    private func stepAnimatedScene(step: TutorialStep, height: CGFloat, aura: VelvetAuraTheme) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(backgroundStyle == .light ? Color.black.opacity(0.84) : Color.black.opacity(0.38))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                )
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [step.iconColor.opacity(0.24), step.iconColor.opacity(0.06), Color.clear],
+                        center: .center,
+                        startRadius: 10,
+                        endRadius: 165
+                    )
+                )
+                .frame(width: 330, height: 330)
+                .allowsHitTesting(false)
+
+            Group {
+                switch currentStepIndex {
+                case 0: AnimStep0OpenClose(accentColor: step.iconColor)
+                case 1: AnimStepLiquidGlassSearch(accentColor: step.iconColor)
+                case 2: AnimStep2DragAndPage(accentColor: step.iconColor)
+                case 3: AnimStep3CreateFolder(accentColor: step.iconColor)
+                case 4: AnimStep4WidgetsVinyl(accentColor: step.iconColor)
+                case 5: AnimStep5ProTrial(accentColor: step.iconColor)
+                default: EmptyView()
+                }
+            }
+            .padding(14)
+        }
+        .frame(height: height)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private func stepHighlightStrip(step: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        HStack(spacing: 8) {
+            ForEach(0..<step.highlights.count, id: \.self) { idx in
+                let h = step.highlights[idx]
+                HStack(spacing: 6) {
+                    Image(systemName: h.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(step.iconColor)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(h.title)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(aura.primaryText)
+                            .lineLimit(1)
+                        Text(h.detail)
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(aura.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.8))
+            }
+        }
+    }
+
+    private func instructionPill(currentStep: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(currentStep.iconColor)
+            Text(currentStep.instruction)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(aura.primaryText)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(currentStep.iconColor.opacity(0.14), in: Capsule())
+        .overlay(Capsule().stroke(currentStep.iconColor.opacity(0.32), lineWidth: 1))
+    }
+
+    private func tutorialFooter(allSteps: [TutorialStep], currentStep: TutorialStep, aura: VelvetAuraTheme) -> some View {
+        HStack {
+            if currentStepIndex > 0 {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        currentStepIndex -= 1
+                        vm?.tutorialStepIndex = currentStepIndex
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(loc("tuto.prev"))
+                            .font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .foregroundStyle(aura.primaryText)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 8)
+                    .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.9))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Spacer().frame(width: 90)
+            }
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                ForEach(0..<allSteps.count, id: \.self) { idx in
+                    Capsule()
+                        .fill(idx == currentStepIndex ? currentStep.iconColor : aura.secondaryText.opacity(0.28))
+                        .frame(width: idx == currentStepIndex ? 20 : 6, height: 6)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentStepIndex)
+                }
+            }
+
+            Spacer()
+
+            if currentStepIndex < allSteps.count - 1 {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        currentStepIndex += 1
+                        vm?.tutorialStepIndex = currentStepIndex
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(loc("tuto.next"))
+                            .font(.system(size: 13, weight: .bold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .background(aura.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .shadow(color: aura.accent.opacity(0.35), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
+            } else {
+                let isTrial = LicenseManager.shared.isTrialActive
+                let isLifetime = LicenseManager.shared.isProLifetime
+                HStack(spacing: 6) {
+                    if isLifetime || isTrial {
+                        AnimatedVerifiedSealBadge(isTrial: isTrial && !isLifetime, size: 15)
+                    } else {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(aura.accent)
+                    }
+                    Text("ESC pour terminer")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(aura.secondaryText)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(aura.pillFill, in: Capsule())
+                .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 0.8))
+            }
+        }
     }
 }
 
@@ -769,130 +1075,115 @@ private struct AnimStep0OpenClose: View {
 
 // MARK: - ANIMATION 2 : Recherche et Lancement au Clavier
 
-private struct AnimStep1SearchLaunch: View {
-    let accentColor: Color
-    @ObservedObject private var locManager = LocalizationManager.shared
+// MARK: - ANIMATION 2 : Liquid Glass %, Recherche Cristal & Dock Favoris
 
-    @State private var typed = ""
-    @State private var isLaunched = false
+private struct AnimStepLiquidGlassSearch: View {
+    let accentColor: Color
+    @State private var glassLevel: Double = 0.85
+    @State private var searchHighlight = false
     @State private var loopTask: Task<Void, Never>? = nil
+
+    private var glassSpec: CrystalGlassSpec {
+        CrystalGlassSpec.resolve(style: .clearLiquid, glassIntensity: glassLevel)
+    }
 
     var body: some View {
         VStack(spacing: 14) {
-            // Barre de recherche avec texte qui se tape automatiquement
+            // Barre de recherche Liquid Glass identique aux icônes
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(accentColor)
-
-                Text(typed.isEmpty ? loc("tuto.search.placeholder") : typed)
-                    .font(.system(size: 13, weight: typed.isEmpty ? .regular : .bold))
-                    .foregroundStyle(typed.isEmpty ? .white.opacity(0.35) : .white)
-
-                if !typed.isEmpty {
-                    Rectangle().fill(accentColor).frame(width: 2, height: 14)
-                }
-
+                    .foregroundStyle(Color(red: 0.80, green: 0.68, blue: 1.0))
+                Text(searchHighlight ? "Safari" : "Rechercher une application…")
+                    .font(.system(size: 13, weight: searchHighlight ? .bold : .regular))
+                    .foregroundStyle(searchHighlight ? .white : .white.opacity(0.58))
                 Spacer()
+                Text("⌘F")
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.12), in: Capsule())
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .frame(width: 280)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(typed.isEmpty ? Color.white.opacity(0.12) : accentColor, lineWidth: 1.2)
-                    )
-            )
+            .frame(width: 280, height: 34)
+            .background(CrystalGlassBackdrop(shape: Capsule(), spec: glassSpec, preferRotatedMaterial: true))
+            .overlay(CrystalGlassBackdrop.specularRim(shape: Capsule(), spec: glassSpec, lineWidth: 1.1))
 
-            // 4 Applications : les non-correspondantes se floutent, Safari s'ouvre
-            HStack(spacing: 24) {
-                appTile(name: loc("app_sample.notes"), icon: "note.text", color: .yellow, isMatch: typed.isEmpty)
-                appTile(name: "Safari", icon: "safari.fill", color: .blue, isMatch: true, isTarget: typed == "Safari")
-                appTile(name: loc("app_sample.music"), icon: "music.note", color: .pink, isMatch: typed.isEmpty)
-                appTile(name: "Terminal", icon: "terminal.fill", color: .gray, isMatch: typed.isEmpty)
+            // Vraies icônes vectorielles CustomAppIconView réagissant au pourcentage Liquid Glass
+            HStack(spacing: 18) {
+                VStack(spacing: 4) {
+                    CustomAppIconView(kind: .safari, style: .clearLiquid, size: 54, isPro: true, glassIntensity: glassLevel)
+                    Text("Safari")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .scaleEffect(searchHighlight ? 1.12 : 1.0)
+
+                VStack(spacing: 4) {
+                    CustomAppIconView(kind: .photos, style: .clearLiquid, size: 54, isPro: true, glassIntensity: glassLevel)
+                    Text("Photos")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+
+                VStack(spacing: 4) {
+                    CustomAppIconView(kind: .weather, style: .clearLiquid, size: 54, isPro: true, glassIntensity: glassLevel)
+                    Text("Météo")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+
+                VStack(spacing: 4) {
+                    CustomAppIconView(kind: .keynote, style: .tinted, tintColor: accentColor, size: 54, isPro: true, glassIntensity: glassLevel)
+                    Text("Teinté")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
             }
 
-            // Touche Entrée qui se presse et lance l'app
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Text("↵").font(.system(size: 13, weight: .bold))
-                    Text(loc("tuto.search.key_return")).font(.system(size: 11, weight: .bold))
+            // Indicateur visuel du % Liquid Glass & Dock Favoris
+            HStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    Image(systemName: "drop.halffull")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accentColor)
+                    Text("Liquid Glass : \(Int(round(glassLevel * 100))) %")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
                 }
-                .padding(.horizontal, 9)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(isLaunched ? Color.green : accentColor)
-                .clipShape(Capsule())
-                .foregroundStyle(.white)
-                .scaleEffect(isLaunched ? 1.08 : 1.0)
+                .background(Color.white.opacity(0.10), in: Capsule())
 
-                Text(isLaunched ? loc("tuto.search.launched") : loc("tuto.search.press_enter"))
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(isLaunched ? Color.green : .white.opacity(0.85))
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.yellow)
+                    Text("Dock Favoris épinglé")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.10), in: Capsule())
             }
         }
         .onAppear {
-            startLoop()
+            loopTask?.cancel()
+            loopTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    withAnimation(.easeInOut(duration: 0.7)) { glassLevel = 0.25; searchHighlight = false }
+                    try? await Task.sleep(for: .milliseconds(900))
+                    guard !Task.isCancelled else { break }
+                    withAnimation(.easeInOut(duration: 0.7)) { glassLevel = 0.95; searchHighlight = true }
+                    try? await Task.sleep(for: .milliseconds(1300))
+                }
+            }
         }
         .onDisappear {
             loopTask?.cancel()
             loopTask = nil
-        }
-    }
-
-    private func appTile(name: String, icon: String, color: Color, isMatch: Bool, isTarget: Bool = false) -> some View {
-        VStack(spacing: 4) {
-            ZStack {
-                if isTarget {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(accentColor.opacity(0.5))
-                        .frame(width: 58, height: 58)
-                        .blur(radius: 10)
-                }
-
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(color)
-                    .frame(width: 48, height: 48)
-                    .overlay(Image(systemName: icon).font(.system(size: 22)).foregroundStyle(.white))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(isTarget ? Color.white : Color.clear, lineWidth: 2)
-                    )
-                    .scaleEffect(isTarget ? (isLaunched ? 1.25 : 1.15) : 1.0)
-            }
-
-            Text(name)
-                .font(.system(size: 10.5, weight: isTarget ? .bold : .medium))
-                .foregroundStyle(isTarget ? .white : .white.opacity(0.7))
-        }
-        .opacity(isMatch ? 1.0 : 0.22)
-        .blur(radius: isMatch ? 0 : 5)
-    }
-
-    private func startLoop() {
-        loopTask?.cancel()
-        loopTask = Task { @MainActor in
-            while !Task.isCancelled {
-                typed = ""
-                isLaunched = false
-
-                try? await Task.sleep(for: .seconds(0.2))
-                for char in "Safari" {
-                    guard !Task.isCancelled else { return }
-                    typed.append(char)
-                    try? await Task.sleep(for: .seconds(0.16))
-                }
-
-                try? await Task.sleep(for: .seconds(0.4))
-                guard !Task.isCancelled else { return }
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    isLaunched = true
-                }
-
-                try? await Task.sleep(for: .seconds(2.0))
-            }
         }
     }
 }
@@ -1833,52 +2124,12 @@ struct TutorialModalView: View {
 
     var body: some View {
         ZStack {
-            // Fond d'ambiance sans passe blur géante
-            Color.black.opacity(0.40)
+            // Voile sombre statique sans fermeture sur clic (ESC uniquement)
+            Color.black.opacity(0.50)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        vm.showTutorial = false
-                    }
-                }
 
-            // Orbes lumineuses d'ambiance via RadialGradient doux (zéro blur 110px)
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.22, green: 0.64, blue: 1.0).opacity(0.24),
-                            Color(red: 0.22, green: 0.64, blue: 1.0).opacity(0.06),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 20,
-                        endRadius: 340
-                    )
-                )
-                .frame(width: 680, height: 680)
-                .offset(x: -160, y: -100)
-                .allowsHitTesting(false)
-
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.85, green: 0.40, blue: 1.0).opacity(0.20),
-                            Color(red: 0.85, green: 0.40, blue: 1.0).opacity(0.05),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 20,
-                        endRadius: 320
-                    )
-                )
-                .frame(width: 640, height: 640)
-                .offset(x: 180, y: 120)
-                .allowsHitTesting(false)
-
-            // Carte de tutoriel interactive
+            // Carte de tutoriel interactive Aura 4C
             TutorialCardView(vm: vm, initialStepIndex: vm.tutorialStepIndex) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     vm.showTutorial = false

@@ -17,28 +17,16 @@ struct WeatherCityPickerSheet: View {
 
     var body: some View {
         let _ = locManager.effectiveLanguageCode
-        VStack(spacing: 14) {
-            headerBar
-            autoLocationCard
-            searchBar
-            cityListSection
+        VelvetAuraModalContainer(cornerRadius: 22) { _ in
+            VStack(spacing: 14) {
+                headerBar
+                autoLocationCard
+                searchBar
+                cityListSection
+            }
+            .padding(20)
+            .frame(width: 520, height: 520)
         }
-        .padding(20)
-        .frame(width: 470, height: 500)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.black.opacity(0.68))
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
-        .environment(\.colorScheme, .dark)
         .onAppear {
             searchResults = WeatherCitySearchResult.popularCities
             onTextFocusChanged?(true)
@@ -55,7 +43,7 @@ struct WeatherCityPickerSheet: View {
         }
     }
 
-    // MARK: - En-tête + Sélecteur °C / °F
+    // MARK: - En-tête + Sélecteur °C / °F + ESC
 
     private var headerBar: some View {
         HStack(spacing: 12) {
@@ -77,10 +65,10 @@ struct WeatherCityPickerSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("weather.picker.title"))
                     .font(.system(size: 15.5, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                 Text(currentLocationSummary)
                     .font(.system(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.68))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
@@ -95,7 +83,7 @@ struct WeatherCityPickerSheet: View {
                     } label: {
                         Text("°\(u)")
                             .font(.system(size: 11.5, weight: isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? .black : .white.opacity(0.85))
+                            .foregroundStyle(isSelected ? .black : .primary)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 5)
                             .background(isSelected ? Color.white : Color.clear, in: Capsule())
@@ -106,16 +94,7 @@ struct WeatherCityPickerSheet: View {
             .padding(2)
             .background(Color.white.opacity(0.12), in: Capsule())
 
-            Button {
-                onClose()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.12), in: Circle())
-            }
-            .buttonStyle(.plain)
+            VelvetAuraEscapePill()
         }
     }
 

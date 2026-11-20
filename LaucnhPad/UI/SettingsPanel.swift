@@ -57,6 +57,8 @@ struct SettingsPanel: View {
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
+    @AppStorage(PrefKey.searchBarStyle) private var searchBarStyle: SearchBarVisualStyle = .crystalIcon
+    @AppStorage(PrefKey.licenseComparisonStyle) private var licenseComparisonStyle: LicenseComparisonStyle = .bentoGrid
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var customTileManager = CustomTileManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
@@ -279,7 +281,7 @@ struct SettingsPanel: View {
                         .frame(height: 1)
 
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 14) {
                             switch selectedTab {
                             case .interface: interfaceTab
                             case .apps: customizationAndAppsTab
@@ -481,19 +483,7 @@ struct SettingsPanel: View {
                     .foregroundStyle(aura.secondaryText)
             }
             Spacer()
-            HStack(spacing: 6) {
-                Text("ESC")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(aura.primaryText)
-                Text(loc("settings.esc_hint"))
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(aura.secondaryText)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 5.5)
-            .background(aura.pillFill, in: Capsule())
-            .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 1))
-            .accessibilityLabel(loc("settings.esc_a11y"))
+            VelvetAuraEscapePill()
         }
     }
 
@@ -645,7 +635,7 @@ struct SettingsPanel: View {
                 value: $backdropOpacity
             )
 
-            if licenseManager.isPro && backgroundStyle == .liquidGlass {
+            if licenseManager.isPro {
                 SettingsSeparator()
                 SettingsSliderRow(
                     loc("interface.liquid_glass_intensity"),
@@ -656,6 +646,52 @@ struct SettingsPanel: View {
                     isPercentage: true
                 )
             }
+
+            SettingsSeparator()
+
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Barre de recherche Liquid Glass")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Style de verre coordonné avec vos icônes d'applications.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 8) {
+                    ForEach(SearchBarVisualStyle.allCases) { variant in
+                        let selected = (searchBarStyle == variant)
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                searchBarStyle = variant
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(selected ? aura.accent : Color.white.opacity(0.28))
+                                    .frame(width: 7, height: 7)
+                                Text(variant.shortTitle)
+                                    .font(.system(size: 11.5, weight: selected ? .bold : .medium))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(selected ? aura.primaryText : aura.secondaryText)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                selected ? AnyShapeStyle(aura.navActiveFill) : AnyShapeStyle(aura.pillFill),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(selected ? aura.accent : aura.pillBorder, lineWidth: selected ? 1.3 : 1.0)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.vertical, 12)
         }
 
         SettingsSectionTitle(loc("custom.grid_section"))
@@ -1823,33 +1859,13 @@ struct SettingsPanel: View {
             .padding(.vertical, 14)
         }
 
-        // Tableau comparatif Gratuit vs Pro
+        // Comparatif visuel des fonctionnalités (4 modèles sélectionnables)
         SettingsCardBox {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(loc("license.features_comparison"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .padding(.bottom, 2)
-
-                featureRow(title: loc("license.feature_themes"), statusFree: loc("license.status_included"), statusPro: loc("license.status_included"))
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_liquid_glass"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_transparent_icons"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_uninstall"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_touchid"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_tinted"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_custom_tiles"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"), isProHighlight: true)
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_backup"), statusFree: loc("license.status_locked"), statusPro: loc("license.status_unlocked"))
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_auto_sort"), statusFree: loc("license.status_manual"), statusPro: loc("license.status_auto"))
-                SettingsSeparator()
-                featureRow(title: loc("license.feature_custom_folders"), statusFree: loc("license.status_default"), statusPro: loc("license.status_unlimited"))
-            }
+            LicenseFeaturesComparisonCard(
+                style: $licenseComparisonStyle,
+                isPro: licenseManager.isPro,
+                aura: aura
+            )
             .padding(.vertical, 14)
         }
 
@@ -1929,18 +1945,6 @@ struct SettingsPanel: View {
         case "gold": return Color(red: 0.98, green: 0.80, blue: 0.25)
         case "blue": return Color(red: 0.20, green: 0.60, blue: 1.0)
         default: return Color.accentColor
-        }
-    }
-
-    private func featureRow(title: String, statusFree: String, statusPro: String, isProHighlight: Bool = false) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 13))
-                .foregroundStyle(isProHighlight ? Color.primary : Color.secondary)
-            Spacer()
-            Text(licenseManager.isPro ? statusPro : statusFree)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(licenseManager.isPro ? (isProHighlight ? SettingsStyle.accent : Color.green) : Color.secondary)
         }
     }
 
@@ -4133,5 +4137,288 @@ private struct SettingsUpdateCardView: View {
             }
             .padding(.vertical, 16)
         }
+    }
+}
+
+// MARK: - Comparatif Visuel des Fonctionnalités Licence (4 Versions au Choix)
+
+private struct LicenseFeatureEntry: Identifiable {
+    let id: String
+    let icon: String
+    let tint: Color
+    let title: String
+    let category: String
+    let freeLabel: String
+    let proLabel: String
+    let isFreeIncluded: Bool
+    let isProHighlight: Bool
+}
+
+private struct LicenseFeaturesComparisonCard: View {
+    @Binding var style: LicenseComparisonStyle
+    let isPro: Bool
+    let aura: VelvetAuraTheme
+
+    private var features: [LicenseFeatureEntry] {
+        [
+            LicenseFeatureEntry(id: "themes", icon: "circle.lefthalf.filled", tint: .green, title: loc("license.feature_themes"), category: "Design", freeLabel: loc("license.status_included"), proLabel: loc("license.status_included"), isFreeIncluded: true, isProHighlight: false),
+            LicenseFeatureEntry(id: "liquid_glass", icon: "drop.halffull", tint: Color(red: 0.72, green: 0.45, blue: 1.0), title: loc("license.feature_liquid_glass"), category: "Design", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: true),
+            LicenseFeatureEntry(id: "transparent_icons", icon: "sparkles.square.filled.on.square", tint: Color(red: 0.28, green: 0.72, blue: 1.0), title: loc("license.feature_transparent_icons"), category: "Design", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: true),
+            LicenseFeatureEntry(id: "tinted", icon: "paintpalette.fill", tint: Color(red: 0.96, green: 0.42, blue: 0.68), title: loc("license.feature_tinted"), category: "Design", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: true),
+            LicenseFeatureEntry(id: "custom_tiles", icon: "globe.badge.chevron.backward", tint: Color(red: 0.24, green: 0.84, blue: 0.72), title: loc("license.feature_custom_tiles"), category: "Productivité", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: true),
+            LicenseFeatureEntry(id: "auto_sort", icon: "arrow.up.arrow.down.circle.fill", tint: Color(red: 0.35, green: 0.86, blue: 0.48), title: loc("license.feature_auto_sort"), category: "Productivité", freeLabel: loc("license.status_manual"), proLabel: loc("license.status_auto"), isFreeIncluded: false, isProHighlight: false),
+            LicenseFeatureEntry(id: "custom_folders", icon: "folder.fill.badge.gearshape", tint: Color(red: 1.0, green: 0.66, blue: 0.22), title: loc("license.feature_custom_folders"), category: "Productivité", freeLabel: loc("license.status_default"), proLabel: loc("license.status_unlimited"), isFreeIncluded: false, isProHighlight: false),
+            LicenseFeatureEntry(id: "uninstall", icon: "trash.fill", tint: Color(red: 1.0, green: 0.36, blue: 0.38), title: loc("license.feature_uninstall"), category: "Sécurité & Système", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: true),
+            LicenseFeatureEntry(id: "touchid", icon: "touchid", tint: Color(red: 0.82, green: 0.48, blue: 1.0), title: loc("license.feature_touchid"), category: "Sécurité & Système", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: true),
+            LicenseFeatureEntry(id: "backup", icon: "externaldrive.badge.checkmark", tint: Color(red: 0.42, green: 0.78, blue: 0.98), title: loc("license.feature_backup"), category: "Sécurité & Système", freeLabel: loc("license.status_locked"), proLabel: loc("license.status_unlocked"), isFreeIncluded: false, isProHighlight: false)
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // En-tête + sélecteur rapide des 4 présentations
+            HStack(alignment: .center, spacing: 8) {
+                HStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(aura.accentGradient)
+                            .frame(width: 28, height: 28)
+                        Image(systemName: isPro ? "crown.fill" : "sparkles")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(loc("license.features_comparison"))
+                            .font(.system(size: 14.5, weight: .bold))
+                            .foregroundStyle(aura.primaryText)
+                        Text(isPro ? "Toutes les capacités Pro sont actives" : "Comparez les avantages Standard et Pro")
+                            .font(.system(size: 11))
+                            .foregroundStyle(aura.secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 3) {
+                    ForEach(LicenseComparisonStyle.allCases) { variant in
+                        let chosen = (style == variant)
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                style = variant
+                            }
+                        } label: {
+                            Text(variant.shortTitle)
+                                .font(.system(size: 10, weight: chosen ? .bold : .medium))
+                                .foregroundStyle(chosen ? aura.primaryText : aura.secondaryText)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(
+                                    chosen ? AnyShapeStyle(aura.navActiveFill) : AnyShapeStyle(Color.clear),
+                                    in: Capsule()
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(2)
+                .background(aura.pillFill, in: Capsule())
+                .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 0.8))
+            }
+
+            switch style {
+            case .bentoGrid:
+                bentoGridLayout
+            case .dualColumns:
+                dualColumnsLayout
+            case .categoryCards:
+                categoryCardsLayout
+            case .showcaseRibbon:
+                showcaseRibbonLayout
+            }
+        }
+    }
+
+    // V1 — Grille Bento Visuelle & Pastilles Icônes
+    private var bentoGridLayout: some View {
+        let cols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        return LazyVGrid(columns: cols, spacing: 10) {
+            ForEach(features) { item in
+                HStack(spacing: 10) {
+                    featureIconBadge(item.icon, tint: item.tint, size: 30)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(aura.primaryText)
+                            .lineLimit(2)
+                        statusPill(for: item)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+                .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.9))
+            }
+        }
+    }
+
+    // V2 — Tableau Dual-Column Gratuit vs Pro
+    private var dualColumnsLayout: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 10) {
+                Text("Fonctionnalité")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(aura.secondaryText)
+                Spacer()
+                Text("Gratuit")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(aura.secondaryText)
+                    .frame(width: 78)
+                HStack(spacing: 4) {
+                    Image(systemName: "crown.fill").font(.system(size: 9))
+                    Text("PRO")
+                }
+                .font(.system(size: 11, weight: .heavy))
+                .foregroundStyle(.white)
+                .frame(width: 92)
+                .padding(.vertical, 4)
+                .background(aura.accentGradient, in: Capsule())
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 2)
+
+            ForEach(features) { item in
+                HStack(spacing: 10) {
+                    featureIconBadge(item.icon, tint: item.tint, size: 24)
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(aura.primaryText)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: item.isFreeIncluded ? "checkmark.circle.fill" : "minus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(item.isFreeIncluded ? Color.green : aura.secondaryText.opacity(0.45))
+                        .frame(width: 78)
+                    HStack(spacing: 4) {
+                        Image(systemName: isPro || item.isFreeIncluded ? "checkmark.circle.fill" : "sparkles")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(item.proLabel)
+                            .font(.system(size: 10.5, weight: .bold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(isPro ? Color(red: 0.84, green: 0.68, blue: 1.0) : aura.accent)
+                    .frame(width: 92)
+                    .padding(.vertical, 3)
+                    .background(aura.accent.opacity(0.14), in: Capsule())
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(aura.pillFill.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    // V3 — Cartes Catégories Thématiques
+    private var categoryCardsLayout: some View {
+        VStack(spacing: 10) {
+            ForEach(["Design", "Productivité", "Sécurité & Système"], id: \.self) { cat in
+                let catFeatures = features.filter { $0.category == cat }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(cat.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(aura.accent)
+                    ForEach(catFeatures) { item in
+                        HStack(spacing: 9) {
+                            featureIconBadge(item.icon, tint: item.tint, size: 24)
+                            Text(item.title)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(aura.primaryText)
+                            Spacer()
+                            statusPill(for: item)
+                        }
+                    }
+                }
+                .padding(11)
+                .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.9))
+            }
+        }
+    }
+
+    // V4 — Ruban Showcase Horizontal + Liste Cristal Icônée
+    private var showcaseRibbonLayout: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                showcaseTile(icon: "drop.halffull", tint: Color(red: 0.72, green: 0.45, blue: 1.0), title: "Liquid Glass", sub: "Translucidité & Cristal")
+                showcaseTile(icon: "touchid", tint: Color(red: 0.28, green: 0.78, blue: 1.0), title: "Touch ID", sub: "Dossiers chiffrés")
+                showcaseTile(icon: "trash.fill", tint: Color(red: 1.0, green: 0.40, blue: 0.42), title: "Nettoyage Pro", sub: "0 fichier résiduel")
+            }
+
+            VStack(spacing: 6) {
+                ForEach(features) { item in
+                    HStack(spacing: 10) {
+                        featureIconBadge(item.icon, tint: item.tint, size: 22)
+                        Text(item.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(aura.primaryText)
+                        Spacer()
+                        statusPill(for: item)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private func showcaseTile(icon: String, tint: Color, title: String, sub: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            featureIconBadge(icon, tint: tint, size: 28)
+            Text(title)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(aura.primaryText)
+            Text(sub)
+                .font(.system(size: 10.5))
+                .foregroundStyle(aura.secondaryText)
+                .lineLimit(1)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tint.opacity(0.32), lineWidth: 1))
+    }
+
+    private func featureIconBadge(_ symbol: String, tint: Color, size: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(LinearGradient(colors: [tint.opacity(0.34), tint.opacity(0.14)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: size, height: size)
+                .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(tint.opacity(0.45), lineWidth: 0.8))
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.46, weight: .semibold))
+                .foregroundStyle(tint)
+        }
+    }
+
+    @ViewBuilder
+    private func statusPill(for item: LicenseFeatureEntry) -> some View {
+        let unlocked = isPro || item.isFreeIncluded
+        let label = unlocked ? item.proLabel : item.freeLabel
+        let pillTint: Color = item.isFreeIncluded
+            ? .green
+            : (isPro ? (item.isProHighlight ? Color(red: 0.78, green: 0.56, blue: 1.0) : .green) : aura.secondaryText)
+
+        HStack(spacing: 4) {
+            Image(systemName: unlocked ? "checkmark.circle.fill" : "lock.fill")
+                .font(.system(size: 9.5, weight: .bold))
+            Text(label)
+                .font(.system(size: 10.5, weight: .bold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(pillTint)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 2.5)
+        .background(pillTint.opacity(unlocked ? 0.16 : 0.10), in: Capsule())
     }
 }

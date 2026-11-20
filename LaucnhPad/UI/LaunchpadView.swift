@@ -76,9 +76,6 @@ private struct CustomIconPickerModalLayer: View {
             ZStack(alignment: .center) {
                 Color.black.opacity(0.48)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        customIconManager.activePickerAppID = nil
-                    }
                     .transition(.opacity)
                 AppCustomIconPickerSheet(
                     appID: customAppID,
@@ -111,6 +108,8 @@ private struct LaunchpadActiveBody: View {
     @AppStorage(PrefKey.showFavoritesBar) private var showFavoritesBar = true
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor = "accent"
+    @AppStorage(PrefKey.iconStyle) private var iconStyleRaw = "original"
+    @AppStorage(PrefKey.searchBarStyle) private var searchBarStyle: SearchBarVisualStyle = .crystalIcon
     @AppStorage(PrefKey.reduceMotion) private var reduceMotionPreference = false
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
@@ -168,13 +167,8 @@ private struct LaunchpadActiveBody: View {
                 }
                 if vm.showWeatherCityPicker {
                     ZStack(alignment: .center) {
-                        Color.black.opacity(0.48)
+                        Color.black.opacity(0.52)
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                    vm.showWeatherCityPicker = false
-                                }
-                            }
                             .transition(.opacity)
                         WeatherCityPickerSheet(
                             onTextFocusChanged: { focused in
@@ -459,12 +453,13 @@ private struct LaunchpadActiveBody: View {
                 showLabels: showLabels,
                 showRunning: showRunning,
                 reduceMotion: reduceMotion,
-                tint: activeTintColor
+                tint: activeTintColor,
+                glassIntensity: liquidGlassIntensity
             )
                 .offset(x: layout.gridOrigin.x, y: layout.gridOrigin.y)
                 .scaleEffect(vm.openFolderID != nil ? 0.93 : 1.0)
                 .opacity(vm.openFolderID != nil ? 0.32 : 1.0)
-                .allowsHitTesting(vm.openFolderID == nil && !vm.showWidgetGallery && !vm.showWeatherCityPicker && !vm.isPresentingModal)
+                .allowsHitTesting(!vm.isAnyMenuOrModalOpen)
                 .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: vm.openFolderID != nil)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: iconScale)
             if vm.displayItems.isEmpty {
@@ -485,18 +480,36 @@ private struct LaunchpadActiveBody: View {
         .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
     }
 
-    // Barre de recherche façon LaunchOS : capsule en Liquid Glass blanc
+    // Barre de recherche Liquid Glass assortie aux icônes (4 variantes sélectionnables)
+    private var resolvedSearchGlassIconStyle: IconAppearanceStyle {
+        if tintedIcons && licenseManager.isPro { return .tinted }
+        let parsed = IconAppearanceStyle(rawValue: iconStyleRaw) ?? .original
+        switch parsed {
+        case .original, .system, .classicApple: return .clearLiquid
+        default: return (parsed.requiresPro && !licenseManager.isPro) ? .clearLiquid : parsed
+        }
+    }
+
     private var searchBar: some View {
         let typing = !vm.query.isEmpty
-        return HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
+        return HStack(spacing: 8) {
+            if searchBarStyle == .pureMinimal {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11.5, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.94))
+                    .frame(width: 22, height: 22)
+                    .background(Color.white.opacity(0.14), in: Circle())
+            } else {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(searchBarStyle == .prismAura ? Color(red: 0.80, green: 0.68, blue: 1.0) : .white.opacity(0.92))
+            }
+
             ZStack(alignment: .leading) {
                 if !typing {
                     Text(loc("grid.search_placeholder"))
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: 13.5, weight: searchBarStyle == .crystalIcon ? .medium : .regular))
+                        .foregroundStyle(.white.opacity(0.58))
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
@@ -507,6 +520,7 @@ private struct LaunchpadActiveBody: View {
                     .tint(.white)
                     .focused($searchFocused)
             }
+
             if typing {
                 Button { vm.query = "" } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 12.5))
@@ -514,7 +528,16 @@ private struct LaunchpadActiveBody: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.white.opacity(0.65))
                 .transition(.opacity)
+            } else if searchBarStyle == .prismAura {
+                Text("⌘F")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(Color.white.opacity(0.10), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.7))
             }
+
             SearchMenuButton(foreground: .white.opacity(0.85),
                              onAddWidget: {
                                  withAnimation(reduceMotion ? nil : AppleDesignSystem.Springs.snappy) {
@@ -529,10 +552,17 @@ private struct LaunchpadActiveBody: View {
                              onReorganize: { vm.requestReorganize() },
                              onRefresh: { store.refresh() })
         }
-        .padding(.leading, 12)
+        .padding(.leading, searchBarStyle == .pureMinimal ? 6 : 12)
         .padding(.trailing, 6)
-        .frame(width: 280, height: 32)
-        .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
+        .frame(width: 288, height: 34)
+        .modifier(
+            SearchCapsuleGlassModifier(
+                intensity: liquidGlassIntensity,
+                iconStyle: resolvedSearchGlassIconStyle,
+                tintColor: activeTintColor,
+                visualStyle: searchBarStyle
+            )
+        )
         .onTapGesture { searchFocused = true }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: typing)
     }
@@ -580,7 +610,7 @@ private struct LaunchpadActiveBody: View {
     }
 
     private func tileModel(for item: LayoutItem) -> TileModel {
-        vm.cachedTileModel(for: item, showRunning: showRunning, tint: activeTintColor)
+        vm.cachedTileModel(for: item, showRunning: showRunning, tint: activeTintColor, glassIntensity: liquidGlassIntensity)
     }
 }
 
@@ -605,9 +635,10 @@ struct PagesLayer: View {
     let showRunning: Bool
     let reduceMotion: Bool
     let tint: Color?
+    let glassIntensity: Double
 
     init(vm: LaunchpadViewModel, store: LaunchpadStore, pageRange: PageRangeState, metrics: GridMetrics,
-         showLabels: Bool, showRunning: Bool, reduceMotion: Bool, tint: Color?) {
+         showLabels: Bool, showRunning: Bool, reduceMotion: Bool, tint: Color?, glassIntensity: Double = 0.85) {
         self.vm = vm
         self.store = store
         self.pageRange = pageRange
@@ -616,6 +647,7 @@ struct PagesLayer: View {
         self.showRunning = showRunning
         self.reduceMotion = reduceMotion
         self.tint = tint
+        self.glassIntensity = glassIntensity
     }
 
     private func visiblePlacedItems(metrics m: GridMetrics, draggingID: String?) -> [PlacedItem] {
@@ -670,7 +702,7 @@ struct PagesLayer: View {
     }
 
     private func tileModel(for item: LayoutItem) -> TileModel {
-        vm.cachedTileModel(for: item, showRunning: showRunning, tint: tint)
+        vm.cachedTileModel(for: item, showRunning: showRunning, tint: tint, glassIntensity: glassIntensity)
     }
 
     @ViewBuilder
@@ -851,18 +883,83 @@ struct SearchMenuButton: View {
 /// Apparence capsule Liquid Glass transparente unifiée (identique à la barre de recherche).
 private struct SearchCapsuleGlassModifier: ViewModifier {
     let intensity: Double
+    var iconStyle: IconAppearanceStyle = .clearLiquid
+    var tintColor: Color? = nil
+    var visualStyle: SearchBarVisualStyle = .crystalIcon
 
     func body(content: Content) -> some View {
+        let resolvedTint: Color? = {
+            switch visualStyle {
+            case .prismAura:
+                return Color(red: 0.54, green: 0.36, blue: 0.98).opacity(0.28)
+            default:
+                return tintColor
+            }
+        }()
+        let resolvedStyle: IconAppearanceStyle = {
+            switch visualStyle {
+            case .prismAura: return .tinted
+            case .pureMinimal: return .clearLiquid
+            case .crystalIcon, .doubleGlass: return iconStyle
+            }
+        }()
+        let spec = CrystalGlassSpec.resolve(
+            style: resolvedStyle,
+            tintColor: resolvedTint,
+            glassIntensity: visualStyle == .pureMinimal ? max(0.08, intensity * 0.65) : intensity
+        )
+
         content
-            .liquidGlass(
-                in: Capsule(),
-                interactive: true,
-                tint: nil,
-                prominence: .clear,
-                intensity: intensity
-            )
+            .background {
+                ZStack {
+                    CrystalGlassBackdrop(shape: Capsule(), spec: spec, interactive: true)
+                    if visualStyle == .doubleGlass {
+                        Capsule()
+                            .inset(by: 2.5)
+                            .fill(Color.white.opacity(0.055 * max(0.2, intensity)))
+                            .overlay(
+                                Capsule()
+                                    .inset(by: 2.5)
+                                    .strokeBorder(
+                                        LinearGradient(colors: spec.specularRimColors, startPoint: .topLeading, endPoint: .bottomTrailing),
+                                        lineWidth: 0.7
+                                    )
+                            )
+                    }
+                }
+            }
+            .overlay {
+                if visualStyle == .prismAura {
+                    Capsule()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.80, green: 0.66, blue: 1.0).opacity(0.75),
+                                    Color.white.opacity(0.32),
+                                    Color(red: 0.42, green: 0.76, blue: 1.0).opacity(0.45)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.15
+                        )
+                        .allowsHitTesting(false)
+                } else {
+                    CrystalGlassBackdrop.specularRim(
+                        shape: Capsule(),
+                        spec: spec,
+                        lineWidth: visualStyle == .pureMinimal ? 0.8 : 1.1
+                    )
+                }
+            }
             .contentShape(Capsule())
-            .shadow(color: LiquidGlassStyle.shadowColor, radius: 10, y: 5)
+            .shadow(
+                color: visualStyle == .prismAura
+                    ? Color(red: 0.36, green: 0.16, blue: 0.78).opacity(0.28)
+                    : LiquidGlassStyle.shadowColor.opacity(visualStyle == .pureMinimal ? 0.55 : 1.0),
+                radius: visualStyle == .pureMinimal ? 6 : 10,
+                y: visualStyle == .pureMinimal ? 3 : 5
+            )
     }
 }
 
@@ -931,6 +1028,7 @@ struct TileModel: Equatable {
     var tintColor: Color? = nil
     var iconStyle: IconAppearanceStyle = .original
     var isProCrystal: Bool = false
+    var glassIntensity: Double = 0.85
 
     nonisolated static func == (lhs: TileModel, rhs: TileModel) -> Bool {
         guard lhs.title == rhs.title,
@@ -939,6 +1037,7 @@ struct TileModel: Equatable {
               lhs.tintColor == rhs.tintColor,
               lhs.iconStyle == rhs.iconStyle,
               lhs.isProCrystal == rhs.isProCrystal,
+              lhs.glassIntensity == rhs.glassIntensity,
               lhs.folderStyle == rhs.folderStyle,
               lhs.folderColorHex == rhs.folderColorHex,
               lhs.folderSymbol == rhs.folderSymbol,
@@ -951,9 +1050,10 @@ struct TileModel: Equatable {
     }
 
     @MainActor
-    static func make(_ item: LayoutItem, store: LaunchpadStore, showRunning: Bool) -> TileModel {
+    static func make(_ item: LayoutItem, store: LaunchpadStore, showRunning: Bool, glassIntensity: Double? = nil) -> TileModel {
         let style = IconCache.shared.currentAppearanceStyle
         let isPro = LicenseManager.shared.isPro
+        let glass = max(0.05, min(1.0, glassIntensity ?? CrystalGlassSpec.currentGlassIntensity))
         switch item {
         case .app(let id):
             let running = showRunning && (store.catalog[id].map(store.isRunning) ?? false)
@@ -964,7 +1064,8 @@ struct TileModel: Equatable {
                 isRunning: running,
                 isLocked: false,
                 iconStyle: style,
-                isProCrystal: isPro
+                isProCrystal: isPro,
+                glassIntensity: glass
             )
         case .folder(let folder):
             return TileModel(
@@ -977,7 +1078,8 @@ struct TileModel: Equatable {
                 isRunning: false,
                 isLocked: folder.isLocked,
                 iconStyle: style,
-                isProCrystal: isPro
+                isProCrystal: isPro,
+                glassIntensity: glass
             )
         case .widget(let config):
             return TileModel(title: config.kind.title, icon: nil, folderIcons: nil, isRunning: false, isLocked: false)
@@ -1182,7 +1284,8 @@ struct IconImage: View {
                 isJiggling: isJiggling,
                 resolvedIconStyle: model.iconStyle,
                 resolvedIsPro: model.isProCrystal,
-                resolvedTintColor: model.tintColor ?? Color(red: 0.08, green: 0.54, blue: 0.98)
+                resolvedTintColor: model.tintColor ?? Color(red: 0.08, green: 0.54, blue: 0.98),
+                glassIntensity: model.glassIntensity
             )
             .equatable()
         } else if let icon = model.icon {
@@ -1192,6 +1295,7 @@ struct IconImage: View {
                 style: model.iconStyle,
                 isPro: model.isProCrystal,
                 tintColor: model.tintColor,
+                glassIntensity: model.glassIntensity,
                 useLiveGlass: true,
                 isJiggling: isJiggling
             )
@@ -1636,10 +1740,23 @@ struct FolderOverlayView: View {
 
     @State private var title = ""
     @State private var isRevealed = false
-    @State private var isShowingCustomizer = false
-    @State private var isShowingAppPicker = false
     @FocusState private var titleFocused: Bool
     @AppStorage(PrefKey.backgroundStyle) private var theme: BackgroundStyle = .liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
+
+    private var customizerBinding: Binding<Bool> {
+        Binding(
+            get: { vm.folderShowingCustomizer },
+            set: { vm.folderShowingCustomizer = $0 }
+        )
+    }
+
+    private var appPickerBinding: Binding<Bool> {
+        Binding(
+            get: { vm.folderShowingAppPicker },
+            set: { vm.folderShowingAppPicker = $0 }
+        )
+    }
 
     /// L'app sortie du dossier reste rendue (invisible) pour ne pas interrompre le geste en cours.
     private var appsToRender: [String] {
@@ -1658,22 +1775,37 @@ struct FolderOverlayView: View {
                 .onTapGesture { titleFocused = false }
                 .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
 
-            // En-tête du dossier : Titre éditable + Boutons Personnaliser (pinceau) & Ajouter des apps (+)
+            // En-tête du dossier : Titre éditable + Boutons Personnaliser (pinceau), Ajouter des apps (+) & ESC
             HStack(spacing: 10) {
                 Button {
                     withAnimation(AppleDesignSystem.Springs.snappy) {
-                        isShowingCustomizer.toggle()
-                        if isShowingCustomizer { isShowingAppPicker = false }
+                        vm.folderShowingCustomizer.toggle()
+                        if vm.folderShowingCustomizer { vm.folderShowingAppPicker = false }
                     }
                 } label: {
                     Image(systemName: "paintbrush.fill")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isShowingCustomizer ? .black : .white.opacity(0.85))
+                        .foregroundStyle(vm.folderShowingCustomizer ? .black : .white.opacity(0.85))
                         .frame(width: 28, height: 28)
-                        .background(isShowingCustomizer ? Color.white : Color.white.opacity(0.12), in: Circle())
+                        .background(vm.folderShowingCustomizer ? Color.white : Color.white.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .help(loc("folder.customize_help"))
+
+                Button {
+                    withAnimation(AppleDesignSystem.Springs.snappy) {
+                        vm.folderShowingAppPicker.toggle()
+                        if vm.folderShowingAppPicker { vm.folderShowingCustomizer = false }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(vm.folderShowingAppPicker ? .black : .white.opacity(0.85))
+                        .frame(width: 28, height: 28)
+                        .background(vm.folderShowingAppPicker ? Color.white : Color.white.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help(loc("folder.manage_apps_help"))
 
                 Spacer(minLength: 4)
 
@@ -1695,20 +1827,7 @@ struct FolderOverlayView: View {
 
                 Spacer(minLength: 4)
 
-                Button {
-                    withAnimation(AppleDesignSystem.Springs.snappy) {
-                        isShowingAppPicker.toggle()
-                        if isShowingAppPicker { isShowingCustomizer = false }
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(isShowingAppPicker ? .black : .white.opacity(0.85))
-                        .frame(width: 28, height: 28)
-                        .background(isShowingAppPicker ? Color.white : Color.white.opacity(0.12), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .help(loc("folder.manage_apps_help"))
+                VelvetAuraEscapePill()
             }
             .padding(.horizontal, 24)
             .frame(width: fm.panelRect.width)
@@ -1728,7 +1847,7 @@ struct FolderOverlayView: View {
                         .foregroundStyle(.white.opacity(0.85))
                     Button {
                         withAnimation(AppleDesignSystem.Springs.snappy) {
-                            isShowingAppPicker = true
+                            vm.folderShowingAppPicker = true
                         }
                     } label: {
                         Label(loc("folder.add_apps"), systemImage: "plus.circle.fill")
@@ -1749,23 +1868,23 @@ struct FolderOverlayView: View {
                     .position(x: fm.contentRect.midX, y: fm.contentRect.midY)
             }
 
-            if isShowingCustomizer {
+            if vm.folderShowingCustomizer {
                 FolderCustomizationBarView(
                     folder: folder,
                     store: store,
-                    isShowingCustomizer: $isShowingCustomizer,
-                    isShowingAppPicker: $isShowingAppPicker
+                    isShowingCustomizer: customizerBinding,
+                    isShowingAppPicker: appPickerBinding
                 )
                 .frame(width: min(fm.panelRect.width - 28, 560))
                 .position(x: fm.panelRect.midX, y: max(110, fm.panelRect.minY - 76))
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
-            if isShowingAppPicker {
+            if vm.folderShowingAppPicker {
                 FolderAppPickerSheet(
                     folder: folder,
                     store: store,
-                    isPresented: $isShowingAppPicker
+                    isPresented: appPickerBinding
                 )
                 .frame(width: min(fm.panelRect.width - 24, 540))
                 .position(x: fm.panelRect.midX, y: fm.panelRect.midY)
@@ -1846,7 +1965,7 @@ struct FolderOverlayView: View {
             case .liquidGlass: return .clearLiquid
             }
         }()
-        let spec = CrystalGlassSpec.resolve(style: crystalStyle, isFolder: true)
+        let spec = CrystalGlassSpec.resolve(style: crystalStyle, isFolder: true, glassIntensity: liquidGlassIntensity)
 
         ZStack {
             CrystalGlassBackdrop(shape: shape, spec: spec)
@@ -2087,20 +2206,10 @@ struct WidgetGalleryModal: View {
         let modalHeight = min(640, max(440, rootSize.height - 44))
 
         ZStack(alignment: .center) {
-            // Arrière-plan givré et assombri (fondu doux indépendant du zoom de la carte)
-            ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(backgroundStyle == .light ? 0.50 : 0.62)
-                Color.black.opacity(backgroundStyle == .light ? 0.28 : 0.48)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
-                    vm.showWidgetGallery = false
-                }
-            }
-            .transition(.opacity)
+            // Voile sombre statique léger sans re-blur temps réel pendant le défilement des widgets
+            Color.black.opacity(backgroundStyle == .light ? 0.34 : 0.62)
+                .contentShape(Rectangle())
+                .transition(.opacity)
 
             HStack(spacing: 0) {
                 // 1. Barre latérale gauche unifiée Aura Nocturne Velvet (4C — identique aux Réglages)
@@ -2339,30 +2448,7 @@ struct WidgetGalleryModal: View {
                     .foregroundStyle(aura.secondaryText)
             }
             Spacer()
-            HStack(spacing: 8) {
-                Text("ESC")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(aura.primaryText)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5.5)
-                    .background(aura.pillFill, in: Capsule())
-                    .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 1))
-
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        vm.showWidgetGallery = false
-                    }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(aura.secondaryText)
-                        .frame(width: 28, height: 28)
-                        .background(aura.pillFill, in: Circle())
-                        .overlay(Circle().strokeBorder(aura.pillBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(loc("widget.gallery.close_a11y"))
-            }
+            VelvetAuraEscapePill()
         }
     }
 
@@ -2796,8 +2882,6 @@ private struct WidgetGalleryCardButton: View, Equatable {
     let languageCode: String = LocalizationManager.shared.effectiveLanguageCode
     let onSelect: () -> Void
 
-    @State private var isHovered: Bool = false
-
     static func == (lhs: WidgetGalleryCardButton, rhs: WidgetGalleryCardButton) -> Bool {
         lhs.card == rhs.card &&
         lhs.effectiveConfig == rhs.effectiveConfig &&
@@ -2822,7 +2906,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
                             .equatable()
                             .scaleEffect(thumbScale)
                             .frame(width: previewW * thumbScale, height: previewH * thumbScale)
-                            .shadow(color: .black.opacity(theme == .light ? 0.16 : 0.30), radius: 8, x: 0, y: 4)
+                            .drawingGroup()
                             .allowsHitTesting(false)
                     }
                     .frame(height: boxSize * 0.86)
@@ -2852,7 +2936,7 @@ private struct WidgetGalleryCardButton: View, Equatable {
             }
             .padding(10)
             .background(
-                VelvetAuraCardBackground(theme: theme, cornerRadius: 15, isSelected: isSelected, isHovered: isHovered)
+                VelvetAuraCardBackground(theme: theme, cornerRadius: 15, isSelected: isSelected)
             )
             .overlay(
                 VelvetAuraCardOverlay(theme: theme, cornerRadius: 15, isSelected: isSelected)
@@ -2860,8 +2944,5 @@ private struct WidgetGalleryCardButton: View, Equatable {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
 }

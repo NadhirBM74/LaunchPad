@@ -426,174 +426,201 @@ public struct CrystalGlassSpec {
     public let specularRimColors: [Color]
     public let fallbackTintOpacity: Double
     public let fallbackMaterialOpacity: Double
+    public let glassIntensity: Double
+
+    nonisolated public static var currentGlassIntensity: Double {
+        let d = UserDefaults.standard
+        guard d.object(forKey: PrefKey.liquidGlassIntensity) != nil else { return 0.85 }
+        return max(0.05, min(1.0, d.double(forKey: PrefKey.liquidGlassIntensity)))
+    }
 
     public static func resolve(
         style: IconAppearanceStyle,
         tintColor: Color? = nil,
         isFolder: Bool = false,
         customFolderColor: Color? = nil,
-        isPureLightPreset: Bool = false
+        isPureLightPreset: Bool = false,
+        glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
     ) -> CrystalGlassSpec {
+        let g = max(0.05, min(1.0, glassIntensity))
+        let scale = 0.14 + 1.02 * g // 5% -> ~0.19x, 60% -> ~0.75x, 85% -> ~1.01x, 100% -> ~1.16x
+        let rimScale = 0.28 + 0.85 * g
+        let materialScale = max(0.08, min(1.0, g))
+
+        @inline(__always)
+        func s(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * scale)) }
+        @inline(__always)
+        func r(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * rimScale)) }
+
         if isFolder && isPureLightPreset {
             return CrystalGlassSpec(
-                tint: Color.white.opacity(0.24),
+                tint: Color.white.opacity(s(0.24)),
                 surfaceSheenColors: [
-                    Color.white.opacity(0.22),
-                    Color.white.opacity(0.06),
-                    Color.white.opacity(0.12)
+                    Color.white.opacity(s(0.22)),
+                    Color.white.opacity(s(0.06)),
+                    Color.white.opacity(s(0.12))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.88),
-                    Color.white.opacity(0.26),
-                    Color.white.opacity(0.18),
-                    Color.white.opacity(0.50)
+                    Color.white.opacity(r(0.88)),
+                    Color.white.opacity(r(0.26)),
+                    Color.white.opacity(r(0.18)),
+                    Color.white.opacity(r(0.50))
                 ],
-                fallbackTintOpacity: 0.22,
-                fallbackMaterialOpacity: 0.56
+                fallbackTintOpacity: s(0.22),
+                fallbackMaterialOpacity: min(1.0, 0.56 * materialScale),
+                glassIntensity: g
             )
         }
 
         switch style {
         case .transparent, .clearLiquid, .original, .system:
             return CrystalGlassSpec(
-                tint: isFolder ? customFolderColor?.opacity(0.20) : nil,
+                tint: isFolder ? customFolderColor?.opacity(s(0.20)) : nil,
                 surfaceSheenColors: [
-                    Color.white.opacity(0.08),
-                    Color.white.opacity(0.02),
-                    Color.white.opacity(0.05)
+                    Color.white.opacity(s(0.09)),
+                    Color.white.opacity(s(0.02)),
+                    Color.white.opacity(s(0.06))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.78),
-                    Color.white.opacity(0.18),
-                    Color.white.opacity(0.14),
-                    Color.white.opacity(0.42)
+                    Color.white.opacity(r(0.78)),
+                    Color.white.opacity(r(0.18)),
+                    Color.white.opacity(r(0.14)),
+                    Color.white.opacity(r(0.42))
                 ],
-                fallbackTintOpacity: customFolderColor != nil && isFolder ? 0.18 : 0.06,
-                fallbackMaterialOpacity: 0.34
+                fallbackTintOpacity: customFolderColor != nil && isFolder ? s(0.18) : s(0.06),
+                fallbackMaterialOpacity: min(1.0, 0.36 * materialScale),
+                glassIntensity: g
             )
 
         case .clearDark:
             return CrystalGlassSpec(
-                tint: Color(red: 0.04, green: 0.05, blue: 0.10).opacity(0.55),
+                tint: Color(red: 0.04, green: 0.05, blue: 0.10).opacity(s(0.55)),
                 surfaceSheenColors: [
-                    Color(red: 0.08, green: 0.09, blue: 0.15).opacity(0.46),
-                    Color(red: 0.03, green: 0.04, blue: 0.08).opacity(0.58)
+                    Color(red: 0.08, green: 0.09, blue: 0.15).opacity(s(0.46)),
+                    Color(red: 0.03, green: 0.04, blue: 0.08).opacity(s(0.58))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.52),
-                    Color.white.opacity(0.14),
-                    Color.white.opacity(0.08),
-                    Color.white.opacity(0.30)
+                    Color.white.opacity(r(0.52)),
+                    Color.white.opacity(r(0.14)),
+                    Color.white.opacity(r(0.08)),
+                    Color.white.opacity(r(0.30))
                 ],
-                fallbackTintOpacity: 0.45,
-                fallbackMaterialOpacity: 0.46
+                fallbackTintOpacity: s(0.45),
+                fallbackMaterialOpacity: min(1.0, 0.46 * materialScale),
+                glassIntensity: g
             )
 
         case .frostedGlass:
             return CrystalGlassSpec(
-                tint: Color.white.opacity(0.22),
+                tint: Color.white.opacity(s(0.22)),
                 surfaceSheenColors: [
-                    Color.white.opacity(0.24),
-                    Color(red: 0.88, green: 0.92, blue: 1.0).opacity(0.12),
-                    Color.white.opacity(0.18)
+                    Color.white.opacity(s(0.24)),
+                    Color(red: 0.88, green: 0.92, blue: 1.0).opacity(s(0.12)),
+                    Color.white.opacity(s(0.18))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.86),
-                    Color.white.opacity(0.26),
-                    Color.white.opacity(0.16),
-                    Color.white.opacity(0.50)
+                    Color.white.opacity(r(0.86)),
+                    Color.white.opacity(r(0.26)),
+                    Color.white.opacity(r(0.16)),
+                    Color.white.opacity(r(0.50))
                 ],
-                fallbackTintOpacity: 0.24,
-                fallbackMaterialOpacity: 0.56
+                fallbackTintOpacity: s(0.24),
+                fallbackMaterialOpacity: min(1.0, 0.56 * materialScale),
+                glassIntensity: g
             )
 
         case .dark:
             return CrystalGlassSpec(
-                tint: Color(red: 0.05, green: 0.06, blue: 0.10).opacity(isFolder ? 0.62 : 0.68),
+                tint: Color(red: 0.05, green: 0.06, blue: 0.10).opacity(s(isFolder ? 0.62 : 0.68)),
                 surfaceSheenColors: [
-                    Color(red: 0.08, green: 0.09, blue: 0.13).opacity(isFolder ? 0.56 : 0.62),
-                    Color(red: 0.03, green: 0.035, blue: 0.06).opacity(isFolder ? 0.68 : 0.76)
+                    Color(red: 0.08, green: 0.09, blue: 0.13).opacity(s(isFolder ? 0.56 : 0.62)),
+                    Color(red: 0.03, green: 0.035, blue: 0.06).opacity(s(isFolder ? 0.68 : 0.76))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.48),
-                    Color.white.opacity(0.13),
-                    Color.white.opacity(0.08),
-                    Color.white.opacity(0.28)
+                    Color.white.opacity(r(0.48)),
+                    Color.white.opacity(r(0.13)),
+                    Color.white.opacity(r(0.08)),
+                    Color.white.opacity(r(0.28))
                 ],
-                fallbackTintOpacity: 0.56,
-                fallbackMaterialOpacity: 0.52
+                fallbackTintOpacity: s(0.56),
+                fallbackMaterialOpacity: min(1.0, 0.52 * materialScale),
+                glassIntensity: g
             )
 
         case .light:
             return CrystalGlassSpec(
-                tint: Color.white.opacity(isFolder ? 0.36 : 0.42),
+                tint: Color.white.opacity(s(isFolder ? 0.36 : 0.42)),
                 surfaceSheenColors: [
-                    Color.white.opacity(isFolder ? 0.46 : 0.54),
-                    Color(red: 0.93, green: 0.95, blue: 1.0).opacity(isFolder ? 0.32 : 0.38),
-                    Color.white.opacity(isFolder ? 0.40 : 0.48)
+                    Color.white.opacity(s(isFolder ? 0.46 : 0.54)),
+                    Color(red: 0.93, green: 0.95, blue: 1.0).opacity(s(isFolder ? 0.32 : 0.38)),
+                    Color.white.opacity(s(isFolder ? 0.40 : 0.48))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.92),
-                    Color.white.opacity(0.30),
-                    Color.white.opacity(0.20),
-                    Color.white.opacity(0.56)
+                    Color.white.opacity(r(0.92)),
+                    Color.white.opacity(r(0.30)),
+                    Color.white.opacity(r(0.20)),
+                    Color.white.opacity(r(0.56))
                 ],
-                fallbackTintOpacity: 0.40,
-                fallbackMaterialOpacity: 0.58
+                fallbackTintOpacity: s(0.40),
+                fallbackMaterialOpacity: min(1.0, 0.58 * materialScale),
+                glassIntensity: g
             )
 
         case .tinted:
             let accent = tintColor ?? customFolderColor ?? Color(red: 0.12, green: 0.56, blue: 1.0)
             return CrystalGlassSpec(
-                tint: accent.opacity(isFolder ? 0.34 : 0.38),
+                tint: accent.opacity(s(isFolder ? 0.34 : 0.38)),
                 surfaceSheenColors: [
-                    accent.opacity(0.20),
-                    Color.white.opacity(0.05),
-                    accent.opacity(0.14)
+                    accent.opacity(s(0.20)),
+                    Color.white.opacity(s(0.05)),
+                    accent.opacity(s(0.14))
                 ],
                 specularRimColors: [
-                    accent.opacity(0.84),
-                    Color.white.opacity(0.28),
-                    accent.opacity(0.18),
-                    accent.opacity(0.48)
+                    accent.opacity(r(0.84)),
+                    Color.white.opacity(r(0.28)),
+                    accent.opacity(r(0.18)),
+                    accent.opacity(r(0.48))
                 ],
-                fallbackTintOpacity: 0.32,
-                fallbackMaterialOpacity: 0.46
+                fallbackTintOpacity: s(0.32),
+                fallbackMaterialOpacity: min(1.0, 0.46 * materialScale),
+                glassIntensity: g
             )
 
         case .monochrome:
             return CrystalGlassSpec(
-                tint: Color(white: 0.16).opacity(0.36),
+                tint: Color(white: 0.16).opacity(s(0.36)),
                 surfaceSheenColors: [
-                    Color(white: 0.24).opacity(0.38),
-                    Color(white: 0.12).opacity(0.48)
+                    Color(white: 0.24).opacity(s(0.38)),
+                    Color(white: 0.12).opacity(s(0.48))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.74),
-                    Color.white.opacity(0.20),
-                    Color.white.opacity(0.12),
-                    Color.white.opacity(0.40)
+                    Color.white.opacity(r(0.74)),
+                    Color.white.opacity(r(0.20)),
+                    Color.white.opacity(r(0.12)),
+                    Color.white.opacity(r(0.40))
                 ],
-                fallbackTintOpacity: 0.34,
-                fallbackMaterialOpacity: 0.46
+                fallbackTintOpacity: s(0.34),
+                fallbackMaterialOpacity: min(1.0, 0.46 * materialScale),
+                glassIntensity: g
             )
 
         case .classicApple:
             return CrystalGlassSpec(
-                tint: isFolder ? customFolderColor?.opacity(0.18) : nil,
+                tint: isFolder ? customFolderColor?.opacity(s(0.18)) : nil,
                 surfaceSheenColors: [
-                    Color.white.opacity(0.10),
-                    Color.white.opacity(0.02),
-                    Color.white.opacity(0.05)
+                    Color.white.opacity(s(0.10)),
+                    Color.white.opacity(s(0.02)),
+                    Color.white.opacity(s(0.05))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(0.78),
-                    Color.white.opacity(0.20),
-                    Color.white.opacity(0.12),
-                    Color.white.opacity(0.42)
+                    Color.white.opacity(r(0.78)),
+                    Color.white.opacity(r(0.20)),
+                    Color.white.opacity(r(0.12)),
+                    Color.white.opacity(r(0.42))
                 ],
-                fallbackTintOpacity: 0.10,
-                fallbackMaterialOpacity: 0.36
+                fallbackTintOpacity: s(0.10),
+                fallbackMaterialOpacity: min(1.0, 0.36 * materialScale),
+                glassIntensity: g
             )
         }
     }
@@ -641,6 +668,7 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
                 }()
                 Color.clear
                     .glassEffect(glass, in: shape)
+                    .opacity(max(0.06, min(1.0, spec.glassIntensity)))
             } else {
                 shape
                     .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.86) : Color.clear)
@@ -650,10 +678,10 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
                         .opacity(spec.fallbackMaterialOpacity)
                 } else if !reduceTransparency {
                     shape
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color.white.opacity(0.08 * (0.2 + 0.8 * spec.glassIntensity)))
                 }
                 if let tint = spec.tint {
-                    shape.fill(tint.opacity(preferRotatedMaterial ? 0.55 : spec.fallbackTintOpacity))
+                    shape.fill(tint.opacity(preferRotatedMaterial ? 0.55 * spec.glassIntensity : spec.fallbackTintOpacity))
                 }
             }
 
@@ -691,6 +719,7 @@ public struct CrystalAppIconImage: View, Equatable {
     public let style: IconAppearanceStyle
     public let isPro: Bool
     public let tintColor: Color?
+    public var glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
     public var useLiveGlass: Bool = true
     public var isJiggling: Bool = false
 
@@ -700,6 +729,7 @@ public struct CrystalAppIconImage: View, Equatable {
         style: IconAppearanceStyle,
         isPro: Bool,
         tintColor: Color? = nil,
+        glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity,
         useLiveGlass: Bool = true,
         isJiggling: Bool = false
     ) {
@@ -708,6 +738,7 @@ public struct CrystalAppIconImage: View, Equatable {
         self.style = style
         self.isPro = isPro
         self.tintColor = tintColor
+        self.glassIntensity = glassIntensity
         self.useLiveGlass = useLiveGlass
         self.isJiggling = isJiggling
     }
@@ -717,6 +748,7 @@ public struct CrystalAppIconImage: View, Equatable {
             && lhs.size == rhs.size
             && lhs.style == rhs.style
             && lhs.isPro == rhs.isPro
+            && lhs.glassIntensity == rhs.glassIntensity
             && lhs.useLiveGlass == rhs.useLiveGlass
             && lhs.isJiggling == rhs.isJiggling
             && lhs.tintColor == rhs.tintColor
@@ -734,7 +766,7 @@ public struct CrystalAppIconImage: View, Equatable {
         } else {
             let bodySize = size * 0.818
             let shape = RoundedRectangle(cornerRadius: bodySize * 0.225, style: .continuous)
-            let spec = CrystalGlassSpec.resolve(style: style, tintColor: tintColor)
+            let spec = CrystalGlassSpec.resolve(style: style, tintColor: tintColor, glassIntensity: glassIntensity)
             let rimWidth = max(useLiveGlass ? 0.88 : 0.48, min(1.35, bodySize * 0.0155))
 
             let iconStack = ZStack {
@@ -747,7 +779,7 @@ public struct CrystalAppIconImage: View, Equatable {
                         if let tint = spec.tint {
                             shape.fill(tint.opacity(0.62))
                         } else {
-                            shape.fill(Color.white.opacity(0.10))
+                            shape.fill(Color.white.opacity(0.10 * (0.15 + 0.85 * spec.glassIntensity)))
                         }
                         shape.fill(
                             LinearGradient(
@@ -812,6 +844,7 @@ private final class AppIconAppearanceState: ObservableObject {
     @Published private(set) var style: IconAppearanceStyle = .original
     @Published private(set) var isPro: Bool = false
     @Published private(set) var tint: Color? = nil
+    @Published private(set) var glassIntensity: Double = 0.85
 
     private var observer: NSObjectProtocol?
 
@@ -833,6 +866,7 @@ private final class AppIconAppearanceState: ObservableObject {
         let pro = d.bool(forKey: PrefKey.isProUnlocked)
         let tinted = d.bool(forKey: PrefKey.tintedIcons)
         let raw = d.string(forKey: PrefKey.iconStyle) ?? "original"
+        let intensity = CrystalGlassSpec.currentGlassIntensity
         let resolved: IconAppearanceStyle
         if tinted && pro {
             resolved = .tinted
@@ -846,6 +880,7 @@ private final class AppIconAppearanceState: ObservableObject {
         if style != resolved { style = resolved }
         if isPro != pro { isPro = pro }
         if tint != nextTint { tint = nextTint }
+        if glassIntensity != intensity { glassIntensity = intensity }
     }
 }
 
@@ -870,6 +905,7 @@ public struct LiveAppIconView: View {
             style: state.style,
             isPro: state.isPro,
             tintColor: state.tint,
+            glassIntensity: state.glassIntensity,
             useLiveGlass: useLiveGlass
         )
         .equatable()

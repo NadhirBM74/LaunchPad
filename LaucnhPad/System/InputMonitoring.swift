@@ -115,6 +115,7 @@ final class InputEventMonitor {
     private var pinchFingers = 0
     private var pinchInitialSpread: CGFloat = 0
     private var pinchInitialCentroid: CGPoint = .zero
+    private var pinchInteractiveBaseline: CGFloat = 0
     private var pinchFired = false
 
     // État du coin actif
@@ -233,16 +234,21 @@ final class InputEventMonitor {
         let mode = cachedPinchMode
         guard mode != .off else { return }
 
-        // Prise en charge directe de l'événement de pincement natif macOS (.magnify) comme secours infaillible
+        // Prise en compte directe de l'événement de pincement natif macOS (.magnify) uniquement s'il implique ≥ 3 doigts
+        // (évite tout conflit avec le zoom à 2 doigts dans Safari, Finder, Aperçu, etc.).
         if event.type == .magnify {
+            let touchingCount = event.touches(matching: .touching, in: nil).count
+            guard touchingCount >= 3 || (!gestureTapAvailable && cachedPinchMode.accepts(max(3, touchingCount))) else {
+                return
+            }
             let mag = event.magnification
             let visible = isLaunchpadVisible()
             if !interactiveActive && !pinchFired {
-                if !visible && mag < -0.035 {
+                if !visible && mag < -0.045 {
                     pinchFired = true
                     onAction?(.open)
                     return
-                } else if visible && (mag > 0.04 || mag < -0.05) {
+                } else if visible && (mag > 0.045 || mag < -0.055) {
                     pinchFired = true
                     onAction?(.close)
                     return
@@ -317,6 +323,7 @@ final class InputEventMonitor {
                 pinchFingers = count
                 pinchInitialSpread = spread
                 pinchInitialCentroid = centroid
+                pinchInteractiveBaseline = 0
                 pinchFired = false
                 return
             } else if count != pinchFingers {
@@ -329,15 +336,7 @@ final class InputEventMonitor {
         let driftDY = centroid.y - pinchInitialCentroid.y
         let driftSq = driftDX * driftDX + driftDY * driftDY
         let ratio = spread / pinchInitialSpread
-
-        // Détection complémentaire : balayage franc vers le haut à 3 doigts (geste alternatif intuitif)
-        let upwardDelta = centroid.y - pinchInitialCentroid.y
         let visible = isLaunchpadVisible()
-        if !interactiveActive, !pinchFired, !visible, count >= 3, upwardDelta > 0.12, ratio > 0.82, abs(centroid.x - pinchInitialCentroid.x) < 0.14 {
-            pinchFired = true
-            onAction?(.open)
-            return
-        }
 
         // Prise en compte directe de la sensibilité configurée par l'utilisateur
         let sensitivity = cachedSensitivity
@@ -347,11 +346,18 @@ final class InputEventMonitor {
         if !interactiveActive {
             guard !pinchFired else { return }
 
+            // Discrimination stricte : si les 3 doigts se déplacent en parallèle (Mission Control, Exposé, Spaces,
+            // ou glissement à 3 doigts) plutôt qu'un pincement radial autour du centroïde, ignorer totalement le geste.
+            let radialChange = abs(1.0 - ratio)
+            if count == 3 && driftSq > pow(max(0.038, radialChange * 1.28), 2) {
+                return
+            }
+
             let pinchInwardProgress = (1.0 - ratio) / openRange
             let spreadOutwardProgress = (ratio - 1.0) / closeRange
 
-            // Seuil d'initiation réactif et fluide
-            let initThreshold: CGFloat = 0.035 / sensitivity
+            // Seuil d'initiation très réactif dès qu'un vrai pincement radial démarre
+            let initThreshold: CGFloat = 0.024 / sensitivity
 
             let shouldStart: Bool
             let opening: Bool
@@ -365,7 +371,7 @@ final class InputEventMonitor {
                 if spreadOutwardProgress > initThreshold {
                     shouldStart = true
                     opening = false
-                } else if pinchInwardProgress > (initThreshold * 1.15) {
+                } else if pinchInwardProgress > (initThreshold * 1.12) {
                     shouldStart = true
                     opening = false
                 } else {
@@ -374,48 +380,38 @@ final class InputEventMonitor {
                 }
             }
 
-            // Tolérance de dérive équilibrée pour gestes naturels à 3 ou 4 doigts (distance au carré, zéro hypot)
-            guard shouldStart, driftSq < (0.38 * 0.38) else { return }
-
-            // Déclenchement direct rapide si le pincement est déjà bien engagé (> 16%)
-            if opening && pinchInwardProgress > 0.16 {
-                if interactiveBegin?(true) == true {
-                    interactiveActive = true
-                    interactiveOpening = true
-                    interactiveProgress = min(max(pinchInwardProgress, 0), 1)
-                    interactiveVelocity = 0.01
-                    interactiveUpdate?(interactiveProgress)
-                    scheduleInteractiveWatchdog()
-                    return
-                } else {
-                    pinchFired = true
-                    onAction?(.open)
-                    return
-                }
-            }
+            // Bloque toute translation globale incompatible avec un pincement
+            guard shouldStart, driftSq < (0.28 * 0.28) else { return }
 
             guard interactiveBegin?(opening) == true else { pinchFired = true; return }
             interactiveActive = true
             interactiveOpening = opening
+            pinchInteractiveBaseline = max(0, opening ? pinchInwardProgress : max(pinchInwardProgress, spreadOutwardProgress))
             interactiveProgress = 0
             interactiveVelocity = 0
+            interactiveUpdate?(opening ? 0 : 1)
+            scheduleInteractiveWatchdog()
+            return
         }
 
-        // Annulation si le geste se transforme en grand balayage (drift excessif)
-        if driftSq > (0.55 * 0.55) {
+        // Annulation si le geste devient un grand balayage latéral/vertical macOS (drift excessif)
+        if driftSq > (0.45 * 0.45) {
             finishInteractive(forceCancel: true)
             return
         }
 
-        let raw: CGFloat
+        let rawMagnitude: CGFloat
         if interactiveOpening {
-            raw = (1.0 - ratio) / openRange
+            rawMagnitude = (1.0 - ratio) / openRange
         } else {
-            raw = ratio < 1.0 ? (1.0 - ratio) / openRange : (ratio - 1.0) / closeRange
+            rawMagnitude = ratio < 1.0 ? (1.0 - ratio) / openRange : (ratio - 1.0) / closeRange
         }
 
-        let progress = min(max(raw, 0), 1)
-        interactiveVelocity = interactiveVelocity * 0.5 + (progress - interactiveProgress) * 0.5
+        // Progression continue depuis 0.0 à partir du seuil d'entrée (aucun saut visuel à l'ouverture)
+        let span = max(0.28, 1.0 - pinchInteractiveBaseline)
+        let normalized = (rawMagnitude - pinchInteractiveBaseline) / span
+        let progress = min(max(normalized, 0), 1)
+        interactiveVelocity = interactiveVelocity * 0.35 + (progress - interactiveProgress) * 0.65
         interactiveProgress = progress
 
         // Visibilité du Launchpad : 0 → 1 à l'ouverture, 1 → 0 à la fermeture
@@ -482,6 +478,7 @@ final class InputEventMonitor {
     private func resetPinch() {
         pinchFingers = 0
         pinchInitialSpread = 0
+        pinchInteractiveBaseline = 0
         pinchFired = false
     }
 
@@ -489,11 +486,27 @@ final class InputEventMonitor {
 
     private func startKeyTap() {
         guard Self.accessibilityTrusted else { return }
-        let mask = (CGEventMask(1) << CGEventMask(CGEventType.keyDown.rawValue)) | (CGEventMask(1) << CGEventMask(CGEventType.keyUp.rawValue))
+        // Écoute keyDown, keyUp ET NX_SYSDEFINED (type 14) pour intercepter F4 sans Fn (touche Spotlight/Launchpad Apple)
+        let mask = (CGEventMask(1) << CGEventMask(CGEventType.keyDown.rawValue))
+            | (CGEventMask(1) << CGEventMask(CGEventType.keyUp.rawValue))
+            | (CGEventMask(1) << 14)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-                                          eventsOfInterest: mask, callback: keyTapCallback, userInfo: refcon),
-              let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else { return }
+        let tap = CGEvent.tapCreate(
+            tap: .cghidEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: keyTapCallback,
+            userInfo: refcon
+        ) ?? CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: keyTapCallback,
+            userInfo: refcon
+        )
+        guard let tap, let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else { return }
         keyTap = tap
         keySource = source
         CGEvent.tapEnable(tap: tap, enable: true)
@@ -589,24 +602,57 @@ nonisolated private func gestureTapCallback(proxy: CGEventTapProxy, type: CGEven
     return Unmanaged.passUnretained(event)
 }
 
+nonisolated(unsafe) private var lastLaunchpadKeyToggleTime: CFAbsoluteTime = 0
+
+nonisolated private func triggerLaunchpadFromKeyTap(refcon: UnsafeMutableRawPointer) {
+    let now = CFAbsoluteTimeGetCurrent()
+    guard now - lastLaunchpadKeyToggleTime > 0.18 else { return }
+    lastLaunchpadKeyToggleTime = now
+    let monitor = Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue()
+    DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+            monitor.onAction?(.toggle)
+        }
+    }
+}
+
 nonisolated private func keyTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent, refcon: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
     guard let refcon else { return Unmanaged.passUnretained(event) }
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
         Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue().reenableKeyTap()
         return Unmanaged.passUnretained(event)
     }
+
+    let modifiersMask: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
+    guard event.flags.intersection(modifiersMask).isEmpty else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    // Touche média / fonction système Apple (NX_SYSDEFINED == 14) : intercepte F4 sans Fn (Launchpad / Spotlight)
+    if type.rawValue == 14 {
+        if let nsEvent = NSEvent(cgEvent: event), nsEvent.subtype.rawValue == 8 {
+            let keyCode = Int((nsEvent.data1 & 0xFFFF_0000) >> 16)
+            // 13 = NX_KEYTYPE_LAUNCH_PANEL, 131 = Launchpad Apple, 177 / 129 = Spotlight F4 Apple Silicon
+            if keyCode == 13 || keyCode == 131 || keyCode == 177 || keyCode == 129 {
+                let keyFlags = nsEvent.data1 & 0x0000_FFFF
+                let keyState = (keyFlags & 0xFF00) >> 8
+                let isRepeat = (keyFlags & 0x0001) != 0
+                if keyState == 0x0A && !isRepeat {
+                    triggerLaunchpadFromKeyTap(refcon: refcon)
+                }
+                return nil
+            }
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    // 131 = touche Launchpad des claviers Apple ; 118 = F4 standard sans modificateur.
-    guard keyCode == 131 || (keyCode == Int64(kVK_F4) && event.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift]).isEmpty) else {
+    // 131 = touche Launchpad, 177 / 129 = touche Spotlight F4 (sans Fn), 118 (kVK_F4) = F4 standard
+    guard keyCode == 131 || keyCode == 177 || keyCode == 129 || keyCode == Int64(kVK_F4) else {
         return Unmanaged.passUnretained(event)
     }
     if type == .keyDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-        let monitor = Unmanaged<InputEventMonitor>.fromOpaque(refcon).takeUnretainedValue()
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                monitor.onAction?(.toggle)
-            }
-        }
+        triggerLaunchpadFromKeyTap(refcon: refcon)
     }
-    return nil // la touche est consommée
+    return nil // Consomme keyDown et keyUp pour empêcher Spotlight de s'ouvrir
 }

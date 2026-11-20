@@ -174,34 +174,13 @@ struct AdminTestCenterView: View {
                     .frame(minWidth: 540)
             }
 
-            // Aperçu interactif du tutoriel en plein écran dans la fenêtre Admin
+            // Aperçu interactif du tutoriel en plein écran dans la fenêtre Admin (fermeture par Échap)
             if previewTutorial {
                 Color.black.opacity(0.65)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            previewTutorial = false
-                        }
-                    }
 
                 VStack {
-                    HStack {
-                        Spacer()
-                        Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                previewTutorial = false
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white.opacity(0.75))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 24)
-                        .padding(.top, 20)
-                    }
-
                     Spacer()
 
                     TutorialCardView(vm: nil, initialStepIndex: previewStep, onDismiss: {
@@ -1187,8 +1166,8 @@ private struct AdminUpdatesSectionView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("À jour (v1.2.26)") {
-                            updates.setDebugState(.upToDate(version: "1.2.26"))
+                        Button("À jour (v1.2.27)") {
+                            updates.setDebugState(.upToDate(version: "1.2.27"))
                             AdminManager.shared.log(category: "Update", message: "État défini sur .upToDate")
                             triggerFeedback("État UpdateManager : .upToDate")
                         }

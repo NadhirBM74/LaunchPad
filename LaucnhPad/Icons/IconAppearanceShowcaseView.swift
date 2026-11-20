@@ -7,6 +7,7 @@ struct IconAppearanceShowcaseView: View {
     @AppStorage(PrefKey.iconStyle) private var iconStyleRaw: String = "original"
     @AppStorage(PrefKey.tintedIcons) private var tintedIcons: Bool = false
     @AppStorage(PrefKey.tintedIconColor) private var tintedIconColor: String = "blue"
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity: Double = 0.85
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var locManager = LocalizationManager.shared
     @State private var feedbackMessage: String? = nil
@@ -228,9 +229,9 @@ struct IconAppearanceShowcaseView: View {
         } label: {
             HStack(spacing: 10) {
                 HStack(spacing: 5) {
-                    CustomAppIconView(kind: .keynote, style: .transparent, size: 32).equatable()
-                    CustomAppIconView(kind: .weather, style: .transparent, size: 32).equatable()
-                    CustomAppIconView(kind: .photos, style: .transparent, size: 32).equatable()
+                    CustomAppIconView(kind: .keynote, style: .transparent, size: 32, glassIntensity: liquidGlassIntensity).equatable()
+                    CustomAppIconView(kind: .weather, style: .transparent, size: 32, glassIntensity: liquidGlassIntensity).equatable()
+                    CustomAppIconView(kind: .photos, style: .transparent, size: 32, glassIntensity: liquidGlassIntensity).equatable()
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -313,7 +314,8 @@ struct IconAppearanceShowcaseView: View {
                     iconSize: 48,
                     isSelected: activeStyle == .dark,
                     isDarkBackground: false,
-                    isPro: licenseManager.isPro
+                    isPro: licenseManager.isPro,
+                    glassIntensity: liquidGlassIntensity
                 ) {
                     selectMode(.dark)
                 }
@@ -327,7 +329,8 @@ struct IconAppearanceShowcaseView: View {
                     iconSize: 48,
                     isSelected: activeStyle == .light,
                     isDarkBackground: false,
-                    isPro: licenseManager.isPro
+                    isPro: licenseManager.isPro,
+                    glassIntensity: liquidGlassIntensity
                 ) {
                     selectMode(.light)
                 }
@@ -341,7 +344,8 @@ struct IconAppearanceShowcaseView: View {
                     iconSize: 48,
                     isSelected: activeStyle == .tinted,
                     isDarkBackground: false,
-                    isPro: licenseManager.isPro
+                    isPro: licenseManager.isPro,
+                    glassIntensity: liquidGlassIntensity
                 ) {
                     selectMode(.tinted)
                 }
@@ -397,7 +401,8 @@ struct IconAppearanceShowcaseView: View {
                         iconSize: 44,
                         isSelected: activeStyle == .clearDark,
                         isDarkBackground: true,
-                        isPro: licenseManager.isPro
+                        isPro: licenseManager.isPro,
+                        glassIntensity: liquidGlassIntensity
                     ) {
                         selectMode(.clearDark)
                     }
@@ -411,7 +416,8 @@ struct IconAppearanceShowcaseView: View {
                         iconSize: 44,
                         isSelected: activeStyle == .frostedGlass,
                         isDarkBackground: true,
-                        isPro: licenseManager.isPro
+                        isPro: licenseManager.isPro,
+                        glassIntensity: liquidGlassIntensity
                     ) {
                         selectMode(.frostedGlass)
                     }
@@ -425,7 +431,8 @@ struct IconAppearanceShowcaseView: View {
                         iconSize: 44,
                         isSelected: activeStyle == .clearLiquid,
                         isDarkBackground: true,
-                        isPro: licenseManager.isPro
+                        isPro: licenseManager.isPro,
+                        glassIntensity: liquidGlassIntensity
                     ) {
                         selectMode(.clearLiquid)
                     }
@@ -484,6 +491,7 @@ private struct IconShowcaseRowButton: View, Equatable {
     let isSelected: Bool
     let isDarkBackground: Bool
     let isPro: Bool
+    let glassIntensity: Double
     let action: () -> Void
 
     static func == (lhs: IconShowcaseRowButton, rhs: IconShowcaseRowButton) -> Bool {
@@ -493,6 +501,7 @@ private struct IconShowcaseRowButton: View, Equatable {
             && lhs.isSelected == rhs.isSelected
             && lhs.isDarkBackground == rhs.isDarkBackground
             && lhs.isPro == rhs.isPro
+            && lhs.glassIntensity == rhs.glassIntensity
             && (lhs.style != .tinted || lhs.tintColor == rhs.tintColor)
     }
 
@@ -505,7 +514,8 @@ private struct IconShowcaseRowButton: View, Equatable {
                         style: style,
                         tintColor: tintColor,
                         size: iconSize,
-                        isPro: isPro
+                        isPro: isPro,
+                        glassIntensity: glassIntensity
                     )
                     .equatable()
                 }

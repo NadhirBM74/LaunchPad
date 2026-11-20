@@ -548,39 +548,109 @@ struct VelvetAuraCardBackground: View, Equatable {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let aura = VelvetAuraTheme(theme: theme)
+        let shadowColor = isSelected ? aura.accent.opacity(theme == .light ? 0.14 : 0.22) : aura.cardShadowColor
+        let shadowRadius: CGFloat = isSelected ? 10 : (theme == .light ? 4 : 5)
+        let shadowY: CGFloat = isSelected ? 3 : 2
 
-        Group {
+        ZStack {
             switch theme {
             case .dark:
-                shape.fill(
-                    isSelected
-                        ? Color(red: 0.125, green: 0.102, blue: 0.192)
-                        : (isHovered ? Color(red: 0.105, green: 0.094, blue: 0.155) : Color(red: 0.086, green: 0.078, blue: 0.129))
-                )
-            case .light:
-                shape.fill(
-                    isSelected
-                        ? Color.white
-                        : (isHovered ? Color.white.opacity(0.98) : Color.white.opacity(0.92))
-                )
-            case .liquidGlass:
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isSelected ? 0.13 : (isHovered ? 0.095 : 0.068)),
-                            Color.white.opacity(isSelected ? 0.06 : (isHovered ? 0.04 : 0.024))
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                shape
+                    .fill(
+                        isSelected
+                            ? Color(red: 0.125, green: 0.102, blue: 0.192)
+                            : (isHovered ? Color(red: 0.105, green: 0.094, blue: 0.155) : Color(red: 0.086, green: 0.078, blue: 0.129))
                     )
-                )
+                    .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
+            case .light:
+                shape
+                    .fill(
+                        isSelected
+                            ? Color.white
+                            : (isHovered ? Color.white.opacity(0.98) : Color.white.opacity(0.92))
+                    )
+                    .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
+            case .liquidGlass:
+                shape
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isSelected ? 0.13 : (isHovered ? 0.095 : 0.068)),
+                                Color.white.opacity(isSelected ? 0.06 : (isHovered ? 0.04 : 0.024))
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
             }
         }
-        .shadow(
-            color: isSelected ? aura.accent.opacity(theme == .light ? 0.14 : 0.24) : aura.cardShadowColor,
-            radius: isSelected ? 12 : (theme == .light ? 6 : 8),
-            y: isSelected ? 4 : 3
-        )
+    }
+}
+
+/// Pilule universelle « ESC Appuyez sur Échap pour quitter » partagée par tous les menus et modales
+struct VelvetAuraEscapePill: View {
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
+    @ObservedObject private var locManager = LocalizationManager.shared
+
+    var body: some View {
+        let _ = locManager.effectiveLanguageCode
+        let aura = VelvetAuraTheme(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+        HStack(spacing: 6) {
+            Text("ESC")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(aura.primaryText)
+            Text(loc("settings.esc_hint"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(aura.secondaryText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(aura.pillFill, in: Capsule())
+        .overlay(Capsule().strokeBorder(aura.pillBorder, lineWidth: 1))
+        .fixedSize(horizontal: true, vertical: true)
+        .accessibilityLabel(loc("settings.esc_a11y"))
+    }
+}
+
+/// Enveloppe modale unifiée Aura Nocturne Velvet (4C) réactive au thème (Liquid Glass / Sombre / Clair)
+struct VelvetAuraModalContainer<Content: View>: View {
+    var cornerRadius: CGFloat = 22
+    @ViewBuilder let content: (VelvetAuraTheme) -> Content
+
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+    @AppStorage(PrefKey.liquidGlassIntensity) private var liquidGlassIntensity = 0.85
+
+    var body: some View {
+        let aura = VelvetAuraTheme(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        content(aura)
+            .background {
+                ZStack {
+                    shape
+                        .fill(Color.black.opacity(0.001))
+                        .shadow(
+                            color: backgroundStyle == .light
+                                ? Color(red: 0.30, green: 0.11, blue: 0.58).opacity(0.18)
+                                : Color.black.opacity(0.58),
+                            radius: backgroundStyle == .light ? 26 : 38,
+                            x: 0,
+                            y: 18
+                        )
+
+                    VelvetAuraWindowBackground(theme: backgroundStyle, liquidGlassIntensity: liquidGlassIntensity)
+                        .equatable()
+                        .clipShape(shape)
+
+                    VelvetAuraWindowOverlay(theme: backgroundStyle, cornerRadius: cornerRadius)
+                        .equatable()
+                }
+            }
+            .environment(\.colorScheme, backgroundStyle == .light ? .light : .dark)
+            .environment(\.velvetAuraTheme, aura)
     }
 }
 

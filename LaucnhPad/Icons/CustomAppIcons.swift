@@ -242,6 +242,7 @@ public struct CustomAppIconView: View, Equatable {
     public var tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0)
     public var size: CGFloat = 128
     public var isPro: Bool = false
+    public var glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
 
     private var usesCrystalPreview: Bool {
         style.usesCrystalGlassBackdrop(isPro: isPro || style.requiresPro)
@@ -252,13 +253,15 @@ public struct CustomAppIconView: View, Equatable {
         style: IconAppearanceStyle = .dark,
         tintColor: Color = Color(red: 0.12, green: 0.56, blue: 1.0),
         size: CGFloat = 128,
-        isPro: Bool = false
+        isPro: Bool = false,
+        glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
     ) {
         self.kind = kind
         self.style = style
         self.tintColor = tintColor
         self.size = size
         self.isPro = isPro
+        self.glassIntensity = glassIntensity
     }
 
     public static func == (lhs: CustomAppIconView, rhs: CustomAppIconView) -> Bool {
@@ -266,6 +269,7 @@ public struct CustomAppIconView: View, Equatable {
             && lhs.style == rhs.style
             && lhs.size == rhs.size
             && lhs.isPro == rhs.isPro
+            && lhs.glassIntensity == rhs.glassIntensity
             && (lhs.style != .tinted || lhs.tintColor == rhs.tintColor)
     }
 
@@ -277,7 +281,7 @@ public struct CustomAppIconView: View, Equatable {
         let s = bodySize
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let crystalSpec: CrystalGlassSpec? = (usesCrystalPreview || style.isTransparentGlassStyle)
-            ? CrystalGlassSpec.resolve(style: style, tintColor: tintColor)
+            ? CrystalGlassSpec.resolve(style: style, tintColor: tintColor, glassIntensity: glassIntensity)
             : nil
 
         ZStack {
@@ -1700,164 +1704,168 @@ public struct AppCustomIconPickerSheet: View {
         self._isPresented = isPresented
     }
 
+    @AppStorage(PrefKey.backgroundStyle) private var backgroundStyle: BackgroundStyle = .liquidGlass
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                LiveAppIconView(image: previewImage ?? IconCache.shared.icon(for: appID), size: 56)
+        VelvetAuraModalContainer(cornerRadius: 22) { aura in
+            VStack(alignment: .leading, spacing: 16) {
+                // En-tête unifié 4C avec pilule ESC (aucun bouton Fermer)
+                HStack(spacing: 12) {
+                    LiveAppIconView(image: previewImage ?? IconCache.shared.icon(for: appID), size: 54)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(loc("icon_picker.title", appName))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text(loc("icon_picker.subtitle"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.68))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("icon_picker.title", appName))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(aura.primaryText)
+                            .lineLimit(1)
+                        Text(loc("icon_picker.subtitle"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(aura.secondaryText)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VelvetAuraEscapePill()
                 }
-                Spacer()
-                Button {
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(loc("icon_picker.close"))
-            }
 
-            Divider().background(Color.white.opacity(0.14))
+                Rectangle()
+                    .fill(aura.divider)
+                    .frame(height: 1)
 
-            // Option 1 : Importer un fichier image
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(loc("icon_picker.step1"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(loc("icon_picker.formats"))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-                Spacer()
-                Button {
-                    chooseImageFromDisk()
-                } label: {
-                    Label(loc("icon_picker.choose_image"), systemImage: "photo.badge.plus")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.white, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(12)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            // Option 2 : Créer une icône avec symbole et couleur d'arrière-plan
-            VStack(alignment: .leading, spacing: 10) {
-                Text(loc("icon_picker.step2"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-
-                HStack(spacing: 8) {
-                    ForEach(Self.colorPalette, id: \.hex) { entry in
-                        let isSelected = selectedColorHex == entry.hex
-                        let label = loc(entry.labelKey)
-                        Button {
-                            selectedColorHex = entry.hex
-                        } label: {
-                            Circle()
-                                .fill(entry.color)
-                                .frame(width: 24, height: 24)
-                                .overlay(
-                                    Circle().strokeBorder(isSelected ? Color.white : Color.white.opacity(0.25), lineWidth: isSelected ? 2.5 : 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .help(label)
-                        .accessibilityLabel(loc("icon_picker.color_a11y", label))
+                // Option 1 : Importer une image sur mesure (carte Velvet 4C)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(loc("icon_picker.step1"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(aura.primaryText)
+                        Text(loc("icon_picker.formats"))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(aura.secondaryText)
                     }
                     Spacer()
                     Button {
-                        customManager.setCustomSymbol(symbol: selectedSymbol, colorHex: selectedColorHex, for: appID)
-                        previewImage = IconCache.shared.icon(for: appID)
-                        statusFeedback = loc("icon_picker.applied_symbol")
+                        chooseImageFromDisk()
                     } label: {
-                        Text(loc("icon_picker.apply_symbol"))
-                            .font(.system(size: 12, weight: .semibold))
+                        Label(loc("icon_picker.choose_image"), systemImage: "photo.badge.plus")
+                            .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.accentColor, in: Capsule())
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(aura.accentGradient, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.24), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(14)
+                .background(VelvetAuraCardBackground(theme: backgroundStyle, cornerRadius: 14))
+                .overlay(VelvetAuraCardOverlay(theme: backgroundStyle, cornerRadius: 14))
 
-                ScrollView(.horizontal, showsIndicators: false) {
+                // Option 2 : Créer une icône avec symbole et couleur d'arrière-plan (carte Velvet 4C)
+                VStack(alignment: .leading, spacing: 11) {
+                    Text(loc("icon_picker.step2"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(aura.primaryText)
+
                     HStack(spacing: 8) {
-                        ForEach(popularSymbols, id: \.self) { sym in
-                            let isChosen = selectedSymbol == sym
+                        ForEach(Self.colorPalette, id: \.hex) { entry in
+                            let isSelected = selectedColorHex == entry.hex
+                            let label = loc(entry.labelKey)
                             Button {
-                                selectedSymbol = sym
+                                selectedColorHex = entry.hex
                             } label: {
-                                Image(systemName: sym)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(isChosen ? .black : .white.opacity(0.85))
-                                    .frame(width: 34, height: 34)
-                                    .background(isChosen ? Color.white : Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                Circle()
+                                    .fill(entry.color)
+                                    .frame(width: 24, height: 24)
+                                    .overlay(
+                                        Circle().strokeBorder(isSelected ? aura.primaryText : aura.pillBorder, lineWidth: isSelected ? 2.5 : 1)
+                                    )
+                                    .scaleEffect(isSelected ? 1.12 : 1.0)
                             }
                             .buttonStyle(.plain)
+                            .help(label)
+                            .accessibilityLabel(loc("icon_picker.color_a11y", label))
+                        }
+                        Spacer()
+                        Button {
+                            customManager.setCustomSymbol(symbol: selectedSymbol, colorHex: selectedColorHex, for: appID)
+                            previewImage = IconCache.shared.icon(for: appID)
+                            statusFeedback = loc("icon_picker.applied_symbol")
+                        } label: {
+                            Text(loc("icon_picker.apply_symbol"))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 7)
+                                .background(aura.accentGradient, in: Capsule())
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.9))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(popularSymbols, id: \.self) { sym in
+                                let isChosen = selectedSymbol == sym
+                                Button {
+                                    selectedSymbol = sym
+                                } label: {
+                                    Image(systemName: sym)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(isChosen ? .white : aura.primaryText.opacity(0.85))
+                                        .frame(width: 34, height: 34)
+                                        .background(
+                                            isChosen ? AnyShapeStyle(aura.accentGradient) : AnyShapeStyle(aura.pillFill),
+                                            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                                .strokeBorder(isChosen ? aura.accent : aura.pillBorder, lineWidth: isChosen ? 1.2 : 0.8)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(14)
+                .background(VelvetAuraCardBackground(theme: backgroundStyle, cornerRadius: 14))
+                .overlay(VelvetAuraCardOverlay(theme: backgroundStyle, cornerRadius: 14))
+
+                // Pied de page : Réinitialiser + Feedback (fermeture uniquement par Échap)
+                if customManager.hasOverride(for: appID) || statusFeedback != nil {
+                    HStack {
+                        if customManager.hasOverride(for: appID) {
+                            Button(role: .destructive) {
+                                customManager.removeOverride(for: appID)
+                                previewImage = IconCache.shared.icon(for: appID)
+                                statusFeedback = loc("icon_picker.restored")
+                            } label: {
+                                Label(loc("menu.restore_icon"), systemImage: "arrow.counterclockwise")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.red.opacity(0.92))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.red.opacity(0.12), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer()
+                        if let statusFeedback {
+                            HStack(spacing: 5) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12))
+                                Text(statusFeedback)
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(.green)
                         }
                     }
                 }
             }
-            .padding(12)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            // Pied de page : Réinitialiser + Fermer
-            HStack {
-                if customManager.hasOverride(for: appID) {
-                    Button(role: .destructive) {
-                        customManager.removeOverride(for: appID)
-                        previewImage = IconCache.shared.icon(for: appID)
-                        statusFeedback = loc("icon_picker.restored")
-                    } label: {
-                        Label(loc("menu.restore_icon"), systemImage: "arrow.counterclockwise")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.red.opacity(0.9))
-                    }
-                    .buttonStyle(.plain)
-                }
-                if let statusFeedback {
-                    Text(statusFeedback)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.green)
-                }
-                Spacer()
-                Button {
-                    isPresented = false
-                } label: {
-                    Text(loc("common.done"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 7)
-                        .background(Color.white.opacity(0.16), in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(22)
+            .frame(width: 530)
         }
-        .padding(22)
-        .frame(width: 500)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(red: 0.10, green: 0.11, blue: 0.15).opacity(0.96))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
-                )
-        )
-        .shadow(color: .black.opacity(0.55), radius: 30, y: 14)
         .onAppear { previewImage = IconCache.shared.icon(for: appID) }
         .onChange(of: customManager.overrides[appID]) { _, _ in
             previewImage = IconCache.shared.icon(for: appID)

@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.26",
-  "name": "LaunchPad v1.2.26",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.26",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.26\n\n- ⚡ **Fluidité 120 FPS & Balayage Zéro Saccade** : Optimisation complète du pipeline de rendu SwiftUI et Metal, préchargement des pages adjacentes et découplage des ombres GPU pour des transitions d'une fluidité exemplaire, sans aucun compromis visuel.\n- 🧠 **Mémoire RAM & Cache d'Icônes Optimisés** : Enveloppe Retina zéro-copie, cache mémoire borné, chargement disque asynchrone prioritaire et accélération du rendu d'icônes 512×512 pour diviser l'empreinte mémoire de moitié.\n- 🔋 **Veille Silencieuse & CPU Quasi-Nul en Arrière-Plan** : Démontage automatique des Réglages à la fermeture, désactivation du flou GPU hors écran, filtrage clavier sur thread dédié et suspension intelligente des services Météo, Musique et Calendrier.\n- 🚀 **Démarrage & Réouverture Éclair** : Différé des initialisations non critiques, recherche pré-indexée, localisation sans verrou sur le fil principal et panneau maintenu prêt pour un affichage quasi instantané.\n- 🛠️ **Build Release Haute Performance (ThinLTO)** : Activation de l'optimisation inter-procédurale et de l'élimination du code mort en production, tout en préservant intégralement le design, les animations et l'ensemble de vos fonctionnalités.",
+  "tag_name": "v1.2.27",
+  "name": "LaunchPad v1.2.27",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.27",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.27\n\n- 💧 **Liquid Glass & Barre de Recherche Cristal** : Le curseur de transparence Liquid Glass pilote désormais en direct l'intensité du verre de toutes les icônes, et la barre de recherche adopte le même rendu cristal (avec 4 styles au choix dans les Réglages).\n- 🎨 **Design Unifié Aura Nocturne Velvet** : Les fenêtres de personnalisation d'icône et de désinstallation complète adoptent désormais l'identité veloutée et réactive aux thèmes des Réglages et des Widgets, accompagnées d'un nouveau comparatif Licence visuel et d'un tutoriel interactif entièrement refait.\n- ⚡ **Défilement Molette 120 FPS & Ouverture 3 Doigts / F4** : Élimination des saccades à la molette dans les Réglages et les Widgets, blocage strict du changement de page derrière les menus, geste 3 doigts isolé des raccourcis macOS et prise en charge directe de la touche F4 sans Fn.\n- ⌨️ **Navigation Épurée Par Échap** : Suppression des boutons de fermeture superflus dans tous les menus pour une fermeture homogène via la touche Échap avec indicateur visuel intégré.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.26.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.26/LaunchPad-v1.2.26.zip"
+      "name": "LaunchPad-v1.2.27.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.27/LaunchPad-v1.2.27.zip"
     },
     {
-      "name": "LaunchPad-v1.2.26.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.26/LaunchPad-v1.2.26.dmg"
+      "name": "LaunchPad-v1.2.27.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.27/LaunchPad-v1.2.27.dmg"
     }
   ]
 }

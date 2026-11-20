@@ -342,7 +342,7 @@ final class LaunchpadWindowController: NSObject {
                 self.viewModel.handleFlags(event.modifierFlags)
                 return event
             case .scrollWheel:
-                guard event.window === self.panel else { return event }
+                guard event.window === self.panel, !self.viewModel.isAnyMenuOrModalOpen else { return event }
                 return self.viewModel.handleScroll(event) ? nil : event
             default:
                 return event

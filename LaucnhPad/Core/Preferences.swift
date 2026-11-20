@@ -72,19 +72,22 @@ nonisolated enum PrefKey: Sendable {
     static let weatherLongitude = "LaunchpadWeatherLongitude"
     static let weatherUnit = "LaunchpadWeatherUnit"
     static let weatherCachedSnapshot = "LaunchpadWeatherCachedSnapshot"
+    static let searchBarStyle = "LaunchpadSearchBarStyle"
+    static let tutorialVisualStyle = "LaunchpadTutorialVisualStyle"
+    static let licenseComparisonStyle = "LaunchpadLicenseComparisonStyle"
 
     /// Clés exportées dans les sauvegardes.
     static let backupKeys: [String] = [
-        columns, rows, backgroundOpacity, backdropOpacity, backgroundStyle, iconScale, showLabels, reduceMotion,
-        scrollSensitivity, settingsOpacity, pinchMode, hotCorner, interceptF4, hotKeyEnabled,
-        hotKeyCode, hotKeyModifiers, hotKeyDisplay, screenTarget, returnToFirstPage,
+        columns, rows, backgroundOpacity, backdropOpacity, backgroundStyle, iconScale, liquidGlassIntensity,
+        showLabels, reduceMotion, scrollSensitivity, settingsOpacity, pinchMode, hotCorner, interceptF4,
+        hotKeyEnabled, hotKeyCode, hotKeyModifiers, hotKeyDisplay, screenTarget, returnToFirstPage,
         showMenuBarIcon, showDockIcon, showHiddenInSearch, showRunningIndicator, customSources,
         reorganizeRule, folderPlacement, sortFolderContents, iconStyle, displayMode, hideDock, appLogo,
         isProUnlocked, licenseKey, tintedIcons, tintedIconColor, showFavoritesBar, favoriteAppIDs, customTiles,
         appLanguage, showWidgetBanner, widgetBannerCollapsed, widgetClockEnabled, widgetSystemEnabled,
         widgetQuickNoteEnabled, widgetQuickNoteText, customWidgetsData, widgetPosition, widgetGlowColor,
         widgetCornerRadius, widgetGlassOpacity, weatherLocationMode, weatherCityName, weatherCountryName,
-        weatherLatitude, weatherLongitude, weatherUnit,
+        weatherLatitude, weatherLongitude, weatherUnit, searchBarStyle, tutorialVisualStyle, licenseComparisonStyle,
     ]
 }
 
@@ -243,6 +246,60 @@ enum FolderPlacement: String, CaseIterable, Identifiable {
     var title: String { loc("placement.\(rawValue)") }
 }
 
+/// Variantes Liquid Glass de la barre de recherche assorties aux icônes
+nonisolated enum SearchBarVisualStyle: String, CaseIterable, Identifiable, Sendable {
+    case crystalIcon = "crystalIcon"     // V1 : Verre Cristal identique aux icônes + biseau spéculaire
+    case prismAura = "prismAura"         // V2 : Capsule Prisme Aura Velvet 4C + badge ⌘F
+    case pureMinimal = "pureMinimal"     // V3 : Pilule Ultra-Clair minimaliste avec pastille loupe
+    case doubleGlass = "doubleGlass"     // V4 : Double Paroi Vitrail façon tuile d'icône allongée
+
+    nonisolated var id: String { rawValue }
+    nonisolated var shortTitle: String {
+        switch self {
+        case .crystalIcon: return "V1 • Cristal Icône"
+        case .prismAura: return "V2 • Prisme Aura"
+        case .pureMinimal: return "V3 • Ultra-Clair"
+        case .doubleGlass: return "V4 • Double Verre"
+        }
+    }
+}
+
+/// Variantes visuelles du Tutoriel interactif
+nonisolated enum TutorialVisualStyle: String, CaseIterable, Identifiable, Sendable {
+    case studioAura = "studioAura"             // V1 : Studio Aura 4C (Sidebar étapes + Scène live)
+    case cinemaPanoramique = "cinemaPanoramique" // V2 : Cinéma Panoramique + pilules numérotées
+    case bentoShowcase = "bentoShowcase"       // V3 : Bento Grid Démonstrateur + fiches raccourcis
+    case spotlightMinimal = "spotlightMinimal" // V4 : Carrousel Spotlight Minimal
+
+    nonisolated var id: String { rawValue }
+    nonisolated var shortTitle: String {
+        switch self {
+        case .studioAura: return "V1 • Studio 4C"
+        case .cinemaPanoramique: return "V2 • Panoramique"
+        case .bentoShowcase: return "V3 • Bento"
+        case .spotlightMinimal: return "V4 • Spotlight"
+        }
+    }
+}
+
+/// Variantes visuelles du Comparatif des fonctionnalités (Réglages > Licence)
+nonisolated enum LicenseComparisonStyle: String, CaseIterable, Identifiable, Sendable {
+    case bentoGrid = "bentoGrid"         // V1 : Grille Bento visuelle avec pastilles icônes & badges Pro
+    case dualColumns = "dualColumns"     // V2 : Tableau Dual-Column Gratuit vs Pro
+    case categoryCards = "categoryCards" // V3 : Cartes Catégories (Design, Productivité, Sécurité)
+    case showcaseRibbon = "showcaseRibbon" // V4 : Ruban Showcase + liste cristal icônée
+
+    nonisolated var id: String { rawValue }
+    nonisolated var shortTitle: String {
+        switch self {
+        case .bentoGrid: return "V1 • Bento"
+        case .dualColumns: return "V2 • Colonnes"
+        case .categoryCards: return "V3 • Catégories"
+        case .showcaseRibbon: return "V4 • Showcase"
+        }
+    }
+}
+
 enum Prefs {
     static var defaults: UserDefaults { .standard }
 
@@ -336,6 +393,9 @@ enum Prefs {
             PrefKey.widgetQuickNoteText: "",
             PrefKey.weatherLocationMode: "auto",
             PrefKey.weatherUnit: Locale.current.measurementSystem == .metric ? "C" : "F",
+            PrefKey.searchBarStyle: SearchBarVisualStyle.crystalIcon.rawValue,
+            PrefKey.tutorialVisualStyle: TutorialVisualStyle.studioAura.rawValue,
+            PrefKey.licenseComparisonStyle: LicenseComparisonStyle.bentoGrid.rawValue,
         ])
     }
 

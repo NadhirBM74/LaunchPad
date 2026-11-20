@@ -78,6 +78,7 @@ struct PremiumFolderIconView: View, Equatable {
     var resolvedIconStyle: IconAppearanceStyle = Self.defaultIconStyle()
     var resolvedIsPro: Bool = LicenseManager.shared.isPro
     var resolvedTintColor: Color = IconCache.shared.activeTintColor
+    var glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
 
     static func == (lhs: PremiumFolderIconView, rhs: PremiumFolderIconView) -> Bool {
         lhs.style == rhs.style
@@ -87,6 +88,7 @@ struct PremiumFolderIconView: View, Equatable {
             && lhs.isJiggling == rhs.isJiggling
             && lhs.resolvedIconStyle == rhs.resolvedIconStyle
             && lhs.resolvedIsPro == rhs.resolvedIsPro
+            && lhs.glassIntensity == rhs.glassIntensity
             && (lhs.resolvedIconStyle != .tinted || lhs.resolvedTintColor == rhs.resolvedTintColor)
             && lhs.icons.count == rhs.icons.count
             && zip(lhs.icons, rhs.icons).allSatisfy(===)
@@ -138,7 +140,8 @@ struct PremiumFolderIconView: View, Equatable {
             tintColor: resolvedTintColor,
             isFolder: true,
             customFolderColor: explicitCustomColor,
-            isPureLightPreset: isPureLightPreset
+            isPureLightPreset: isPureLightPreset,
+            glassIntensity: glassIntensity
         )
     }
 
@@ -179,7 +182,8 @@ struct PremiumFolderIconView: View, Equatable {
                 mini: mini,
                 iconTheme: iconTheme,
                 resolvedIsPro: resolvedIsPro,
-                resolvedTintColor: resolvedTintColor
+                resolvedTintColor: resolvedTintColor,
+                glassIntensity: glassIntensity
             )
             .equatable()
 
@@ -679,6 +683,7 @@ private struct FolderMiniGridView: View, Equatable {
     let iconTheme: IconAppearanceStyle
     let resolvedIsPro: Bool
     let resolvedTintColor: Color
+    let glassIntensity: Double
 
     static func == (lhs: FolderMiniGridView, rhs: FolderMiniGridView) -> Bool {
         lhs.customSymbol == rhs.customSymbol
@@ -687,6 +692,7 @@ private struct FolderMiniGridView: View, Equatable {
             && lhs.mini == rhs.mini
             && lhs.iconTheme == rhs.iconTheme
             && lhs.resolvedIsPro == rhs.resolvedIsPro
+            && lhs.glassIntensity == rhs.glassIntensity
             && (lhs.iconTheme != .tinted || lhs.resolvedTintColor == rhs.resolvedTintColor)
             && lhs.icons.count == rhs.icons.count
             && zip(lhs.icons, rhs.icons).allSatisfy(===)
@@ -710,6 +716,7 @@ private struct FolderMiniGridView: View, Equatable {
                                     style: iconTheme,
                                     isPro: resolvedIsPro,
                                     tintColor: iconTheme == .tinted ? resolvedTintColor : nil,
+                                    glassIntensity: glassIntensity,
                                     useLiveGlass: false
                                 )
                                 .equatable()
@@ -730,6 +737,7 @@ private struct FolderMiniGridView: View, Equatable {
                                         style: iconTheme,
                                         isPro: resolvedIsPro,
                                         tintColor: iconTheme == .tinted ? resolvedTintColor : nil,
+                                        glassIntensity: glassIntensity,
                                         useLiveGlass: false
                                     )
                                     .equatable()
@@ -846,72 +854,55 @@ struct FolderAppPickerSheet: View {
         let tintColor = IconCache.shared.activeTintColor
         let iconsVer = store.iconsVersion
 
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(loc("folder.manage_title", folder.name), systemImage: "folder.badge.gearshape")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Button {
-                    withAnimation(AppleDesignSystem.Springs.snappy) {
-                        isPresented = false
-                    }
-                } label: {
-                    Text(loc("common.done"))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(Color.white, in: Capsule())
+        VelvetAuraModalContainer(cornerRadius: 20) { aura in
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label(loc("folder.manage_title", folder.name), systemImage: "folder.badge.gearshape")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(aura.primaryText)
+                    Spacer()
+                    VelvetAuraEscapePill()
                 }
-                .buttonStyle(.plain)
-            }
 
-            // Champ de recherche rapide
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.6))
-                TextField(loc("grid.search_placeholder"), text: $filterText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                // Champ de recherche rapide
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12))
+                        .foregroundStyle(aura.secondaryText)
+                    TextField(loc("grid.search_placeholder"), text: $filterText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(aura.primaryText)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(aura.pillFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(aura.pillBorder, lineWidth: 0.8))
 
-            ScrollView(.vertical, showsIndicators: true) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 8)], spacing: 8) {
-                    ForEach(filteredEntries) { entry in
-                        let inFolder = folderAppSet.contains(entry.id)
-                        FolderAppPickerRowView(
-                            entry: entry,
-                            inFolder: inFolder,
-                            iconStyle: iconStyle,
-                            isPro: isPro,
-                            tintColor: tintColor,
-                            iconsVersion: iconsVer
-                        ) {
-                            withAnimation(AppleDesignSystem.Springs.snappy) {
-                                store.toggleAppInFolder(entry.id, folderID: folder.id)
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 8)], spacing: 8) {
+                        ForEach(filteredEntries) { entry in
+                            let inFolder = folderAppSet.contains(entry.id)
+                            FolderAppPickerRowView(
+                                entry: entry,
+                                inFolder: inFolder,
+                                iconStyle: iconStyle,
+                                isPro: isPro,
+                                tintColor: tintColor,
+                                iconsVersion: iconsVer
+                            ) {
+                                withAnimation(AppleDesignSystem.Springs.snappy) {
+                                    store.toggleAppInFolder(entry.id, folderID: folder.id)
+                                }
                             }
+                            .equatable()
                         }
-                        .equatable()
                     }
                 }
+                .frame(maxHeight: 220)
             }
-            .frame(maxHeight: 220)
+            .padding(16)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(red: 0.08, green: 0.09, blue: 0.12).opacity(0.95))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
-                )
-        )
         .onAppear { rebuildSortedApps() }
         .onChange(of: store.catalog.count) { _, _ in rebuildSortedApps() }
         .onChange(of: store.hidden.count) { _, _ in rebuildSortedApps() }

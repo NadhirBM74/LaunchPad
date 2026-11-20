@@ -176,16 +176,22 @@ final class LaunchpadViewModel: ObservableObject {
     let settingsChrome = SettingsChrome()
 
     private var cachedTileModels: [String: TileModel] = [:]
-    private var cachedTileState: (rev: Int, icons: Int, running: Int, showRun: Bool, lang: String, tint: Color?)?
+    private var cachedTileState: (rev: Int, icons: Int, running: Int, showRun: Bool, lang: String, tint: Color?, glass: Double)?
 
     /// Cache O(1) des modèles de tuiles pour éviter de reconstruire titres, états et aperçus de dossiers à 120 Hz.
-    func cachedTileModel(for item: LayoutItem, showRunning: Bool, tint: Color?) -> TileModel {
+    func cachedTileModel(
+        for item: LayoutItem,
+        showRunning: Bool,
+        tint: Color?,
+        glassIntensity: Double? = nil
+    ) -> TileModel {
         let lang = LocalizationManager.shared.effectiveLanguageCode
         let runRev = showRunning ? store.runningRevision : -1
-        let state = (rev: store.revision, icons: store.iconsVersion, running: runRev, showRun: showRunning, lang: lang, tint: tint)
+        let glass = max(0.05, min(1.0, glassIntensity ?? CrystalGlassSpec.currentGlassIntensity))
+        let state = (rev: store.revision, icons: store.iconsVersion, running: runRev, showRun: showRunning, lang: lang, tint: tint, glass: glass)
         if let prev = cachedTileState {
             let coreChanged = prev.rev != state.rev || prev.icons != state.icons ||
-                prev.showRun != state.showRun || prev.lang != state.lang || prev.tint != state.tint
+                prev.showRun != state.showRun || prev.lang != state.lang || prev.tint != state.tint || prev.glass != state.glass
             if coreChanged {
                 cachedTileModels.removeAll(keepingCapacity: true)
                 cachedTileState = state
@@ -209,7 +215,7 @@ final class LaunchpadViewModel: ObservableObject {
         if let existing = cachedTileModels[item.id] {
             return existing
         }
-        var built = TileModel.make(item, store: store, showRunning: showRunning)
+        var built = TileModel.make(item, store: store, showRunning: showRunning, glassIntensity: glass)
         built.tintColor = tint
         cachedTileModels[item.id] = built
         return built
@@ -274,6 +280,8 @@ final class LaunchpadViewModel: ObservableObject {
     }
     @Published var showWeatherCityPicker: Bool = false
     @Published var showTutorial: Bool = false
+    @Published var folderShowingCustomizer: Bool = false
+    @Published var folderShowingAppPicker: Bool = false
     var tutorialStepIndex: Int = 0
     @Published private(set) var favoritesRevision = 0
     @Published private(set) var toast: String?
@@ -608,6 +616,18 @@ final class LaunchpadViewModel: ObservableObject {
     var rows: Int { metrics?.rows ?? Prefs.rows }
 
     var isPresentingModal: Bool { dialog != nil || rename != nil || uninstall != nil || customTileModal != nil || showTutorial || PermissionManager.shared.showPermissionCard }
+
+    /// Vrai dès qu'un menu, réglage, dossier ou modale quelconque est ouvert (bloque tout changement de page en arrière-plan).
+    var isAnyMenuOrModalOpen: Bool {
+        isSettingsOpen
+            || openFolderID != nil
+            || showWidgetGallery
+            || showWeatherCityPicker
+            || isPresentingModal
+            || CustomIconManager.shared.activePickerAppID != nil
+            || AdminTestWindowController.isSharedVisible
+    }
+
     var showsDeleteBadges: Bool { (editing || optionHeld) && !isSearching }
 
     var overlayFolder: FolderData? {
@@ -880,20 +900,20 @@ final class LaunchpadViewModel: ObservableObject {
     }
 
     func backgroundDragChanged(_ translation: CGFloat) {
-        guard drag == nil, openFolderID == nil else { return }
+        guard !isAnyMenuOrModalOpen, drag == nil else { return }
         let width = metrics?.size.width ?? 1200
         let baseOffset = -CGFloat(page) * width
         pageOffset = baseOffset + rubberBand(translation)
     }
 
     func backgroundDragEnded(_ translation: CGFloat, predicted: CGFloat) {
-        guard drag == nil, openFolderID == nil else { return }
+        guard !isAnyMenuOrModalOpen, drag == nil else { return }
         finishPaging(offset: rubberBand(translation), velocity: (predicted - translation) * 3)
     }
 
     /// Défilement à deux doigts (suivi interactif, comme le « paged drag » de LaunchOS) ou molette.
     func handleScroll(_ event: NSEvent) -> Bool {
-        guard openFolderID == nil, drag == nil, !isPresentingModal, !showWidgetGallery, !showWeatherCityPicker, CustomIconManager.shared.activePickerAppID == nil else { return false }
+        guard !isAnyMenuOrModalOpen, drag == nil else { return false }
         let hasPhases = event.phase != [] || event.momentumPhase != []
         if event.hasPreciseScrollingDeltas, hasPhases {
             if event.momentumPhase != [] { return true }
@@ -951,6 +971,10 @@ final class LaunchpadViewModel: ObservableObject {
             }
         }
         if event.keyCode == 53 {
+            if isSettingsOpen {
+                NotificationCenter.default.post(name: .closeSettings, object: nil)
+                return true
+            }
             if showWeatherCityPicker {
                 showWeatherCityPicker = false
                 return true
@@ -968,7 +992,7 @@ final class LaunchpadViewModel: ObservableObject {
             escape()
             return true
         }
-        if isPresentingModal || textInputActive || showWidgetGallery || showWeatherCityPicker || CustomIconManager.shared.activePickerAppID != nil { return false }
+        if isAnyMenuOrModalOpen || textInputActive { return false }
         switch event.keyCode {
         case 36, 76: activateKeyboardSelection(); return true
         case 123: moveSelection(dx: -1, dy: 0); return true
@@ -981,7 +1005,7 @@ final class LaunchpadViewModel: ObservableObject {
 
     func handleFlags(_ flags: NSEvent.ModifierFlags) {
         let held = flags.contains(.option) && !flags.contains(.command) && !flags.contains(.control)
-            && !isSearching && !textInputActive && !isPresentingModal
+            && !isSearching && !textInputActive && !isAnyMenuOrModalOpen
         if held != optionHeld { withAnimation(.easeOut(duration: 0.15)) { optionHeld = held } }
     }
 
@@ -993,9 +1017,11 @@ final class LaunchpadViewModel: ObservableObject {
             focusSearch()
         } else if showTutorial { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showTutorial = false }; focusSearch() }
         else if uninstall != nil, uninstall?.working == false { uninstall = nil; focusSearch() }
-        else if customTileModal != nil { customTileModal = nil; focusSearch() }
+        else if customTileModal != nil { customTileModal = nil; textInputActive = false; focusSearch() }
         else if rename != nil { rename = nil; textInputActive = false; focusSearch() }
         else if dialog != nil { dialog = nil }
+        else if folderShowingAppPicker { withAnimation(AppleDesignSystem.Springs.snappy) { folderShowingAppPicker = false } }
+        else if folderShowingCustomizer { withAnimation(AppleDesignSystem.Springs.snappy) { folderShowingCustomizer = false } }
         else if openFolderID != nil { closeFolder() }
         else if editing || optionHeld { withAnimation(.easeOut(duration: 0.2)) { editing = false; optionHeld = false } }
         else if !selection.isEmpty { selection.removeAll() }
@@ -1095,6 +1121,8 @@ final class LaunchpadViewModel: ObservableObject {
             folderFaded = false
         }
         folderSnapshot = nil
+        folderShowingCustomizer = false
+        folderShowingAppPicker = false
         textInputActive = false
         if refocusSearch { focusSearch() }
     }
