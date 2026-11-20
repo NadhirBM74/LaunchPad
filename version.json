@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.2.30",
-  "name": "LaunchPad v1.2.30",
-  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.30",
-  "body": "### 🚀 Nouveautés de LaunchPad v1.2.30\n\n- 💧 **Transparence Liquid Glass Inversée (0 % → 100 %)** : Le curseur agit désormais de façon intuitive : plus il approche de 100 %, plus les icônes deviennent cristallines et transparentes ; plus il approche de 0 %, plus elles sont denses et opaques.\n- ✨ **Affichage Net Sans Délimitation dans Réglages** : Suppression de l'effet de bord de défilement macOS sous l'en-tête, harmonisation continue de la lueur supérieure Aura Nocturne Velvet et séparation propre de l'aperçu de taille des icônes.",
+  "tag_name": "v1.2.31",
+  "name": "LaunchPad v1.2.31",
+  "html_url": "https://github.com/NadhirBM74/LaunchPad/releases/tag/v1.2.31",
+  "body": "### 🚀 Nouveautés de LaunchPad v1.2.31\n\n- 🎯 **Transparence Liquid Glass 100 % Dédiée aux Icônes** : Le réglage de transparence Liquid Glass (0 % à 100 %) agit désormais exclusivement sur les icônes sans flouter ni altérer l'arrière-plan du Launchpad ou des fenêtres.\n- 🖼️ **Arrière-plan Indépendant & Constant** : L'opacité et le flou du fond d'écran restent pilotés uniquement par le réglage d'opacité de l'arrière-plan, garantissant un fond net même avec des icônes 100 % transparentes.",
   "assets": [
     {
-      "name": "LaunchPad-v1.2.30.zip",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.30/LaunchPad-v1.2.30.zip"
+      "name": "LaunchPad-v1.2.31.zip",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.31/LaunchPad-v1.2.31.zip"
     },
     {
-      "name": "LaunchPad-v1.2.30.dmg",
-      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.30/LaunchPad-v1.2.30.dmg"
+      "name": "LaunchPad-v1.2.31.dmg",
+      "browser_download_url": "https://github.com/NadhirBM74/LaunchPad/releases/download/v1.2.31/LaunchPad-v1.2.31.dmg"
     }
   ]
 }

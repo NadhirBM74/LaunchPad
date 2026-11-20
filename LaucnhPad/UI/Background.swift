@@ -115,7 +115,6 @@ struct LiquidGlassBackground: View, Equatable {
     }
 
     var body: some View {
-        let i = max(0.05, min(1.0, intensity))
         let clamped = max(0.0, min(1.0, backdropOpacity))
         let baseScale = clamped < 0.40 ? (clamped / 0.40) : 1.0
         let extraDark = clamped > 0.40 ? ((clamped - 0.40) / 0.60) : 0.0
@@ -126,9 +125,9 @@ struct LiquidGlassBackground: View, Equatable {
         let combinedBlack = 1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)
 
         ZStack {
-            // 1. Flou d'arrière-plan en temps réel : diminue vers 0 quand l'opacité baisse
+            // 1. Flou d'arrière-plan indépendant (piloté uniquement par l'opacité d'arrière-plan, jamais par le curseur des icônes)
             VisualEffectBackground(material: .fullScreenUI, isActive: isActive)
-                .opacity((reduceTransparency ? 1.0 : (0.25 + 0.75 * i)) * baseScale)
+                .opacity((reduceTransparency ? 1.0 : 0.25) * baseScale)
 
             // 2. Nuance optique Liquid Glass discrète (sans reflet blanc supérieur)
             if baseScale > 0.001 && extraDark < 0.999 {

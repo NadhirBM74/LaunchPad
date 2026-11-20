@@ -450,8 +450,6 @@ struct VelvetAuraWindowBackground: View, Equatable {
 
     var body: some View {
         let aura = VelvetAuraTheme(theme: theme, liquidGlassIntensity: liquidGlassIntensity)
-        let transparency = max(0.0, min(1.0, liquidGlassIntensity))
-        let opacityFactor = 1.0 - transparency
 
         ZStack(alignment: .top) {
             switch theme {
@@ -477,11 +475,10 @@ struct VelvetAuraWindowBackground: View, Equatable {
                 )
             case .liquidGlass:
                 VisualEffectBackground(material: .fullScreenUI)
-                    .opacity(0.45 + 0.55 * opacityFactor)
                 LinearGradient(
                     colors: [
-                        Color(red: 0.078, green: 0.063, blue: 0.125).opacity(0.62 + 0.30 * opacityFactor),
-                        Color(red: 0.043, green: 0.039, blue: 0.071).opacity(0.70 + 0.24 * opacityFactor)
+                        Color(red: 0.078, green: 0.063, blue: 0.125).opacity(0.92),
+                        Color(red: 0.043, green: 0.039, blue: 0.071).opacity(0.94)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

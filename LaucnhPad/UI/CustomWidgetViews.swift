@@ -52,7 +52,7 @@ struct WidgetContainerView<Content: View>: View {
                 interactive: false,
                 tint: nil,
                 prominence: .clear,
-                intensity: liquidGlassIntensity
+                intensity: 0.85
             )
             .overlay {
                 if widgetManager.glowColor != .none {

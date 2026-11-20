@@ -381,7 +381,7 @@ private struct LaunchpadActiveBody: View {
                     .foregroundStyle(.white.opacity(0.92))
                     .padding(.horizontal, 12)
                     .frame(height: 30)
-                    .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
+                    .modifier(SearchCapsuleGlassModifier(intensity: 0.85))
                 }
                 .buttonStyle(.plain)
                 .position(x: max(58, layout.size.width * 0.055), y: layout.searchCenterY)
@@ -396,7 +396,7 @@ private struct LaunchpadActiveBody: View {
                         .foregroundStyle(.white.opacity(0.92))
                         .padding(.horizontal, 14)
                         .frame(height: 30)
-                        .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
+                        .modifier(SearchCapsuleGlassModifier(intensity: 0.85))
                 }
                 .buttonStyle(.plain)
                 .position(x: layout.size.width - max(58, layout.size.width * 0.055), y: layout.searchCenterY)
@@ -441,7 +441,7 @@ private struct LaunchpadActiveBody: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 8)
                 .frame(height: 30)
-                .modifier(SearchCapsuleGlassModifier(intensity: liquidGlassIntensity))
+                .modifier(SearchCapsuleGlassModifier(intensity: 0.85))
                 .position(x: layout.searchCenterX, y: layout.searchCenterY + 41)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
@@ -558,7 +558,7 @@ private struct LaunchpadActiveBody: View {
         .frame(width: 288, height: 34)
         .modifier(
             SearchCapsuleGlassModifier(
-                intensity: liquidGlassIntensity,
+                intensity: 0.85,
                 iconStyle: resolvedSearchGlassIconStyle,
                 tintColor: activeTintColor,
                 visualStyle: searchBarStyle
@@ -586,7 +586,7 @@ private struct LaunchpadActiveBody: View {
         PageDotsPill(
             pageCount: vm.pageCount,
             currentPage: vm.page,
-            intensity: liquidGlassIntensity,
+            intensity: 0.85,
             reduceMotion: reduceMotion,
             onSelectPage: { vm.setPage($0) }
         )
@@ -1362,7 +1362,8 @@ private struct MacOSDockDropBar: View {
         let accentColor: Color = already ? Color.orange : Color(red: 0.25, green: 0.85, blue: 0.98)
         let dockSpec = CrystalGlassSpec.resolve(
             style: .clearLiquid,
-            tintColor: hovering ? accentColor : nil
+            tintColor: hovering ? accentColor : nil,
+            glassIntensity: 0.85
         )
         let accentRim = LinearGradient(
             colors: hovering
@@ -1921,7 +1922,7 @@ struct FolderOverlayView: View {
                 let item = LayoutItem.app(id)
                 let phase = Double(abs(id.hashValue % 17)) / 17.0
                 AppTileView(
-                    model: vm.cachedTileModel(for: item, showRunning: showRunning, tint: tint),
+                    model: vm.cachedTileModel(for: item, showRunning: showRunning, tint: tint, glassIntensity: liquidGlassIntensity),
                     iconSize: fm.iconSize,
                     labelWidth: fm.cellWidth - 8,
                     showLabel: showLabels,
@@ -1967,7 +1968,7 @@ struct FolderOverlayView: View {
             case .liquidGlass: return .clearLiquid
             }
         }()
-        let spec = CrystalGlassSpec.resolve(style: crystalStyle, isFolder: true, glassIntensity: liquidGlassIntensity)
+        let spec = CrystalGlassSpec.resolve(style: crystalStyle, isFolder: true, glassIntensity: 0.85)
 
         ZStack {
             CrystalGlassBackdrop(shape: shape, spec: spec)
