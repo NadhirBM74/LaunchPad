@@ -443,13 +443,13 @@ public struct CrystalGlassSpec {
         isPureLightPreset: Bool = false,
         glassIntensity: Double = CrystalGlassSpec.currentGlassIntensity
     ) -> CrystalGlassSpec {
-        // 100 % (1.0) = Liquid Glass le plus transparent ; 0 % (0.0) = Liquid Glass le plus opaque (éclat vitré toujours actif)
+        // 100 % (1.0) = Liquid Glass transparent (Glass.clear) ; 0 % (0.0) = plus opaque (Glass.regular + matériau)
         let t = max(0.0, min(1.0, glassIntensity))
         let opacityFactor = 1.0 - t
-        let sheenScale = 1.0 + 0.25 * opacityFactor
-        let rimScale = 1.0 + 0.10 * opacityFactor
-        let tintScale = 0.38 + 1.05 * opacityFactor
-        let materialScale = max(0.35, min(1.0, 0.35 + 0.65 * opacityFactor))
+        let sheenScale = 0.28 + 0.95 * opacityFactor
+        let rimScale = 0.92 + 0.18 * opacityFactor
+        let tintScale = 0.10 + 1.25 * opacityFactor
+        let materialScale = max(0.08, min(1.0, 0.08 + 0.92 * opacityFactor))
 
         @inline(__always)
         func s(_ opacity: Double) -> Double { min(1.0, max(0.0, opacity * tintScale)) }
@@ -483,15 +483,15 @@ public struct CrystalGlassSpec {
             return CrystalGlassSpec(
                 tint: isFolder ? customFolderColor?.opacity(s(0.20)) : nil,
                 surfaceSheenColors: [
-                    Color.white.opacity(sh(0.24)),
-                    Color.white.opacity(sh(0.05)),
-                    Color.white.opacity(sh(0.14))
+                    Color.white.opacity(sh(0.22)),
+                    Color.white.opacity(sh(0.04)),
+                    Color.white.opacity(sh(0.12))
                 ],
                 specularRimColors: [
-                    Color.white.opacity(r(0.88)),
-                    Color.white.opacity(r(0.28)),
-                    Color.white.opacity(r(0.16)),
-                    Color.white.opacity(r(0.54))
+                    Color.white.opacity(r(0.86)),
+                    Color.white.opacity(r(0.24)),
+                    Color.white.opacity(r(0.14)),
+                    Color.white.opacity(r(0.50))
                 ],
                 fallbackTintOpacity: customFolderColor != nil && isFolder ? s(0.18) : s(0.12),
                 fallbackMaterialOpacity: min(1.0, 0.75 * materialScale),
@@ -670,25 +670,36 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
 
         ZStack {
             if #available(macOS 26.0, *), !reduceTransparency, !preferRotatedMaterial {
-                let glass: Glass = {
-                    var g: Glass = interactive ? .regular.interactive() : .regular
-                    if let tint = spec.tint {
+                let clearGlass: Glass = {
+                    var g: Glass = interactive ? .clear.interactive() : .clear
+                    if let tint = spec.tint, opacityFactor > 0.05 {
                         g = g.tint(tint)
                     }
                     return g
                 }()
-                if opacityFactor > 0.02 {
+                Color.clear
+                    .glassEffect(clearGlass, in: shape)
+
+                if opacityFactor > 0.01 {
+                    let regularGlass: Glass = {
+                        var g: Glass = interactive ? .regular.interactive() : .regular
+                        if let tint = spec.tint {
+                            g = g.tint(tint)
+                        }
+                        return g
+                    }()
+                    Color.clear
+                        .glassEffect(regularGlass, in: shape)
+                        .opacity(opacityFactor)
                     shape
-                        .fill(.regularMaterial)
-                        .opacity(0.78 * opacityFactor)
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.65 * opacityFactor)
                     if let tint = spec.tint {
                         shape.fill(tint.opacity(0.55 * opacityFactor))
                     } else {
-                        shape.fill(Color.white.opacity(0.35 * opacityFactor))
+                        shape.fill(Color(white: 0.14).opacity(0.42 * opacityFactor))
                     }
                 }
-                Color.clear
-                    .glassEffect(glass, in: shape)
             } else {
                 shape
                     .fill(reduceTransparency ? Color(nsColor: .windowBackgroundColor).opacity(0.86) : Color.clear)
@@ -698,10 +709,10 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
                         .opacity(spec.fallbackMaterialOpacity)
                 } else if !reduceTransparency {
                     shape
-                        .fill(Color.white.opacity(0.10 + 0.14 * opacityFactor))
+                        .fill(Color.white.opacity(0.06 + 0.18 * opacityFactor))
                 }
                 if let tint = spec.tint {
-                    shape.fill(tint.opacity(preferRotatedMaterial ? (0.28 + 0.45 * opacityFactor) : spec.fallbackTintOpacity))
+                    shape.fill(tint.opacity(preferRotatedMaterial ? (0.12 + 0.55 * opacityFactor) : spec.fallbackTintOpacity))
                 } else if !reduceTransparency && opacityFactor > 0.05 {
                     shape.fill(Color.white.opacity(0.22 * opacityFactor))
                 }
@@ -720,7 +731,7 @@ public struct CrystalGlassBackdrop<S: InsettableShape>: View {
                 .inset(by: 0.9)
                 .strokeBorder(
                     LinearGradient(
-                        colors: spec.specularRimColors.map { $0.opacity(0.38) },
+                        colors: spec.specularRimColors.map { $0.opacity(0.22) },
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -811,9 +822,9 @@ public struct CrystalAppIconImage: View, Equatable {
                     let miniOpacityFactor = 1.0 - max(0.0, min(1.0, spec.glassIntensity))
                     ZStack {
                         if let tint = spec.tint {
-                            shape.fill(tint.opacity(0.28 + 0.55 * miniOpacityFactor))
+                            shape.fill(tint.opacity(0.10 + 0.65 * miniOpacityFactor))
                         } else {
-                            shape.fill(Color.white.opacity(0.14 + 0.24 * miniOpacityFactor))
+                            shape.fill(Color.white.opacity(0.05 + 0.28 * miniOpacityFactor))
                         }
                         shape.fill(
                             LinearGradient(
